@@ -94,21 +94,22 @@ class MessageStore: NSObject, ObservableObject {
     }
     
     func respond(to message: ClawkMessage, with action: String) {
-        guard let index = messages.firstIndex(where: { $0.id == message.id }) else { return }
-        
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            guard let index = self.messages.firstIndex(where: { $0.id == message.id }) else { return }
+            
             self.messages[index].responded = true
             self.messages[index].response = action
-        }
-        
-        let response: [String: Any] = [
-            "messageId": message.id,
-            "action": action,
-            "timestamp": Date().timeIntervalSince1970
-        ]
-        
-        if let data = try? JSONSerialization.data(withJSONObject: response) {
-            webSocketTask?.send(.string(String(data: data, encoding: .utf8)!)) { _ in }
+            
+            let response: [String: Any] = [
+                "messageId": message.id,
+                "action": action,
+                "timestamp": Date().timeIntervalSince1970
+            ]
+            
+            if let data = try? JSONSerialization.data(withJSONObject: response) {
+                self.webSocketTask?.send(.string(String(data: data, encoding: .utf8)!)) { _ in }
+            }
         }
     }
 }
