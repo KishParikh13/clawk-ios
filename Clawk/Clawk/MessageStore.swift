@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import UIKit
 
 struct ClawkMessage: Identifiable, Codable {
     let id: String
@@ -11,14 +12,15 @@ struct ClawkMessage: Identifiable, Codable {
     var response: String?
 }
 
-class MessageStore: ObservableObject {
+class MessageStore: NSObject, ObservableObject {
     @Published var messages: [ClawkMessage] = []
     @Published var isConnected = false
     
     private var webSocketTask: URLSessionWebSocketTask?
     private var reconnectTimer: Timer?
     
-    init() {
+    override init() {
+        super.init()
         connect()
         pairDevice()
     }
