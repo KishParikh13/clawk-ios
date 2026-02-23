@@ -1,0 +1,21 @@
+name: Clawk
+targets:
+  Clawk:
+    type: application
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - Clawk
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.kishparikh.clawk
+        INFOPLIST_FILE: Clawk/Info.plist
+        CODE_SIGN_STYLE: Automatic
+    info:
+      path: Clawk/Info.plist
+      properties:
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UILaunchStoryboardName: LaunchScreen
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: "1"
