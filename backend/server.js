@@ -86,6 +86,17 @@ app.get('/message/:id/status', authMiddleware, (req, res) => {
   res.json({ id, status: 'unknown' });
 });
 
+// Poll for pending messages (fallback when WebSocket is down)
+app.get('/poll', authMiddleware, (req, res) => {
+  const deviceToken = req.deviceToken;
+  const pending = pendingMessages.get(deviceToken) || [];
+  
+  // Clear pending messages after returning them
+  pendingMessages.set(deviceToken, []);
+  
+  res.json(pending);
+});
+
 // WebSocket connection from iOS app
 wss.on('connection', (ws, req) => {
   const token = new URL(req.url, 'http://localhost').searchParams.get('token');

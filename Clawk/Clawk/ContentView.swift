@@ -41,8 +41,11 @@ struct MessageCard: View {
             
             if !message.responded {
                 FlowLayout(spacing: 8) {
-                    ForEach(message.actions, id: \.self) { action in
-                        Button(action: { onAction(action) }) {
+                    ForEach(Array(message.actions.enumerated()), id: \.offset) { index, action in
+                        Button(action: { 
+                            guard !message.responded else { return }
+                            onAction(action) 
+                        }) {
                             Text(action)
                                 .font(.subheadline.weight(.medium))
                                 .padding(.horizontal, 16)
@@ -51,6 +54,7 @@ struct MessageCard: View {
                                 .foregroundColor(.white)
                                 .cornerRadius(8)
                         }
+                        .disabled(message.responded)
                     }
                 }
             } else {

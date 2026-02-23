@@ -18,6 +18,8 @@ class MessageStore: NSObject, ObservableObject {
     
     private var webSocketTask: URLSessionWebSocketTask?
     private var reconnectTimer: Timer?
+    private var pollTimer: Timer?
+    private var receivedMessageIds = Set<String>()
     
     override init() {
         super.init()
@@ -58,6 +60,44 @@ class MessageStore: NSObject, ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
             self?.connect()
         }
+        // Start polling as fallback
+        startPolling()
+    }
+    
+    private func startPolling() {
+        pollTimer?.invalidate()
+        pollTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+            self?.pollMessages()
+        }
+        pollTimer?.fire()
+    }
+    
+    private func stopPolling() {
+        pollTimer?.invalidate()
+        pollTimer = nil
+    }
+    
+    private func pollMessages() {
+        let url = Config.apiURL.appendingPathComponent("/poll")
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue(Config.deviceToken, forHTTPHeaderField: "x-device-token")
+        
+        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+            guard let data = data, error == nil else { return }
+            
+            if let messages = try? JSONDecoder().decode([ClawkMessage].self, from: data) {
+                DispatchQueue.main.async {
+                    for message in messages {
+                        // Only add if we haven't seen this message before
+                        if !(self?.receivedMessageIds.contains(message.id) ?? false) {
+                            self?.receivedMessageIds.insert(message.id)
+                            self?.messages.insert(message, at: 0)
+                        }
+                    }
+                }
+            }
+        }.resume()
     }
     
     private func receive() {
@@ -84,11 +124,14 @@ class MessageStore: NSObject, ObservableObject {
     
     private func handleMessage(_ text: String) {
         guard let data = text.data(using: .utf8),
-              var message = try? JSONDecoder().decode(ClawkMessage.self, from: data) else {
+              let message = try? JSONDecoder().decode(ClawkMessage.self, from: data) else {
             return
         }
         
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak self] in
+            // Only add if we haven't seen this message before
+            guard let self = self, !self.receivedMessageIds.contains(message.id) else { return }
+            self.receivedMessageIds.insert(message.id)
             self.messages.insert(message, at: 0)
         }
     }
@@ -119,9 +162,10 @@ extension MessageStore: URLSessionWebSocketDelegate {
         DispatchQueue.main.async {
             self.isConnected = true
         }
+        stopPolling() // WebSocket works, no need to poll
         receive()
     }
-    
+
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         DispatchQueue.main.async {
             self.isConnected = false
