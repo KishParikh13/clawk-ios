@@ -74,7 +74,9 @@ class MessageStore: NSObject, ObservableObject {
                 
             case .failure(let error):
                 print("WebSocket error: \(error)")
-                self?.isConnected = false
+                DispatchQueue.main.async {
+                    self?.isConnected = false
+                }
                 self?.reconnect()
             }
         }
@@ -94,8 +96,10 @@ class MessageStore: NSObject, ObservableObject {
     func respond(to message: ClawkMessage, with action: String) {
         guard let index = messages.firstIndex(where: { $0.id == message.id }) else { return }
         
-        messages[index].responded = true
-        messages[index].response = action
+        DispatchQueue.main.async {
+            self.messages[index].responded = true
+            self.messages[index].response = action
+        }
         
         let response: [String: Any] = [
             "messageId": message.id,
