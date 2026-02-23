@@ -1,0 +1,14 @@
+# Fastlane Appfile
+# Store your app identifiers and Apple ID here
+
+# Your Apple Developer email
+apple_id("your-apple-id@example.com")
+
+# Your team ID (find at https://developer.apple.com/account/#!/membership)
+team_id("YOUR_TEAM_ID")
+
+# App bundle identifier
+app_identifier("com.kishparikh.clawk")
+
+# iTunes Connect team ID (if different from Developer team)
+# itc_team_id("123456789")

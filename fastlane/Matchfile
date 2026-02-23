@@ -1,0 +1,21 @@
+# Fastlane Match configuration
+# Use match to share certificates across machines
+# https://docs.fastlane.tools/actions/match/
+
+storage_mode("git")
+
+# Git URL for certificates repo (create a private repo for this)
+git_url("https://github.com/YOUR_USERNAME/clawk-certificates")
+
+# Or use Google Cloud Storage:
+# storage_mode("google_cloud")
+# google_cloud_bucket_name("your-bucket")
+# google_cloud_project_id("your-project")
+
+# App Store Connect API Key (recommended over Apple ID)
+# Create at https://appstoreconnect.apple.com/access/api
+# api_key_path("fastlane/AuthKey_XXX.p8")
+# api_key_id("XXX")
+# api_key_issuer_id("XXX")
+
+type("appstore") # The default type, can be: appstore, adhoc, enterprise or development
