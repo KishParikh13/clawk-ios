@@ -98,30 +98,94 @@ app.get('/poll', authMiddleware, (req, res) => {
   res.json(pending);
 });
 
-// Dashboard API - Active Sessions
-app.get('/dashboard/sessions', authMiddleware, async (req, res) => {
+// Dashboard API - System Overview
+app.get('/dashboard/overview', authMiddleware, async (req, res) => {
   try {
-    // This would call the OpenClaw gateway or local CLI
-    // For now, return mock data that the iOS app can display
+    // Get session data from OpenClaw gateway
+    const { execSync } = require('child_process');
+    let sessions = [];
+    let agents = [];
+    
+    try {
+      // Try to get sessions list
+      const sessionsOutput = execSync('curl -s http://localhost:18789/api/sessions 2>/dev/null || echo "[]"', { encoding: 'utf8' });
+      sessions = JSON.parse(sessionsOutput);
+    } catch (e) {
+      console.log('Could not fetch sessions:', e.message);
+    }
+    
+    // Get agent list from config
+    try {
+      const configOutput = execSync('cat /Users/kishparikh/.openclaw/openclaw.json 2>/dev/null || echo "{}"', { encoding: 'utf8' });
+      const config = JSON.parse(configOutput);
+      agents = config.agents?.list?.map(a => ({
+        id: a.id,
+        model: a.model?.primary,
+        heartbeat: a.heartbeat?.every,
+        workspace: a.workspace
+      })) || [];
+    } catch (e) {
+      console.log('Could not fetch agents:', e.message);
+    }
+    
+    // Calculate costs (mock for now - would need real usage data)
+    const totalTokens = sessions.reduce((sum, s) => sum + (s.totalTokens || 0), 0);
+    
     res.json({
-      activeSessions: 3,
-      agents: ['main', 'researcher', 'engineer'],
-      lastUpdate: Date.now()
+      status: 'online',
+      timestamp: Date.now(),
+      sessions: {
+        active: sessions.length,
+        list: sessions.slice(0, 5).map(s => ({
+          key: s.key,
+          kind: s.kind,
+          model: s.model,
+          totalTokens: s.totalTokens,
+          updatedAt: s.updatedAt
+        }))
+      },
+      agents: {
+        count: agents.length,
+        list: agents
+      },
+      costs: {
+        totalTokens: totalTokens,
+        // Rough estimate: $0.50 per 1M tokens
+        estimatedCost: (totalTokens / 1000000 * 0.50).toFixed(2)
+      },
+      clawk: {
+        deviceConnected: devices.has(req.deviceToken),
+        pendingMessages: pendingMessages.get(req.deviceToken)?.length || 0,
+        totalDevices: devices.size
+      }
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// Dashboard API - System Status
-app.get('/dashboard/status', authMiddleware, (req, res) => {
-  res.json({
-    gateway: 'online',
-    backend: 'online',
-    deviceConnected: devices.has(req.deviceToken),
-    pendingMessages: pendingMessages.get(req.deviceToken)?.length || 0,
-    timestamp: Date.now()
-  });
+// Dashboard API - Agent Details
+app.get('/dashboard/agents/:agentId', authMiddleware, async (req, res) => {
+  try {
+    const { agentId } = req.params;
+    const { execSync } = require('child_process');
+    
+    // Get agent sessions
+    const sessionsOutput = execSync(
+      `curl -s "http://localhost:18789/api/sessions?agent=${agentId}" 2>/dev/null || echo "[]"`,
+      { encoding: 'utf8' }
+    );
+    const sessions = JSON.parse(sessionsOutput);
+    
+    res.json({
+      agentId,
+      activeSessions: sessions.length,
+      sessions: sessions,
+      timestamp: Date.now()
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // Get responses from device (for OpenClaw to poll)

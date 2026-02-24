@@ -6,8 +6,19 @@ struct ClawkApp: App {
     
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environmentObject(messageStore)
+            TabView {
+                ContentView()
+                    .tabItem {
+                        Label("Messages", systemImage: "bubble.left.and.bubble.right")
+                    }
+                    .environmentObject(messageStore)
+                
+                DashboardView()
+                    .tabItem {
+                        Label("Dashboard", systemImage: "gauge.with.dots.needle.67percent")
+                    }
+                    .environmentObject(messageStore)
+            }
         }
     }
 }
