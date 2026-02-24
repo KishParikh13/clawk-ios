@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 @main
 struct ClawkApp: App {
@@ -7,12 +8,20 @@ struct ClawkApp: App {
     var body: some Scene {
         WindowGroup {
             TabView {
+                // Native Gateway Chat (new - direct WebSocket)
+                GatewayChatView()
+                    .tabItem {
+                        Label("Chat", systemImage: "bubble.left.and.bubble.right.fill")
+                    }
+                
+                // Relay Messages (existing - via backend)
                 ContentView()
                     .tabItem {
-                        Label("Messages", systemImage: "bubble.left.and.bubble.right")
+                        Label("Messages", systemImage: "bell.fill")
                     }
                     .environmentObject(messageStore)
                 
+                // System Dashboard (existing)
                 DashboardView()
                     .tabItem {
                         Label("Dashboard", systemImage: "gauge.with.dots.needle.67percent")
@@ -20,5 +29,6 @@ struct ClawkApp: App {
                     .environmentObject(messageStore)
             }
         }
+        .modelContainer(for: [PersistedMessage.self, PersistedSession.self, AgentIdentityRecord.self])
     }
 }
