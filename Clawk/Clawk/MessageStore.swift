@@ -141,6 +141,12 @@ class MessageStore: NSObject, ObservableObject {
             guard let self = self else { return }
             guard let index = self.messages.firstIndex(where: { $0.id == message.id }) else { return }
             
+            // Idempotent: ignore if already responded
+            guard !self.messages[index].responded else {
+                print("Message already responded to, ignoring")
+                return
+            }
+            
             self.messages[index].responded = true
             self.messages[index].response = action
             

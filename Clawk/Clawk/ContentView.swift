@@ -33,19 +33,23 @@ struct ContentView: View {
 struct MessageCard: View {
     let message: ClawkMessage
     let onAction: (String) -> Void
+    @State private var hasResponded = false
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(message.message)
                 .font(.body)
             
-            if !message.responded {
+            if !message.responded && !hasResponded {
                 FlowLayout(spacing: 8) {
                     ForEach(Array(message.actions.enumerated()), id: \.offset) { index, action in
                         ActionButton(
                             action: action,
-                            isEnabled: !message.responded,
-                            onTap: onAction
+                            isEnabled: !hasResponded,
+                            onTap: { selectedAction in
+                                hasResponded = true
+                                onAction(selectedAction)
+                            }
                         )
                     }
                 }
