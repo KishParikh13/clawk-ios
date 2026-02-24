@@ -98,6 +98,32 @@ app.get('/poll', authMiddleware, (req, res) => {
   res.json(pending);
 });
 
+// Dashboard API - Active Sessions
+app.get('/dashboard/sessions', authMiddleware, async (req, res) => {
+  try {
+    // This would call the OpenClaw gateway or local CLI
+    // For now, return mock data that the iOS app can display
+    res.json({
+      activeSessions: 3,
+      agents: ['main', 'researcher', 'engineer'],
+      lastUpdate: Date.now()
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Dashboard API - System Status
+app.get('/dashboard/status', authMiddleware, (req, res) => {
+  res.json({
+    gateway: 'online',
+    backend: 'online',
+    deviceConnected: devices.has(req.deviceToken),
+    pendingMessages: pendingMessages.get(req.deviceToken)?.length || 0,
+    timestamp: Date.now()
+  });
+});
+
 // Get responses from device (for OpenClaw to poll)
 app.get('/responses', authMiddleware, (req, res) => {
   const deviceToken = req.deviceToken;
