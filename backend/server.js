@@ -12,6 +12,7 @@ app.use(express.json());
 // In-memory storage (use Redis for prod)
 const devices = new Map(); // deviceToken -> { ws, paired, lastSeen }
 const pendingMessages = new Map(); // deviceToken -> [messages]
+const responses = new Map(); // deviceToken -> [responses]
 
 // Middleware to check auth token
 const authMiddleware = (req, res, next) => {
@@ -90,11 +91,22 @@ app.get('/message/:id/status', authMiddleware, (req, res) => {
 app.get('/poll', authMiddleware, (req, res) => {
   const deviceToken = req.deviceToken;
   const pending = pendingMessages.get(deviceToken) || [];
-  
+
   // Clear pending messages after returning them
   pendingMessages.set(deviceToken, []);
-  
+
   res.json(pending);
+});
+
+// Get responses from device (for OpenClaw to poll)
+app.get('/responses', authMiddleware, (req, res) => {
+  const deviceToken = req.deviceToken;
+  const deviceResponses = responses.get(deviceToken) || [];
+
+  // Clear responses after returning them
+  responses.set(deviceToken, []);
+
+  res.json(deviceResponses);
 });
 
 // WebSocket connection from iOS app
@@ -122,7 +134,15 @@ wss.on('connection', (ws, req) => {
     try {
       const response = JSON.parse(data);
       console.log(`Response from ${token}:`, response);
-      // TODO: Forward response back to OpenClaw
+
+      // Store response for OpenClaw to retrieve
+      if (!responses.has(token)) {
+        responses.set(token, []);
+      }
+      responses.get(token).push({
+        ...response,
+        receivedAt: Date.now()
+      });
     } catch (e) {
       console.error('Invalid message from device:', e);
     }
