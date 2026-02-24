@@ -2,279 +2,442 @@ import SwiftUI
 
 struct DashboardView: View {
     @EnvironmentObject var store: MessageStore
-    @State private var dashboardData: DashboardData?
-    @State private var isLoading = false
-    @State private var errorMessage: String?
     @State private var selectedTab = 0
+    @State private var isRefreshing = false
     
     var body: some View {
         NavigationView {
             VStack(spacing: 0) {
+                // Connection status bar
+                ConnectionStatusBar()
+                    .environmentObject(store)
+                
                 // Tab selector
                 Picker("View", selection: $selectedTab) {
                     Text("Overview").tag(0)
-                    Text("Sessions").tag(1)
-                    Text("Agents").tag(2)
+                    Text("Agents").tag(1)
+                    Text("Sessions").tag(2)
+                    Text("Cron").tag(3)
                 }
                 .pickerStyle(SegmentedPickerStyle())
                 .padding()
                 
-                if isLoading {
-                    ProgressView("Loading dashboard...")
-                        .padding()
-                } else if let error = errorMessage {
-                    VStack(spacing: 12) {
-                        Image(systemName: "exclamationmark.triangle")
-                            .font(.system(size: 48))
-                            .foregroundColor(.orange)
-                        Text("Error loading dashboard")
-                            .font(.headline)
-                        Text(error)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        Button("Retry") {
-                            loadDashboard()
+                ScrollView {
+                    VStack(spacing: 16) {
+                        switch selectedTab {
+                        case 0:
+                            OverviewTab()
+                                .environmentObject(store)
+                        case 1:
+                            AgentsTab()
+                                .environmentObject(store)
+                        case 2:
+                            SessionsTab()
+                                .environmentObject(store)
+                        case 3:
+                            CronTab()
+                                .environmentObject(store)
+                        default:
+                            OverviewTab()
+                                .environmentObject(store)
                         }
-                        .padding()
                     }
-                } else if let data = dashboardData {
-                    ScrollView {
-                        VStack(spacing: 16) {
-                            switch selectedTab {
-                            case 0:
-                                OverviewTab(data: data)
-                            case 1:
-                                SessionsTab(sessions: data.sessions.list)
-                            case 2:
-                                AgentsTab(agents: data.agents.list)
-                            default:
-                                OverviewTab(data: data)
-                            }
-                        }
-                        .padding()
-                    }
-                } else {
-                    Text("Pull to refresh")
-                        .foregroundColor(.secondary)
+                    .padding()
+                }
+                .refreshable {
+                    await refreshData()
                 }
             }
             .navigationTitle("Dashboard")
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: loadDashboard) {
-                        Image(systemName: "arrow.clockwise")
-                    }
-                    .disabled(isLoading)
-                }
-            }
-            .onAppear {
-                loadDashboard()
-            }
-            .refreshable {
-                loadDashboard()
-            }
         }
     }
     
-    private func loadDashboard() {
-        isLoading = true
-        errorMessage = nil
-        
-        let url = Config.apiURL.appendingPathComponent("/dashboard/overview")
-        var request = URLRequest(url: url)
-        request.setValue(Config.deviceToken, forHTTPHeaderField: "x-device-token")
-        
-        URLSession.shared.dataTask(with: request) { data, response, error in
-            DispatchQueue.main.async {
-                isLoading = false
-                
-                if let error = error {
-                    self.errorMessage = error.localizedDescription
-                    return
-                }
-                
-                guard let data = data else {
-                    self.errorMessage = "No data received"
-                    return
-                }
-                
-                do {
-                    self.dashboardData = try JSONDecoder().decode(DashboardData.self, from: data)
-                } catch {
-                    self.errorMessage = "Failed to parse data: \(error.localizedDescription)"
-                    print("Parse error: \(error)")
-                }
-            }
-        }.resume()
+    private func refreshData() async {
+        isRefreshing = true
+        store.manualRefresh()
+        // Small delay to show refresh indicator
+        try? await Task.sleep(nanoseconds: 500_000_000)
+        isRefreshing = false
     }
 }
 
-// MARK: - Data Models
+// MARK: - Connection Status Bar
 
-struct DashboardData: Codable {
-    let status: String
-    let timestamp: TimeInterval
-    let sessions: SessionData
-    let agents: AgentData
-    let costs: CostData
-    let clawk: ClawkData
-}
-
-struct SessionData: Codable {
-    let active: Int
-    let list: [SessionItem]
-}
-
-struct SessionItem: Codable, Identifiable {
-    var id: String { key }
-    let key: String
-    let kind: String
-    let model: String?
-    let totalTokens: Int?
-    let updatedAt: TimeInterval
-}
-
-struct AgentData: Codable {
-    let count: Int
-    let list: [AgentItem]
-}
-
-struct AgentItem: Codable, Identifiable {
-    let id: String
-    let model: String?
-    let heartbeat: String?
-    let workspace: String?
-}
-
-struct CostData: Codable {
-    let totalTokens: Int
-    let estimatedCost: String
-}
-
-struct ClawkData: Codable {
-    let deviceConnected: Bool
-    let pendingMessages: Int
-    let totalDevices: Int
-}
-
-// MARK: - Tab Views
-
-struct OverviewTab: View {
-    let data: DashboardData
+struct ConnectionStatusBar: View {
+    @EnvironmentObject var store: MessageStore
     
     var body: some View {
-        VStack(spacing: 16) {
-            // Status Cards
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                StatusCard(
-                    title: "Active Sessions",
-                    value: "\(data.sessions.active)",
-                    icon: "bubble.left.and.bubble.right.fill",
-                    color: .blue
-                )
-                
-                StatusCard(
-                    title: "Agents",
-                    value: "\(data.agents.count)",
-                    icon: "person.2.fill",
-                    color: .green
-                )
-                
-                StatusCard(
-                    title: "Total Tokens",
-                    value: formatTokens(data.costs.totalTokens),
-                    icon: "cylinder.split.1x2",
-                    color: .orange
-                )
-                
-                StatusCard(
-                    title: "Est. Cost",
-                    value: "$\(data.costs.estimatedCost)",
-                    icon: "dollarsign.circle.fill",
-                    color: .purple
-                )
+        HStack(spacing: 12) {
+            // WebSocket connection
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(store.isConnected ? Color.green : Color.red)
+                    .frame(width: 8, height: 8)
+                Text(store.isConnected ? "Live" : "Offline")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
             
-            // Clawk Status
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Clawk Status")
-                    .font(.headline)
-                
-                HStack {
-                    Image(systemName: data.clawk.deviceConnected ? "checkmark.circle.fill" : "xmark.circle.fill")
-                        .foregroundColor(data.clawk.deviceConnected ? .green : .red)
-                    Text(data.clawk.deviceConnected ? "Device Connected" : "Device Offline")
-                    Spacer()
-                }
-                
-                HStack {
-                    Image(systemName: "envelope.fill")
-                        .foregroundColor(.blue)
-                    Text("\(data.clawk.pendingMessages) pending messages")
-                    Spacer()
-                }
+            // Dashboard data connection
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(store.dashboardConnected ? Color.blue : Color.orange)
+                    .frame(width: 8, height: 8)
+                Text(store.dashboardConnected ? "Data" : "Stale")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
-            .padding()
-            .background(Color(.secondarySystemBackground))
-            .cornerRadius(12)
             
-            // Last Updated
-            Text("Last updated: \(formatDate(data.timestamp))")
-                .font(.caption)
-                .foregroundColor(.secondary)
+            Spacer()
+            
+            // Last update time
+            if let lastUpdate = store.lastDashboardUpdate {
+                Text(timeAgo(from: lastUpdate))
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
         }
+        .padding(.horizontal)
+        .padding(.vertical, 6)
+        .background(Color(.systemGray6))
     }
     
-    private func formatTokens(_ tokens: Int) -> String {
-        if tokens >= 1_000_000 {
-            return String(format: "%.1fM", Double(tokens) / 1_000_000)
-        } else if tokens >= 1_000 {
-            return String(format: "%.1fK", Double(tokens) / 1_000)
-        }
-        return "\(tokens)"
-    }
-    
-    private func formatDate(_ timestamp: TimeInterval) -> String {
-        let date = Date(timeIntervalSince1970: timestamp)
+    private func timeAgo(from date: Date) -> String {
         let formatter = RelativeDateTimeFormatter()
         return formatter.localizedString(for: date, relativeTo: Date())
     }
 }
 
-struct SessionsTab: View {
-    let sessions: [SessionItem]
+// MARK: - Overview Tab
+
+struct OverviewTab: View {
+    @EnvironmentObject var store: MessageStore
+    
+    var body: some View {
+        VStack(spacing: 16) {
+            // Stats Cards
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                StatCard(
+                    title: "Active Sessions",
+                    value: "\(sessionCount)",
+                    icon: "bubble.left.and.bubble.right.fill",
+                    color: .blue
+                )
+                
+                StatCard(
+                    title: "Agents",
+                    value: "\(agentCount)",
+                    icon: "person.2.fill",
+                    color: .green
+                )
+                
+                StatCard(
+                    title: "Total Cost",
+                    value: totalCost,
+                    icon: "dollarsign.circle.fill",
+                    color: .orange
+                )
+                
+                StatCard(
+                    title: "Cron Jobs",
+                    value: "\(cronJobCount)",
+                    icon: "clock.arrow.circlepath",
+                    color: .purple
+                )
+            }
+            
+            // Tasks section
+            if !store.tasks.isEmpty {
+                TasksSection()
+                    .environmentObject(store)
+            }
+            
+            // Stale heartbeats warning
+            if let staleCount = store.openclawStatus?.summary?.staleHeartbeats, staleCount > 0 {
+                HStack {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.orange)
+                    Text("\(staleCount) stale heartbeat\(staleCount == 1 ? "" : "s")")
+                        .font(.subheadline)
+                    Spacer()
+                }
+                .padding()
+                .background(Color.orange.opacity(0.1))
+                .cornerRadius(8)
+            }
+            
+            // Pending tasks
+            if let stats = store.taskStats, stats.pending ?? 0 > 0 {
+                HStack {
+                    Image(systemName: "list.bullet.clipboard.fill")
+                        .foregroundColor(.blue)
+                    Text("\(stats.pending ?? 0) pending task\((stats.pending ?? 0) == 1 ? "" : "s")")
+                        .font(.subheadline)
+                    Spacer()
+                }
+                .padding()
+                .background(Color.blue.opacity(0.1))
+                .cornerRadius(8)
+            }
+        }
+    }
+    
+    private var sessionCount: Int {
+        store.dashboardSnapshot?.sessions?.count ?? 0
+    }
+    
+    private var agentCount: Int {
+        store.dashboardSnapshot?.agents?.count ?? 0
+    }
+    
+    private var totalCost: String {
+        let cost = store.dashboardSnapshot?.totalCost ?? 0
+        return String(format: "%.2f", cost)
+    }
+    
+    private var cronJobCount: Int {
+        store.openclawStatus?.summary?.totalCronJobs ?? 0
+    }
+}
+
+// MARK: - Tasks Section
+
+struct TasksSection: View {
+    @EnvironmentObject var store: MessageStore
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Active Sessions (\(sessions.count))")
-                .font(.headline)
+            HStack {
+                Text("Active Tasks")
+                    .font(.headline)
+                Spacer()
+                if let stats = store.taskStats {
+                    HStack(spacing: 8) {
+                        StatusBadge(count: stats.active, color: .green, label: "active")
+                        StatusBadge(count: stats.pending, color: .blue, label: "pending")
+                        StatusBadge(count: stats.blocked, color: .red, label: "blocked")
+                    }
+                }
+            }
             
-            ForEach(sessions) { session in
-                SessionRow(session: session)
+            ForEach(store.tasks.prefix(5)) { task in
+                TaskRow(task: task)
+            }
+        }
+        .padding()
+        .background(Color(.secondarySystemBackground))
+        .cornerRadius(12)
+    }
+}
+
+struct StatusBadge: View {
+    let count: Int?
+    let color: Color
+    let label: String
+    
+    var body: some View {
+        if let count = count, count > 0 {
+            HStack(spacing: 2) {
+                Circle()
+                    .fill(color)
+                    .frame(width: 6, height: 6)
+                Text("\(count) \(label)")
+                    .font(.caption2)
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(color.opacity(0.15))
+            .cornerRadius(4)
+        }
+    }
+}
+
+struct TaskRow: View {
+    let task: DashboardTask
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(task.agent_emoji ?? "🤖")
+                .font(.title3)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(task.title)
+                    .font(.subheadline)
+                    .lineLimit(1)
+                
+                HStack(spacing: 8) {
+                    Text(task.agent_name ?? task.agent_id ?? "Unknown")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    StatusDot(status: task.status)
+                }
+            }
+            
+            Spacer()
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+struct StatusDot: View {
+    let status: String
+    
+    var body: some View {
+        HStack(spacing: 4) {
+            Circle()
+                .fill(colorForStatus)
+                .frame(width: 6, height: 6)
+            Text(status)
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+    }
+    
+    private var colorForStatus: Color {
+        switch status {
+        case "active", "running": return .green
+        case "pending", "queued": return .blue
+        case "completed", "done": return .gray
+        case "blocked", "error", "failed": return .red
+        default: return .orange
+        }
+    }
+}
+
+// MARK: - Agents Tab
+
+struct AgentsTab: View {
+    @EnvironmentObject var store: MessageStore
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let agents = store.dashboardSnapshot?.agents, !agents.isEmpty {
+                ForEach(agents) { agent in
+                    AgentCard(agent: agent)
+                }
+            } else {
+                EmptyStateView(
+                    icon: "person.2.slash",
+                    message: "No agents connected"
+                )
             }
         }
     }
 }
 
-struct SessionRow: View {
-    let session: SessionItem
+struct AgentCard: View {
+    let agent: DashboardAgent
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(session.key)
-                .font(.caption)
-                .lineLimit(1)
-                .truncationMode(.middle)
-            
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Label(session.kind, systemImage: "tag.fill")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
+                Text(agent.emoji ?? "🤖")
+                    .font(.title2)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(agent.name)
+                        .font(.headline)
+                    
+                    if let model = agent.model {
+                        Text(model)
+                            .font(.caption)
+                            .foregroundColor(.blue)
+                    }
+                }
                 
                 Spacer()
                 
-                if let tokens = session.totalTokens {
-                    Text("\(tokens) tokens")
+                StatusDot(status: agent.status ?? "unknown")
+            }
+            
+            if let skills = agent.skills, !skills.isEmpty {
+                FlowLayout(spacing: 6) {
+                    ForEach(skills.prefix(8)) { skill in
+                        SkillBadge(skill: skill)
+                    }
+                }
+            }
+        }
+        .padding()
+        .background(Color(.secondarySystemBackground))
+        .cornerRadius(12)
+    }
+}
+
+struct SkillBadge: View {
+    let skill: AgentSkill
+    
+    var body: some View {
+        HStack(spacing: 2) {
+            Text(skill.icon ?? "🔹")
+                .font(.caption)
+            Text(skill.name)
+                .font(.caption)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Color(.tertiarySystemBackground))
+        .cornerRadius(6)
+    }
+}
+
+// MARK: - Sessions Tab
+
+struct SessionsTab: View {
+    @EnvironmentObject var store: MessageStore
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let sessions = store.dashboardSnapshot?.sessions, !sessions.isEmpty {
+                ForEach(sessions.prefix(20)) { session in
+                    SessionCard(session: session)
+                }
+            } else {
+                EmptyStateView(
+                    icon: "bubble.left.and.bubble.right.slash",
+                    message: "No active sessions"
+                )
+            }
+        }
+    }
+}
+
+struct SessionCard: View {
+    let session: DashboardSession
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(session.id.prefix(8))
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(.primary)
+                
+                Spacer()
+                
+                if let cost = session.totalCost, cost > 0 {
+                    Text("$\(String(format: "%.3f", cost))")
+                        .font(.caption)
+                        .foregroundColor(.green)
+                }
+            }
+            
+            HStack(spacing: 12) {
+                if let agentId = session.agentId {
+                    Label(agentId, systemImage: "person.fill")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                
+                if let tokens = session.totalTokens, tokens > 0 {
+                    Label(formatTokens(tokens), systemImage: "cylinder.split.1x2")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                
+                if let count = session.messageCount, count > 0 {
+                    Label("\(count)", systemImage: "message.fill")
                         .font(.caption2)
                         .foregroundColor(.secondary)
                 }
@@ -290,61 +453,222 @@ struct SessionRow: View {
         .background(Color(.secondarySystemBackground))
         .cornerRadius(8)
     }
+    
+    private func formatTokens(_ tokens: Int) -> String {
+        if tokens >= 1_000_000 {
+            return String(format: "%.1fM", Double(tokens) / 1_000_000)
+        } else if tokens >= 1_000 {
+            return String(format: "%.1fK", Double(tokens) / 1_000)
+        }
+        return "\(tokens)"
+    }
 }
 
-struct AgentsTab: View {
-    let agents: [AgentItem]
+// MARK: - Cron Tab
+
+struct CronTab: View {
+    @EnvironmentObject var store: MessageStore
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Agents (\(agents.count))")
-                .font(.headline)
+            // Summary cards
+            if let summary = store.openclawStatus?.summary {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                    StatCard(
+                        title: "Total Jobs",
+                        value: "\(summary.totalCronJobs)",
+                        icon: "clock.badge.checkmark",
+                        color: .blue
+                    )
+                    
+                    StatCard(
+                        title: "Enabled",
+                        value: "\(summary.enabledCronJobs)",
+                        icon: "checkmark.circle.fill",
+                        color: .green
+                    )
+                    
+                    StatCard(
+                        title: "Errors",
+                        value: "\(summary.cronErrors)",
+                        icon: "exclamationmark.triangle.fill",
+                        color: summary.cronErrors > 0 ? .red : .gray
+                    )
+                    
+                    StatCard(
+                        title: "Heartbeats",
+                        value: "\(summary.heartbeatCount)",
+                        icon: "heart.fill",
+                        color: .pink
+                    )
+                }
+            }
             
-            ForEach(agents) { agent in
-                AgentRow(agent: agent)
+            // Cron jobs list
+            if let jobs = store.openclawStatus?.cronJobs, !jobs.isEmpty {
+                Text("Cron Jobs")
+                    .font(.headline)
+                    .padding(.top)
+                
+                ForEach(jobs) { job in
+                    CronJobRow(job: job)
+                }
+            }
+            
+            // Heartbeats list
+            if let heartbeats = store.openclawStatus?.heartbeats, !heartbeats.isEmpty {
+                Text("Heartbeats")
+                    .font(.headline)
+                    .padding(.top)
+                
+                ForEach(heartbeats) { heartbeat in
+                    HeartbeatRow(heartbeat: heartbeat)
+                }
+            }
+            
+            if store.openclawStatus == nil {
+                EmptyStateView(
+                    icon: "clock.arrow.2.circlepath",
+                    message: "No cron data available"
+                )
             }
         }
     }
 }
 
-struct AgentRow: View {
-    let agent: AgentItem
+struct CronJobRow: View {
+    let job: CronJob
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(agent.id)
+        HStack(spacing: 12) {
+            Image(systemName: statusIcon)
+                .foregroundColor(statusColor)
+                .font(.title3)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(job.name)
                     .font(.subheadline)
                     .fontWeight(.medium)
-                Spacer()
-                if let heartbeat = agent.heartbeat {
-                    Text(heartbeat)
+                
+                Text(job.schedule)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+                if let agentId = job.agentId {
+                    Text(agentId)
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.blue)
                 }
             }
             
-            if let model = agent.model {
-                Text(model)
+            Spacer()
+            
+            if job.isHeartbeat {
+                Image(systemName: "heart.fill")
+                    .foregroundColor(.pink)
                     .font(.caption)
-                    .foregroundColor(.blue)
             }
             
-            if let workspace = agent.workspace {
-                Text(workspace)
+            if !job.enabled {
+                Text("OFF")
                     .font(.caption2)
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.gray.opacity(0.2))
+                    .cornerRadius(4)
             }
         }
         .padding()
         .background(Color(.secondarySystemBackground))
         .cornerRadius(8)
     }
+    
+    private var statusIcon: String {
+        switch job.status {
+        case "ok": return "checkmark.circle.fill"
+        case "error": return "xmark.circle.fill"
+        case "running": return "arrow.triangle.2.circlepath"
+        case "disabled": return "pause.circle.fill"
+        default: return "questionmark.circle.fill"
+        }
+    }
+    
+    private var statusColor: Color {
+        switch job.status {
+        case "ok": return .green
+        case "error": return .red
+        case "running": return .blue
+        case "disabled": return .gray
+        default: return .orange
+        }
+    }
 }
 
-struct StatusCard: View {
+struct HeartbeatRow: View {
+    let heartbeat: Heartbeat
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: statusIcon)
+                .foregroundColor(statusColor)
+                .font(.title3)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(heartbeat.agentId)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                
+                if let every = heartbeat.every {
+                    Text(every)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                
+                if let model = heartbeat.model {
+                    Text(model)
+                        .font(.caption2)
+                        .foregroundColor(.blue)
+                }
+            }
+            
+            Spacer()
+            
+            if !heartbeat.enabled {
+                Text("OFF")
+                    .font(.caption2)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.gray.opacity(0.2))
+                    .cornerRadius(4)
+            }
+        }
+        .padding()
+        .background(Color(.secondarySystemBackground))
+        .cornerRadius(8)
+    }
+    
+    private var statusIcon: String {
+        switch heartbeat.status {
+        case "ok": return "heart.fill"
+        case "stale": return "heart.slash.fill"
+        case "disabled": return "pause.fill"
+        default: return "questionmark"
+        }
+    }
+    
+    private var statusColor: Color {
+        switch heartbeat.status {
+        case "ok": return .pink
+        case "stale": return .orange
+        case "disabled": return .gray
+        default: return .secondary
+        }
+    }
+}
+
+// MARK: - Supporting Views
+
+struct StatCard: View {
     let title: String
     let value: String
     let icon: String
@@ -363,6 +687,8 @@ struct StatusCard: View {
             Text(title)
                 .font(.caption)
                 .foregroundColor(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity)
         .padding()
@@ -371,8 +697,77 @@ struct StatusCard: View {
     }
 }
 
+struct EmptyStateView: View {
+    let icon: String
+    let message: String
+    
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 48))
+                .foregroundColor(.secondary)
+            Text(message)
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity, minHeight: 150)
+        .padding()
+    }
+}
+
+// MARK: - Flow Layout for Skills
+
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 6
+    
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let result = FlowResult(in: proposal.width ?? 0, subviews: subviews, spacing: spacing)
+        return result.size
+    }
+    
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let result = FlowResult(in: bounds.width, subviews: subviews, spacing: spacing)
+        for (index, subview) in subviews.enumerated() {
+            subview.place(at: CGPoint(x: bounds.minX + result.positions[index].x,
+                                      y: bounds.minY + result.positions[index].y),
+                         proposal: .unspecified)
+        }
+    }
+    
+    struct FlowResult {
+        var size: CGSize = .zero
+        var positions: [CGPoint] = []
+        
+        init(in maxWidth: CGFloat, subviews: Subviews, spacing: CGFloat) {
+            var x: CGFloat = 0
+            var y: CGFloat = 0
+            var rowHeight: CGFloat = 0
+            
+            for subview in subviews {
+                let size = subview.sizeThatFits(.unspecified)
+                
+                if x + size.width > maxWidth && x > 0 {
+                    x = 0
+                    y += rowHeight + spacing
+                    rowHeight = 0
+                }
+                
+                positions.append(CGPoint(x: x, y: y))
+                rowHeight = max(rowHeight, size.height)
+                x += size.width + spacing
+                
+                self.size.width = max(self.size.width, x)
+            }
+            
+            self.size.height = y + rowHeight
+        }
+    }
+}
+
+// MARK: - Preview
+
 struct DashboardView_Previews: PreviewProvider {
     static var previews: some View {
         DashboardView()
+            .environmentObject(MessageStore())
     }
 }

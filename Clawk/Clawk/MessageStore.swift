@@ -12,11 +12,141 @@ struct ClawkMessage: Identifiable, Codable {
     var response: String?
 }
 
+// MARK: - Dashboard Models
+
+struct DashboardSnapshot: Codable {
+    let agents: [DashboardAgent]?
+    let sessions: [DashboardSession]?
+    let totalCost: Double?
+    let lastUpdated: String?
+}
+
+struct DashboardAgent: Codable, Identifiable {
+    let id: String
+    let name: String
+    let emoji: String?
+    let model: String?
+    let status: String?
+    let skills: [AgentSkill]?
+    let activeSkills: [String]?
+}
+
+struct AgentSkill: Codable, Identifiable {
+    let id: String
+    let name: String
+    let icon: String?
+    let category: String?
+}
+
+struct DashboardSession: Codable, Identifiable {
+    let id: String
+    let agentId: String?
+    let model: String?
+    let messageCount: Int?
+    let totalCost: Double?
+    let totalTokens: Int?
+    let updatedAt: String?
+    let startedAt: String?
+}
+
+struct OpenClawStatus: Codable {
+    let cronJobs: [CronJob]?
+    let heartbeats: [Heartbeat]?
+    let summary: OpenClawSummary?
+    let generatedAt: String?
+}
+
+struct CronJob: Codable, Identifiable {
+    let id: String
+    let name: String
+    let agentId: String?
+    let enabled: Bool
+    let status: String
+    let schedule: String
+    let isHeartbeat: Bool
+    let lastRunAtMs: TimeInterval?
+    let nextRunAtMs: TimeInterval?
+}
+
+struct Heartbeat: Codable, Identifiable {
+    let agentId: String
+    let enabled: Bool
+    let status: String
+    let every: String?
+    let model: String?
+    let lastRunAtMs: TimeInterval?
+    let nextRunAtMs: TimeInterval?
+    
+    var id: String { agentId }
+}
+
+struct OpenClawSummary: Codable {
+    let totalCronJobs: Int
+    let enabledCronJobs: Int
+    let cronErrors: Int
+    let heartbeatCount: Int
+    let staleHeartbeats: Int
+    let nextRunAtMs: TimeInterval?
+    let lastRunAtMs: TimeInterval?
+}
+
+struct DashboardUpdate: Codable {
+    let type: String
+    let dashboardType: String
+    let data: DashboardUpdateData
+    let timestamp: TimeInterval
+}
+
+struct DashboardUpdateData: Codable {
+    // Snapshot data
+    let agents: [DashboardAgent]?
+    let sessions: [DashboardSession]?
+    let totalCost: Double?
+    
+    // OpenClaw status data
+    let cronJobs: [CronJob]?
+    let heartbeats: [Heartbeat]?
+    let summary: OpenClawSummary?
+    let generatedAt: String?
+    
+    // Tasks data
+    let tasks: [DashboardTask]?
+    let stats: TaskStats?
+}
+
+struct DashboardTask: Codable, Identifiable {
+    let id: String
+    let title: String
+    let agent_id: String?
+    let agent_name: String?
+    let agent_emoji: String?
+    let status: String
+    let started_at: String?
+    let completed_at: String?
+}
+
+struct TaskStats: Codable {
+    let pending: Int?
+    let active: Int?
+    let completed: Int?
+    let blocked: Int?
+}
+
+// MARK: - Message Store
+
 class MessageStore: NSObject, ObservableObject {
     @Published var messages: [ClawkMessage] = []
     @Published var isConnected = false
     @Published var isConnecting = false
     @Published var logs: [String] = []
+    
+    // Dashboard data
+    @Published var dashboardSnapshot: DashboardSnapshot?
+    @Published var openclawStatus: OpenClawStatus?
+    @Published var tasks: [DashboardTask] = []
+    @Published var taskStats: TaskStats?
+    @Published var lastDashboardUpdate: Date?
+    @Published var dashboardConnected = false
     
     private var webSocketTask: URLSessionWebSocketTask?
     private var reconnectTimer: Timer?
@@ -133,6 +263,7 @@ class MessageStore: NSObject, ObservableObject {
                 print("WebSocket error: \(error)")
                 DispatchQueue.main.async {
                     self?.isConnected = false
+                    self?.dashboardConnected = false
                 }
                 self?.reconnect()
             }
@@ -140,6 +271,13 @@ class MessageStore: NSObject, ObservableObject {
     }
     
     private func handleMessage(_ text: String) {
+        // First try to parse as dashboard update
+        if let dashboardUpdate = try? JSONDecoder().decode(DashboardUpdate.self, from: text.data(using: .utf8)!) {
+            handleDashboardUpdate(dashboardUpdate)
+            return
+        }
+        
+        // Otherwise treat as regular ClawkMessage
         guard let data = text.data(using: .utf8),
               let message = try? JSONDecoder().decode(ClawkMessage.self, from: data) else {
             return
@@ -150,6 +288,61 @@ class MessageStore: NSObject, ObservableObject {
             guard let self = self, !self.receivedMessageIds.contains(message.id) else { return }
             self.receivedMessageIds.insert(message.id)
             self.messages.insert(message, at: 0)
+        }
+    }
+    
+    private func handleDashboardUpdate(_ update: DashboardUpdate) {
+        DispatchQueue.main.async { [weak self] in
+            self?.dashboardConnected = true
+            self?.lastDashboardUpdate = Date(timeIntervalSince1970: update.timestamp / 1000)
+            
+            switch update.dashboardType {
+            case "snapshot":
+                if let agents = update.data.agents {
+                    self?.dashboardSnapshot = DashboardSnapshot(
+                        agents: agents,
+                        sessions: update.data.sessions,
+                        totalCost: update.data.totalCost,
+                        lastUpdated: ISO8601DateFormatter().string(from: Date())
+                    )
+                }
+                
+            case "sessions":
+                // Update sessions in existing snapshot
+                if var snapshot = self?.dashboardSnapshot {
+                    snapshot.sessions = update.data.sessions
+                    snapshot.lastUpdated = ISO8601DateFormatter().string(from: Date())
+                    self?.dashboardSnapshot = snapshot
+                }
+                
+            case "openclaw_status":
+                self?.openclawStatus = OpenClawStatus(
+                    cronJobs: update.data.cronJobs,
+                    heartbeats: update.data.heartbeats,
+                    summary: update.data.summary,
+                    generatedAt: update.data.generatedAt
+                )
+                
+            case "tasks":
+                if let tasks = update.data.tasks {
+                    self?.tasks = tasks
+                }
+                self?.taskStats = update.data.stats
+                
+            case "agent_status":
+                // Handle individual agent status updates
+                log("Agent status update received")
+                
+            case "costs":
+                // Handle cost updates
+                if var snapshot = self?.dashboardSnapshot {
+                    snapshot.totalCost = update.data.totalCost
+                    self?.dashboardSnapshot = snapshot
+                }
+                
+            default:
+                break
+            }
         }
     }
     
@@ -178,8 +371,7 @@ class MessageStore: NSObject, ObservableObject {
             }
         }
     }
-}
-
+    
     func manualRefresh() {
         log("Manual refresh triggered")
         pollMessages()
@@ -189,6 +381,8 @@ class MessageStore: NSObject, ObservableObject {
         logs.removeAll()
     }
 }
+
+// MARK: - WebSocket Delegate
 
 extension MessageStore: URLSessionWebSocketDelegate {
     func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didOpenWithProtocol protocol: String?) {
@@ -206,6 +400,7 @@ extension MessageStore: URLSessionWebSocketDelegate {
         DispatchQueue.main.async {
             self.isConnected = false
             self.isConnecting = false
+            self.dashboardConnected = false
         }
         reconnect()
     }

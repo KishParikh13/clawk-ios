@@ -2,6 +2,7 @@ const express = require('express');
 const WebSocket = require('ws');
 const http = require('http');
 const { v4: uuidv4 } = require('uuid');
+const EventSource = require('eventsource');
 
 const app = express();
 const server = http.createServer(app);
@@ -13,6 +14,102 @@ app.use(express.json());
 const devices = new Map(); // deviceToken -> { ws, paired, lastSeen }
 const pendingMessages = new Map(); // deviceToken -> [messages]
 const responses = new Map(); // deviceToken -> [responses]
+
+// Dashboard SSE connections
+const KISHOS_DASHBOARD_URL = process.env.KISHOS_DASHBOARD_URL || 'http://localhost:3000';
+let dashboardEventSource = null;
+let openclawStatusSource = null;
+let latestDashboardData = null;
+let latestOpenClawStatus = null;
+
+// Dashboard broadcaster - sends to all connected devices
+class DashboardBroadcaster {
+  static broadcast(type, data) {
+    const payload = JSON.stringify({
+      type: 'dashboard',
+      dashboardType: type,
+      data,
+      timestamp: Date.now()
+    });
+
+    let sentCount = 0;
+    for (const [token, device] of devices) {
+      if (device.ws && device.ws.readyState === WebSocket.OPEN) {
+        try {
+          device.ws.send(payload);
+          sentCount++;
+        } catch (err) {
+          console.error(`Failed to send dashboard update to ${token}:`, err.message);
+        }
+      }
+    }
+    if (sentCount > 0) {
+      console.log(`Dashboard ${type} broadcast to ${sentCount} device(s)`);
+    }
+  }
+}
+
+// Initialize SSE connections to kishos-dashboard
+function initDashboardStreams() {
+  // Stream 1: OpenClaw status (cron jobs, heartbeats)
+  try {
+    openclawStatusSource = new EventSource(`${KISHOS_DASHBOARD_URL}/api/openclaw/status/stream`);
+    
+    openclawStatusSource.onmessage = (event) => {
+      try {
+        const parsed = JSON.parse(event.data);
+        if (parsed.type === 'snapshot') {
+          latestOpenClawStatus = parsed.data;
+          DashboardBroadcaster.broadcast('openclaw_status', parsed.data);
+        }
+      } catch (err) {
+        console.error('Failed to parse openclaw status:', err.message);
+      }
+    };
+
+    openclawStatusSource.onerror = (err) => {
+      console.error('OpenClaw status SSE error:', err.message || 'Connection failed');
+    };
+
+    console.log(`Connected to OpenClaw status stream: ${KISHOS_DASHBOARD_URL}/api/openclaw/status/stream`);
+  } catch (err) {
+    console.error('Failed to connect to OpenClaw status stream:', err.message);
+  }
+
+  // Stream 2: Events (sessions, tasks, agents)
+  try {
+    dashboardEventSource = new EventSource(`${KISHOS_DASHBOARD_URL}/api/events?days=7`);
+    
+    dashboardEventSource.onmessage = (event) => {
+      try {
+        const parsed = JSON.parse(event.data);
+        latestDashboardData = parsed;
+        
+        if (parsed.type === 'snapshot') {
+          DashboardBroadcaster.broadcast('snapshot', parsed.data);
+        } else if (parsed.type === 'sessions_update') {
+          DashboardBroadcaster.broadcast('sessions', parsed.data);
+        } else if (parsed.type === 'tasks_snapshot') {
+          DashboardBroadcaster.broadcast('tasks', parsed.data);
+        } else if (parsed.type === 'agent_status') {
+          DashboardBroadcaster.broadcast('agent_status', parsed.data);
+        } else if (parsed.type === 'cost_update') {
+          DashboardBroadcaster.broadcast('costs', parsed.data);
+        }
+      } catch (err) {
+        console.error('Failed to parse dashboard event:', err.message);
+      }
+    };
+
+    dashboardEventSource.onerror = (err) => {
+      console.error('Dashboard events SSE error:', err.message || 'Connection failed');
+    };
+
+    console.log(`Connected to dashboard events stream: ${KISHOS_DASHBOARD_URL}/api/events`);
+  } catch (err) {
+    console.error('Failed to connect to dashboard events stream:', err.message);
+  }
+}
 
 // Middleware to check auth token
 const authMiddleware = (req, res, next) => {
@@ -26,7 +123,16 @@ const authMiddleware = (req, res, next) => {
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', devices: devices.size });
+  res.json({ 
+    status: 'ok', 
+    devices: devices.size,
+    dashboardConnected: !!dashboardEventSource,
+    openclawConnected: !!openclawStatusSource,
+    latestData: {
+      hasDashboard: !!latestDashboardData,
+      hasOpenClaw: !!latestOpenClawStatus
+    }
+  });
 });
 
 // Pair device (called from iOS app after QR scan)
@@ -98,61 +204,56 @@ app.get('/poll', authMiddleware, (req, res) => {
   res.json(pending);
 });
 
-// Dashboard API - System Overview
+// Dashboard API - System Overview (now returns cached live data)
 app.get('/dashboard/overview', authMiddleware, async (req, res) => {
   try {
-    // Get session data from OpenClaw gateway
-    const { execSync } = require('child_process');
-    let sessions = [];
-    let agents = [];
-    
-    try {
-      // Try to get sessions list
-      const sessionsOutput = execSync('curl -s http://localhost:18789/api/sessions 2>/dev/null || echo "[]"', { encoding: 'utf8' });
-      sessions = JSON.parse(sessionsOutput);
-    } catch (e) {
-      console.log('Could not fetch sessions:', e.message);
-    }
-    
-    // Get agent list from config
-    try {
-      const configOutput = execSync('cat /Users/kishparikh/.openclaw/openclaw.json 2>/dev/null || echo "{}"', { encoding: 'utf8' });
-      const config = JSON.parse(configOutput);
-      agents = config.agents?.list?.map(a => ({
-        id: a.id,
-        model: a.model?.primary,
-        heartbeat: a.heartbeat?.every,
-        workspace: a.workspace
-      })) || [];
-    } catch (e) {
-      console.log('Could not fetch agents:', e.message);
-    }
-    
-    // Calculate costs (mock for now - would need real usage data)
-    const totalTokens = sessions.reduce((sum, s) => sum + (s.totalTokens || 0), 0);
+    // Build response from cached live data
+    const sessions = latestDashboardData?.data?.sessions || [];
+    const agents = latestDashboardData?.data?.agents || [];
+    const totalTokens = sessions.reduce((sum, s) => sum + (s.tokensUsed?.input || 0) + (s.tokensUsed?.output || 0), 0);
+    const totalCost = sessions.reduce((sum, s) => sum + (s.totalCost || 0), 0);
     
     res.json({
       status: 'online',
       timestamp: Date.now(),
+      live: !!latestDashboardData,
       sessions: {
         active: sessions.length,
-        list: sessions.slice(0, 5).map(s => ({
-          key: s.key,
-          kind: s.kind,
+        list: sessions.slice(0, 10).map(s => ({
+          id: s.id,
+          key: s.id,
+          agentId: s.agentId,
+          kind: s.agent?.name || s.agentId,
           model: s.model,
-          totalTokens: s.totalTokens,
-          updatedAt: s.updatedAt
+          totalTokens: (s.tokensUsed?.input || 0) + (s.tokensUsed?.output || 0),
+          totalCost: s.totalCost,
+          updatedAt: s.lastActivity,
+          messageCount: s.messageCount
         }))
       },
       agents: {
         count: agents.length,
-        list: agents
+        list: agents.map(a => ({
+          id: a.id,
+          name: a.name,
+          emoji: a.emoji,
+          model: a.model,
+          status: a.status,
+          skillCount: a.skills?.length || 0
+        }))
       },
       costs: {
         totalTokens: totalTokens,
-        // Rough estimate: $0.50 per 1M tokens
-        estimatedCost: (totalTokens / 1000000 * 0.50).toFixed(2)
+        totalCost: totalCost.toFixed(4),
+        estimatedCost: totalCost.toFixed(2)
       },
+      cron: latestOpenClawStatus ? {
+        totalJobs: latestOpenClawStatus.summary?.totalCronJobs || 0,
+        enabledJobs: latestOpenClawStatus.summary?.enabledCronJobs || 0,
+        errors: latestOpenClawStatus.summary?.cronErrors || 0,
+        heartbeats: latestOpenClawStatus.summary?.heartbeatCount || 0,
+        staleHeartbeats: latestOpenClawStatus.summary?.staleHeartbeats || 0
+      } : null,
       clawk: {
         deviceConnected: devices.has(req.deviceToken),
         pendingMessages: pendingMessages.get(req.deviceToken)?.length || 0,
@@ -164,25 +265,34 @@ app.get('/dashboard/overview', authMiddleware, async (req, res) => {
   }
 });
 
-// Dashboard API - Agent Details
-app.get('/dashboard/agents/:agentId', authMiddleware, async (req, res) => {
+// Dashboard API - Agents with live status
+app.get('/dashboard/agents', authMiddleware, async (req, res) => {
   try {
-    const { agentId } = req.params;
-    const { execSync } = require('child_process');
-    
-    // Get agent sessions
-    const sessionsOutput = execSync(
-      `curl -s "http://localhost:18789/api/sessions?agent=${agentId}" 2>/dev/null || echo "[]"`,
-      { encoding: 'utf8' }
-    );
-    const sessions = JSON.parse(sessionsOutput);
-    
+    const agents = latestDashboardData?.data?.agents || [];
     res.json({
-      agentId,
-      activeSessions: sessions.length,
-      sessions: sessions,
+      agents: agents.map(a => ({
+        id: a.id,
+        name: a.name,
+        emoji: a.emoji,
+        model: a.model,
+        status: a.status,
+        skills: a.skills || [],
+        activeSkills: a.activeSkills || []
+      })),
       timestamp: Date.now()
     });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Dashboard API - Costs
+app.get('/dashboard/costs', authMiddleware, async (req, res) => {
+  try {
+    const period = req.query.period || 'week';
+    const response = await fetch(`${KISHOS_DASHBOARD_URL}/api/costs?period=${period}`);
+    const data = await response.json();
+    res.json(data);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -220,6 +330,24 @@ wss.on('connection', (ws, req) => {
   });
   pendingMessages.set(token, []);
   
+  // Send initial dashboard data if available
+  if (latestDashboardData) {
+    ws.send(JSON.stringify({
+      type: 'dashboard',
+      dashboardType: 'snapshot',
+      data: latestDashboardData.data,
+      timestamp: Date.now()
+    }));
+  }
+  if (latestOpenClawStatus) {
+    ws.send(JSON.stringify({
+      type: 'dashboard',
+      dashboardType: 'openclaw_status',
+      data: latestOpenClawStatus,
+      timestamp: Date.now()
+    }));
+  }
+  
   ws.on('message', (data) => {
     try {
       const response = JSON.parse(data);
@@ -253,4 +381,18 @@ wss.on('connection', (ws, req) => {
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Clawk relay running on port ${PORT}`);
+  console.log(`Kishos Dashboard URL: ${KISHOS_DASHBOARD_URL}`);
+  
+  // Initialize SSE streams after server starts
+  setTimeout(initDashboardStreams, 1000);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('Shutting down...');
+  if (dashboardEventSource) dashboardEventSource.close();
+  if (openclawStatusSource) openclawStatusSource.close();
+  server.close(() => {
+    process.exit(0);
+  });
 });
