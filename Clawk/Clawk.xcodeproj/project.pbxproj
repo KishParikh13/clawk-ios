@@ -12,6 +12,12 @@
 		406B8FE4F7E6B617DF8742F4 /* ClawkApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A7C72458B614B76F4F4240A /* ClawkApp.swift */; };
 		796D01F37B7326029545C9CC /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67B095715EC6D0657B8EF344 /* Config.swift */; };
 		D3A1B2C4E5F6078912345678 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A1B2C4E5F60789ABCDEF01 /* DashboardView.swift */; };
+		AA1111111111111111111111 /* ChatHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB1111111111111111111111 /* ChatHistoryStore.swift */; };
+		AA2222222222222222222222 /* GatewayChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB2222222222222222222222 /* GatewayChatView.swift */; };
+		AA3333333333333333333333 /* GatewayConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB3333333333333333333333 /* GatewayConnection.swift */; };
+		AA4444444444444444444444 /* IdentitySyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB4444444444444444444444 /* IdentitySyncManager.swift */; };
+		AA5555555555555555555555 /* SessionChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB5555555555555555555555 /* SessionChatView.swift */; };
+		AA6666666666666666666666 /* ThinkingStepsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB6666666666666666666666 /* ThinkingStepsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -21,6 +27,12 @@
 		67B095715EC6D0657B8EF344 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
 		7A7C72458B614B76F4F4240A /* ClawkApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClawkApp.swift; sourceTree = "<group>"; };
 		AB9ECBC77D8360B0E33A59D8 /* MessageStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageStore.swift; sourceTree = "<group>"; };
+		BB1111111111111111111111 /* ChatHistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatHistoryStore.swift; sourceTree = "<group>"; };
+		BB2222222222222222222222 /* GatewayChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayChatView.swift; sourceTree = "<group>"; };
+		BB3333333333333333333333 /* GatewayConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayConnection.swift; sourceTree = "<group>"; };
+		BB4444444444444444444444 /* IdentitySyncManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdentitySyncManager.swift; sourceTree = "<group>"; };
+		BB5555555555555555555555 /* SessionChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionChatView.swift; sourceTree = "<group>"; };
+		BB6666666666666666666666 /* ThinkingStepsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThinkingStepsView.swift; sourceTree = "<group>"; };
 		E8710FBF24E9CAA28D156CE7 /* Clawk.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Clawk.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -32,8 +44,14 @@
 				67B095715EC6D0657B8EF344 /* Config.swift */,
 				641664BF743F7453554BF316 /* ContentView.swift */,
 				D3A1B2C4E5F60789ABCDEF01 /* DashboardView.swift */,
+				BB1111111111111111111111 /* ChatHistoryStore.swift */,
+				BB3333333333333333333333 /* GatewayConnection.swift */,
+				BB2222222222222222222222 /* GatewayChatView.swift */,
+				BB4444444444444444444444 /* IdentitySyncManager.swift */,
 				645A6F0E142A68BB46D021FB /* Info.plist */,
 				AB9ECBC77D8360B0E33A59D8 /* MessageStore.swift */,
+				BB5555555555555555555555 /* SessionChatView.swift */,
+				BB6666666666666666666666 /* ThinkingStepsView.swift */,
 			);
 			path = Clawk;
 			sourceTree = "<group>";
@@ -113,10 +131,16 @@
 			buildActionMask = 2147483647;
 			files = (
 				406B8FE4F7E6B617DF8742F4 /* ClawkApp.swift in Sources */,
+				AA1111111111111111111111 /* ChatHistoryStore.swift in Sources */,
 				796D01F37B7326029545C9CC /* Config.swift in Sources */,
 				05611179C1434EA208CEF157 /* ContentView.swift in Sources */,
 				D3A1B2C4E5F6078912345678 /* DashboardView.swift in Sources */,
+				AA3333333333333333333333 /* GatewayConnection.swift in Sources */,
+				AA2222222222222222222222 /* GatewayChatView.swift in Sources */,
+				AA4444444444444444444444 /* IdentitySyncManager.swift in Sources */,
 				2808C6EC9F10FBF1D766B1E0 /* MessageStore.swift in Sources */,
+				AA5555555555555555555555 /* SessionChatView.swift in Sources */,
+				AA6666666666666666666666 /* ThinkingStepsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
