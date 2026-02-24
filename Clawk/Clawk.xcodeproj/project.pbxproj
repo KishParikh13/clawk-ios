@@ -11,10 +11,12 @@
 		2808C6EC9F10FBF1D766B1E0 /* MessageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB9ECBC77D8360B0E33A59D8 /* MessageStore.swift */; };
 		406B8FE4F7E6B617DF8742F4 /* ClawkApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A7C72458B614B76F4F4240A /* ClawkApp.swift */; };
 		796D01F37B7326029545C9CC /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67B095715EC6D0657B8EF344 /* Config.swift */; };
+		D3A1B2C4E5F6078912345678 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A1B2C4E5F60789ABCDEF01 /* DashboardView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		641664BF743F7453554BF316 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		D3A1B2C4E5F60789ABCDEF01 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		645A6F0E142A68BB46D021FB /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		67B095715EC6D0657B8EF344 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
 		7A7C72458B614B76F4F4240A /* ClawkApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClawkApp.swift; sourceTree = "<group>"; };
@@ -29,6 +31,7 @@
 				7A7C72458B614B76F4F4240A /* ClawkApp.swift */,
 				67B095715EC6D0657B8EF344 /* Config.swift */,
 				641664BF743F7453554BF316 /* ContentView.swift */,
+				D3A1B2C4E5F60789ABCDEF01 /* DashboardView.swift */,
 				645A6F0E142A68BB46D021FB /* Info.plist */,
 				AB9ECBC77D8360B0E33A59D8 /* MessageStore.swift */,
 			);
@@ -112,6 +115,7 @@
 				406B8FE4F7E6B617DF8742F4 /* ClawkApp.swift in Sources */,
 				796D01F37B7326029545C9CC /* Config.swift in Sources */,
 				05611179C1434EA208CEF157 /* ContentView.swift in Sources */,
+				D3A1B2C4E5F6078912345678 /* DashboardView.swift in Sources */,
 				2808C6EC9F10FBF1D766B1E0 /* MessageStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
