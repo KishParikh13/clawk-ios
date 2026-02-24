@@ -54,11 +54,71 @@ struct DashboardView: View {
     
     private func refreshData() async {
         isRefreshing = true
+        
+        // Haptic feedback on refresh
+        let generator = UIImpactFeedbackGenerator(style: .medium)
+        generator.impactOccurred()
+        
         store.manualRefresh()
+        
         // Small delay to show refresh indicator
         try? await Task.sleep(nanoseconds: 500_000_000)
         isRefreshing = false
     }
+}
+
+// MARK: - Share Button
+
+struct ShareButton: View {
+    let store: MessageStore
+    @State private var showingShareSheet = false
+    
+    var body: some View {
+        Button(action: { showingShareSheet = true }) {
+            Image(systemName: "square.and.arrow.up")
+        }
+        .sheet(isPresented: $showingShareSheet) {
+            ShareSheet(activityItems: [generateShareText()])
+        }
+    }
+    
+    private func generateShareText() -> String {
+        var text = "OpenClaw Dashboard Summary\n\n"
+        
+        if let agents = store.dashboardSnapshot?.agents {
+            text += "Agents: \(agents.count)\n"
+        }
+        
+        if let sessions = store.dashboardSnapshot?.sessions {
+            let active = sessions.filter { $0.status == "active" }.count
+            text += "Sessions: \(sessions.count) (Active: \(active))\n"
+        }
+        
+        if let summary = store.openclawStatus?.summary {
+            text += "Cron Jobs: \(summary.totalCronJobs)\n"
+        }
+        
+        if let cost = store.dashboardSnapshot?.totalCost {
+            text += "Total Cost: $\(String(format: "%.2f", cost))\n"
+        }
+        
+        if let lastUpdate = store.lastDashboardUpdate {
+            let formatter = RelativeDateTimeFormatter()
+            text += "\nLast updated: \(formatter.localizedString(for: lastUpdate, relativeTo: Date()))"
+        }
+        
+        return text
+    }
+}
+
+struct ShareSheet: UIViewControllerRepresentable {
+    let activityItems: [Any]
+    
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+    }
+    
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 // MARK: - Connection Status Bar
@@ -328,12 +388,20 @@ struct AgentsTab: View {
 
 struct AgentCard: View {
     let agent: DashboardAgent
+    @State private var showingPingConfirmation = false
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(agent.emoji ?? "🤖")
-                    .font(.title2)
+            HStack(spacing: 12) {
+                // Agent avatar with color
+                ZStack {
+                    Circle()
+                        .fill(agentColor)
+                        .frame(width: 48, height: 48)
+                    
+                    Text(agent.emoji ?? "🤖")
+                        .font(.title2)
+                }
                 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(agent.name)
@@ -344,11 +412,26 @@ struct AgentCard: View {
                             .font(.caption)
                             .foregroundColor(.blue)
                     }
+                    
+                    if let skillCount = agent.skills?.count, skillCount > 0 {
+                        Text("\(skillCount) skills")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
                 }
                 
                 Spacer()
                 
-                StatusDot(status: agent.status ?? "unknown")
+                VStack(alignment: .trailing, spacing: 4) {
+                    StatusDot(status: agent.status ?? "unknown")
+                    
+                    // Ping button
+                    Button(action: { showingPingConfirmation = true }) {
+                        Image(systemName: "waveform")
+                            .font(.caption)
+                            .foregroundColor(.blue)
+                    }
+                }
             }
             
             if let skills = agent.skills, !skills.isEmpty {
@@ -357,11 +440,40 @@ struct AgentCard: View {
                         SkillBadge(skill: skill)
                     }
                 }
+                .padding(.top, 4)
             }
         }
         .padding()
         .background(Color(.secondarySystemBackground))
         .cornerRadius(12)
+        .contextMenu {
+            Button(action: { showingPingConfirmation = true }) {
+                Label("Ping Agent", systemImage: "waveform")
+            }
+            
+            if let agentId = agent.id {
+                Button(action: { UIPasteboard.general.string = agentId }) {
+                    Label("Copy Agent ID", systemImage: "doc.on.doc")
+                }
+            }
+        }
+        .alert("Ping \(agent.name)?", isPresented: $showingPingConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Ping") {
+                // Haptic feedback
+                let generator = UINotificationFeedbackGenerator()
+                generator.notificationOccurred(.success)
+            }
+        } message: {
+            Text("Send a wake message to \(agent.name)")
+        }
+    }
+    
+    private var agentColor: Color {
+        guard let colorString = agent.color else {
+            return Color.gray
+        }
+        return Color(hex: colorString) ?? Color.gray
     }
 }
 
@@ -386,12 +498,19 @@ struct SkillBadge: View {
 
 struct SessionsTab: View {
     @EnvironmentObject var store: MessageStore
+    @State private var isRefreshing = false
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            // Stats summary
+            if let sessions = store.dashboardSnapshot?.sessions {
+                SessionsStatsHeader(sessions: sessions)
+            }
+            
             if let sessions = store.dashboardSnapshot?.sessions, !sessions.isEmpty {
-                ForEach(sessions.prefix(20)) { session in
-                    SessionCard(session: session)
+                ForEach(sessions.prefix(50)) { session in
+                    EnhancedSessionRow(session: session)
+                        .environmentObject(store)
                 }
             } else {
                 EmptyStateView(
@@ -400,6 +519,58 @@ struct SessionsTab: View {
                 )
             }
         }
+    }
+}
+
+struct SessionsStatsHeader: View {
+    let sessions: [DashboardSession]
+    
+    var body: some View {
+        HStack(spacing: 16) {
+            StatBadge(
+                count: sessions.filter { $0.status == "active" }.count,
+                label: "Active",
+                color: .green
+            )
+            
+            StatBadge(
+                count: sessions.filter { $0.status == "idle" }.count,
+                label: "Idle",
+                color: .orange
+            )
+            
+            StatBadge(
+                count: sessions.count,
+                label: "Total",
+                color: .blue
+            )
+            
+            Spacer()
+        }
+        .padding(.vertical, 8)
+    }
+}
+
+struct StatBadge: View {
+    let count: Int
+    let label: String
+    let color: Color
+    
+    var body: some View {
+        HStack(spacing: 4) {
+            Circle()
+                .fill(color)
+                .frame(width: 8, height: 8)
+            Text("\(count)")
+                .font(.caption)
+                .fontWeight(.bold)
+            Text(label)
+                .font(.caption)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(color.opacity(0.15))
+        .cornerRadius(8)
     }
 }
 

@@ -25,6 +25,7 @@ struct DashboardAgent: Codable, Identifiable {
     let id: String
     let name: String
     let emoji: String?
+    let color: String?
     let model: String?
     let status: String?
     let skills: [AgentSkill]?
@@ -41,12 +42,31 @@ struct AgentSkill: Codable, Identifiable {
 struct DashboardSession: Codable, Identifiable {
     let id: String
     let agentId: String?
+    let agentName: String?
+    let agentEmoji: String?
+    let agentColor: String?
     let model: String?
     let messageCount: Int?
     let totalCost: Double?
-    let totalTokens: Int?
+    let tokensUsed: TokenUsage?
     let updatedAt: String?
     let startedAt: String?
+    let projectPath: String?
+    let source: String?
+    let status: String?
+    let folderTrail: [FolderTrailItem]?
+}
+
+struct TokenUsage: Codable {
+    let input: Int?
+    let output: Int?
+    let cached: Int?
+}
+
+struct FolderTrailItem: Codable {
+    let path: String
+    let timestamp: String?
+    let source: String?
 }
 
 struct OpenClawStatus: Codable {
@@ -130,6 +150,37 @@ struct TaskStats: Codable {
     let active: Int?
     let completed: Int?
     let blocked: Int?
+}
+
+// MARK: - Session Messages
+
+struct SessionMessage: Codable, Identifiable {
+    let id: String
+    let role: String
+    let content: String
+    let timestamp: String?
+    let cost: Double?
+    let model: String?
+    let toolCalls: [ToolCall]?
+    let toolResults: [ToolResult]?
+    
+    enum CodingKeys: String, CodingKey {
+        case id, role, content, timestamp, cost, model
+        case toolCalls = "tool_calls"
+        case toolResults = "tool_results"
+    }
+}
+
+struct ToolCall: Codable {
+    let id: String?
+    let name: String?
+    let arguments: [String: String]?
+}
+
+struct ToolResult: Codable {
+    let toolName: String?
+    let status: String?
+    let content: String?
 }
 
 // MARK: - Message Store
@@ -379,6 +430,55 @@ class MessageStore: NSObject, ObservableObject {
     
     func clearLogs() {
         logs.removeAll()
+    }
+    
+    // MARK: - Session Messages
+    
+    func fetchSessionMessages(sessionId: String, completion: @escaping ([SessionMessage]) -> Void) {
+        let url = Config.apiURL.appendingPathComponent("/dashboard/sessions/\(sessionId)/messages")
+        var request = URLRequest(url: url)
+        request.setValue(Config.deviceToken, forHTTPHeaderField: "x-device-token")
+        
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            guard let data = data, error == nil else {
+                completion([])
+                return
+            }
+            
+            do {
+                let messages = try JSONDecoder().decode([SessionMessage].self, from: data)
+                DispatchQueue.main.async {
+                    completion(messages)
+                }
+            } catch {
+                print("Failed to decode session messages: \(error)")
+                completion([])
+            }
+        }.resume()
+    }
+    
+    // MARK: - Agent Actions
+    
+    func pingAgent(agentId: String, completion: @escaping (Bool) -> Void) {
+        // Send a ping message to the agent via the backend
+        let url = Config.apiURL.appendingPathComponent("/message")
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(Config.deviceToken, forHTTPHeaderField: "x-device-token")
+        
+        let body: [String: Any] = [
+            "message": "Ping from clawk-iOS: @\(agentId) check in please",
+            "type": "ping",
+            "actions": []
+        ]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        
+        URLSession.shared.dataTask(with: request) { _, response, error in
+            DispatchQueue.main.async {
+                completion(error == nil && (response as? HTTPURLResponse)?.statusCode == 200)
+            }
+        }.resume()
     }
 }
 

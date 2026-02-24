@@ -11,18 +11,19 @@ const wss = new WebSocket.Server({ server });
 app.use(express.json());
 
 // In-memory storage (use Redis for prod)
-const devices = new Map(); // deviceToken -> { ws, paired, lastSeen }
-const pendingMessages = new Map(); // deviceToken -> [messages]
-const responses = new Map(); // deviceToken -> [responses]
+const devices = new Map();
+const pendingMessages = new Map();
+const responses = new Map();
 
-// Dashboard SSE connections
-const KISHOS_DASHBOARD_URL = process.env.KISHOS_DASHBOARD_URL || 'http://localhost:3000';
+// Dashboard connections
+const KISHOS_DASHBOARD_URL = process.env.KISHOS_DASHBOARD_URL || 'http://localhost:4004';
 let dashboardEventSource = null;
 let openclawStatusSource = null;
 let latestDashboardData = null;
 let latestOpenClawStatus = null;
+let pollingInterval = null;
 
-// Dashboard broadcaster - sends to all connected devices
+// Dashboard broadcaster
 class DashboardBroadcaster {
   static broadcast(type, data) {
     const payload = JSON.stringify({
@@ -34,89 +35,114 @@ class DashboardBroadcaster {
 
     let sentCount = 0;
     for (const [token, device] of devices) {
-      if (device.ws && device.ws.readyState === WebSocket.OPEN) {
+      if (device.ws?.readyState === WebSocket.OPEN) {
         try {
           device.ws.send(payload);
           sentCount++;
         } catch (err) {
-          console.error(`Failed to send dashboard update to ${token}:`, err.message);
+          console.error(`Failed to send to ${token}:`, err.message);
         }
       }
     }
     if (sentCount > 0) {
-      console.log(`Dashboard ${type} broadcast to ${sentCount} device(s)`);
+      console.log(`📡 Broadcast ${type} to ${sentCount} device(s)`);
     }
   }
 }
 
-// Initialize SSE connections to kishos-dashboard
-function initDashboardStreams() {
-  // Stream 1: OpenClaw status (cron jobs, heartbeats)
+// Primary data fetching via polling (reliable)
+async function fetchDashboardData() {
   try {
+    // Ensure data structure exists
+    if (!latestDashboardData) latestDashboardData = { data: {} };
+    if (!latestDashboardData.data) latestDashboardData.data = {};
+
+    // Fetch agents
+    const agentsRes = await fetch(`${KISHOS_DASHBOARD_URL}/api/agents`);
+    if (agentsRes.ok) {
+      const agentsData = await agentsRes.json();
+      // Handle both wrapped {agents: [...]} and direct array [...] formats
+      latestDashboardData.data.agents = Array.isArray(agentsData) ? agentsData : (agentsData.agents || []);
+    }
+
+    // Fetch sessions
+    const sessionsRes = await fetch(`${KISHOS_DASHBOARD_URL}/api/sessions`);
+    if (sessionsRes.ok) {
+      const sessionsData = await sessionsRes.json();
+      // Handle both wrapped {sessions: [...]} and direct array [...] formats
+      latestDashboardData.data.sessions = Array.isArray(sessionsData) ? sessionsData : (sessionsData.sessions || []);
+    }
+
+    // Fetch OpenClaw status
+    const statusRes = await fetch(`${KISHOS_DASHBOARD_URL}/api/openclaw/status`);
+    if (statusRes.ok) {
+      latestOpenClawStatus = await statusRes.json();
+    }
+
+    return true;
+  } catch (err) {
+    console.error('❌ Dashboard fetch error:', err.message);
+    return false;
+  }
+}
+
+// Start polling
+function startPolling() {
+  if (pollingInterval) return;
+  console.log('🔄 Starting dashboard polling (5s interval)');
+  
+  // Fetch immediately
+  fetchDashboardData();
+  
+  pollingInterval = setInterval(async () => {
+    const success = await fetchDashboardData();
+    if (success) {
+      DashboardBroadcaster.broadcast('update', latestDashboardData?.data);
+    }
+  }, 5000);
+}
+
+// SSE for real-time updates (enhancement)
+function initSSE() {
+  try {
+    // OpenClaw status stream
     openclawStatusSource = new EventSource(`${KISHOS_DASHBOARD_URL}/api/openclaw/status/stream`);
-    
-    openclawStatusSource.onmessage = (event) => {
+    openclawStatusSource.onmessage = (e) => {
       try {
-        const parsed = JSON.parse(event.data);
+        const parsed = JSON.parse(e.data);
         if (parsed.type === 'snapshot') {
           latestOpenClawStatus = parsed.data;
           DashboardBroadcaster.broadcast('openclaw_status', parsed.data);
         }
-      } catch (err) {
-        console.error('Failed to parse openclaw status:', err.message);
-      }
+      } catch (err) {}
     };
-
-    openclawStatusSource.onerror = (err) => {
-      console.error('OpenClaw status SSE error:', err.message || 'Connection failed');
-    };
-
-    console.log(`Connected to OpenClaw status stream: ${KISHOS_DASHBOARD_URL}/api/openclaw/status/stream`);
+    openclawStatusSource.onerror = () => {};
+    console.log('✅ SSE: OpenClaw status stream');
   } catch (err) {
-    console.error('Failed to connect to OpenClaw status stream:', err.message);
+    console.log('⚠️ SSE OpenClaw failed:', err.message);
   }
 
-  // Stream 2: Events (sessions, tasks, agents)
   try {
-    dashboardEventSource = new EventSource(`${KISHOS_DASHBOARD_URL}/api/events?days=7`);
-    
-    dashboardEventSource.onmessage = (event) => {
+    // Events stream
+    dashboardEventSource = new EventSource(`${KISHOS_DASHBOARD_URL}/api/events`);
+    dashboardEventSource.onmessage = (e) => {
       try {
-        const parsed = JSON.parse(event.data);
+        const parsed = JSON.parse(e.data);
         latestDashboardData = parsed;
-        
-        if (parsed.type === 'snapshot') {
-          DashboardBroadcaster.broadcast('snapshot', parsed.data);
-        } else if (parsed.type === 'sessions_update') {
-          DashboardBroadcaster.broadcast('sessions', parsed.data);
-        } else if (parsed.type === 'tasks_snapshot') {
-          DashboardBroadcaster.broadcast('tasks', parsed.data);
-        } else if (parsed.type === 'agent_status') {
-          DashboardBroadcaster.broadcast('agent_status', parsed.data);
-        } else if (parsed.type === 'cost_update') {
-          DashboardBroadcaster.broadcast('costs', parsed.data);
-        }
-      } catch (err) {
-        console.error('Failed to parse dashboard event:', err.message);
-      }
+        DashboardBroadcaster.broadcast('events', parsed);
+      } catch (err) {}
     };
-
-    dashboardEventSource.onerror = (err) => {
-      console.error('Dashboard events SSE error:', err.message || 'Connection failed');
-    };
-
-    console.log(`Connected to dashboard events stream: ${KISHOS_DASHBOARD_URL}/api/events`);
+    dashboardEventSource.onerror = () => {};
+    console.log('✅ SSE: Events stream');
   } catch (err) {
-    console.error('Failed to connect to dashboard events stream:', err.message);
+    console.log('⚠️ SSE events failed:', err.message);
   }
 }
 
-// Middleware to check auth token
+// Auth middleware
 const authMiddleware = (req, res, next) => {
   const token = req.headers['x-device-token'];
-  if (!token) {
-    return res.status(401).json({ error: 'Missing device token' });
-  }
+  if (!token) return res.status(401).json({ error: 'Missing device token' });
   req.deviceToken = token;
   next();
 };
@@ -126,22 +152,19 @@ app.get('/health', (req, res) => {
   res.json({ 
     status: 'ok', 
     devices: devices.size,
-    dashboardConnected: !!dashboardEventSource,
-    openclawConnected: !!openclawStatusSource,
-    latestData: {
-      hasDashboard: !!latestDashboardData,
-      hasOpenClaw: !!latestOpenClawStatus
+    dashboardConnected: !!latestDashboardData,
+    openclawConnected: !!latestOpenClawStatus,
+    hasData: {
+      agents: latestDashboardData?.data?.agents?.length || 0,
+      sessions: latestDashboardData?.data?.sessions?.length || 0
     }
   });
 });
 
-// Pair device (called from iOS app after QR scan)
+// Pair device
 app.post('/pair', (req, res) => {
   const { deviceToken, deviceName } = req.body;
-  
-  if (!deviceToken) {
-    return res.status(400).json({ error: 'Missing deviceToken' });
-  }
+  if (!deviceToken) return res.status(400).json({ error: 'Missing deviceToken' });
   
   devices.set(deviceToken, {
     name: deviceName || 'Unknown',
@@ -150,11 +173,11 @@ app.post('/pair', (req, res) => {
     lastSeen: Date.now()
   });
   
-  console.log(`Device paired: ${deviceToken} (${deviceName})`);
+  console.log(`📱 Device paired: ${deviceToken}`);
   res.json({ success: true, paired: true });
 });
 
-// Send message from OpenClaw to device
+// Send message to device
 app.post('/message', authMiddleware, (req, res) => {
   const { message, actions = [], type = 'card' } = req.body;
   const deviceToken = req.deviceToken;
@@ -170,123 +193,156 @@ app.post('/message', authMiddleware, (req, res) => {
   
   const device = devices.get(deviceToken);
   
-  // If device is connected via WebSocket, send immediately
-  if (device && device.ws && device.ws.readyState === WebSocket.OPEN) {
+  if (device?.ws?.readyState === WebSocket.OPEN) {
     device.ws.send(JSON.stringify(payload));
-    console.log(`Message sent to ${deviceToken}: ${message.substring(0, 50)}...`);
     res.json({ success: true, delivered: true, id: payload.id });
   } else {
-    // Queue for later delivery
-    if (!pendingMessages.has(deviceToken)) {
-      pendingMessages.set(deviceToken, []);
-    }
+    if (!pendingMessages.has(deviceToken)) pendingMessages.set(deviceToken, []);
     pendingMessages.get(deviceToken).push(payload);
-    console.log(`Message queued for ${deviceToken}: ${message.substring(0, 50)}...`);
     res.json({ success: true, delivered: false, queued: true, id: payload.id });
   }
 });
 
-// Get message status
-app.get('/message/:id/status', authMiddleware, (req, res) => {
-  const { id } = req.params;
-  // TODO: Track message status properly
-  res.json({ id, status: 'unknown' });
-});
-
-// Poll for pending messages (fallback when WebSocket is down)
+// Poll for messages
 app.get('/poll', authMiddleware, (req, res) => {
   const deviceToken = req.deviceToken;
   const pending = pendingMessages.get(deviceToken) || [];
-
-  // Clear pending messages after returning them
   pendingMessages.set(deviceToken, []);
-
   res.json(pending);
 });
 
-// Dashboard API - System Overview (now returns cached live data)
-app.get('/dashboard/overview', authMiddleware, async (req, res) => {
-  try {
-    // Build response from cached live data
-    const sessions = latestDashboardData?.data?.sessions || [];
-    const agents = latestDashboardData?.data?.agents || [];
-    const totalTokens = sessions.reduce((sum, s) => sum + (s.tokensUsed?.input || 0) + (s.tokensUsed?.output || 0), 0);
-    const totalCost = sessions.reduce((sum, s) => sum + (s.totalCost || 0), 0);
-    
-    res.json({
-      status: 'online',
-      timestamp: Date.now(),
-      live: !!latestDashboardData,
-      sessions: {
-        active: sessions.length,
-        list: sessions.slice(0, 10).map(s => ({
-          id: s.id,
-          key: s.id,
-          agentId: s.agentId,
-          kind: s.agent?.name || s.agentId,
-          model: s.model,
-          totalTokens: (s.tokensUsed?.input || 0) + (s.tokensUsed?.output || 0),
-          totalCost: s.totalCost,
-          updatedAt: s.lastActivity,
-          messageCount: s.messageCount
-        }))
-      },
-      agents: {
-        count: agents.length,
-        list: agents.map(a => ({
-          id: a.id,
-          name: a.name,
-          emoji: a.emoji,
-          model: a.model,
-          status: a.status,
-          skillCount: a.skills?.length || 0
-        }))
-      },
-      costs: {
-        totalTokens: totalTokens,
-        totalCost: totalCost.toFixed(4),
-        estimatedCost: totalCost.toFixed(2)
-      },
-      cron: latestOpenClawStatus ? {
-        totalJobs: latestOpenClawStatus.summary?.totalCronJobs || 0,
-        enabledJobs: latestOpenClawStatus.summary?.enabledCronJobs || 0,
-        errors: latestOpenClawStatus.summary?.cronErrors || 0,
-        heartbeats: latestOpenClawStatus.summary?.heartbeatCount || 0,
-        staleHeartbeats: latestOpenClawStatus.summary?.staleHeartbeats || 0
-      } : null,
-      clawk: {
-        deviceConnected: devices.has(req.deviceToken),
-        pendingMessages: pendingMessages.get(req.deviceToken)?.length || 0,
-        totalDevices: devices.size
-      }
-    });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// Dashboard API - Agents with live status
-app.get('/dashboard/agents', authMiddleware, async (req, res) => {
-  try {
-    const agents = latestDashboardData?.data?.agents || [];
-    res.json({
-      agents: agents.map(a => ({
+// Dashboard Overview
+app.get('/dashboard/overview', authMiddleware, (req, res) => {
+  const sessions = latestDashboardData?.data?.sessions || [];
+  const agents = latestDashboardData?.data?.agents || [];
+  const totalTokens = sessions.reduce((sum, s) => 
+    sum + (s.tokensUsed?.input || 0) + (s.tokensUsed?.output || 0), 0);
+  const totalCost = sessions.reduce((sum, s) => sum + (s.totalCost || 0), 0);
+  
+  res.json({
+    status: 'online',
+    timestamp: Date.now(),
+    live: !!latestDashboardData,
+    sessions: {
+      active: sessions.filter(s => 
+        s.lastActivity && (Date.now() - new Date(s.lastActivity).getTime()) < 300000
+      ).length,
+      list: sessions.slice(0, 20).map(s => ({
+        id: s.id,
+        key: s.id,
+        agentId: s.agentId,
+        agentName: s.agent?.name || s.agentId,
+        agentEmoji: s.agent?.emoji || '🤖',
+        model: s.model,
+        totalTokens: (s.tokensUsed?.input || 0) + (s.tokensUsed?.output || 0),
+        totalCost: s.totalCost,
+        updatedAt: s.lastActivity,
+        messageCount: s.messageCount,
+        status: s.lastActivity && 
+          (Date.now() - new Date(s.lastActivity).getTime()) < 300000 ? 'active' : 'idle'
+      }))
+    },
+    agents: {
+      count: agents.length,
+      list: agents.map(a => ({
         id: a.id,
         name: a.name,
         emoji: a.emoji,
+        color: a.color,
         model: a.model,
         status: a.status,
-        skills: a.skills || [],
-        activeSkills: a.activeSkills || []
-      })),
-      timestamp: Date.now()
-    });
+        skillCount: a.skills?.length || 0
+      }))
+    },
+    costs: {
+      totalTokens,
+      totalCost: totalCost.toFixed(4),
+      estimatedCost: totalCost.toFixed(2)
+    },
+    cron: latestOpenClawStatus ? {
+      totalJobs: latestOpenClawStatus.summary?.totalCronJobs || 0,
+      enabledJobs: latestOpenClawStatus.summary?.enabledCronJobs || 0,
+      errors: latestOpenClawStatus.summary?.cronErrors || 0,
+      heartbeats: latestOpenClawStatus.summary?.heartbeatCount || 0,
+      staleHeartbeats: latestOpenClawStatus.summary?.staleHeartbeats || 0
+    } : null,
+    clawk: {
+      deviceConnected: devices.has(req.deviceToken),
+      pendingMessages: pendingMessages.get(req.deviceToken)?.length || 0,
+      totalDevices: devices.size
+    }
+  });
+});
+
+// Dashboard Agents
+app.get('/dashboard/agents', authMiddleware, (req, res) => {
+  const agents = latestDashboardData?.data?.agents || [];
+  res.json({
+    agents: agents.map(a => ({
+      id: a.id,
+      name: a.name,
+      emoji: a.emoji,
+      color: a.color,
+      model: a.model,
+      status: a.status,
+      skills: a.skills || [],
+      activeSkills: a.activeSkills || []
+    })),
+    timestamp: Date.now()
+  });
+});
+
+// Dashboard Sessions
+app.get('/dashboard/sessions', authMiddleware, (req, res) => {
+  const sessions = latestDashboardData?.data?.sessions || [];
+  const agents = latestDashboardData?.data?.agents || [];
+  const agentMap = new Map(agents.map(a => [a.id, a]));
+  
+  res.json({
+    sessions: sessions.map(s => {
+      const agent = agentMap.get(s.agentId);
+      const isActive = s.lastActivity && 
+        (Date.now() - new Date(s.lastActivity).getTime()) < 300000;
+      
+      return {
+        id: s.id,
+        key: s.id,
+        agentId: s.agentId,
+        agentName: agent?.name || s.agent?.name || s.agentId,
+        agentEmoji: agent?.emoji || s.agent?.emoji || '🤖',
+        agentColor: agent?.color || s.agent?.color || '#888888',
+        model: s.model,
+        projectPath: s.projectPath,
+        startedAt: s.startedAt,
+        lastActivity: s.lastActivity,
+        messageCount: s.messageCount,
+        totalCost: s.totalCost,
+        tokensUsed: s.tokensUsed,
+        source: s.source,
+        status: isActive ? 'active' : 'idle'
+      };
+    }),
+    activeCount: sessions.filter(s => 
+      s.lastActivity && (Date.now() - new Date(s.lastActivity).getTime()) < 300000
+    ).length,
+    totalCount: sessions.length,
+    timestamp: Date.now()
+  });
+});
+
+// Session messages
+app.get('/dashboard/sessions/:id/messages', authMiddleware, async (req, res) => {
+  try {
+    const response = await fetch(`${KISHOS_DASHBOARD_URL}/api/sessions/${req.params.id}/messages`);
+    if (!response.ok) throw new Error('Failed to fetch');
+    const data = await response.json();
+    res.json(data);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// Dashboard API - Costs
+// Dashboard Costs
 app.get('/dashboard/costs', authMiddleware, async (req, res) => {
   try {
     const period = req.query.period || 'week';
@@ -298,18 +354,15 @@ app.get('/dashboard/costs', authMiddleware, async (req, res) => {
   }
 });
 
-// Get responses from device (for OpenClaw to poll)
+// Get responses from device
 app.get('/responses', authMiddleware, (req, res) => {
   const deviceToken = req.deviceToken;
   const deviceResponses = responses.get(deviceToken) || [];
-
-  // Clear responses after returning them
   responses.set(deviceToken, []);
-
   res.json(deviceResponses);
 });
 
-// WebSocket connection from iOS app
+// WebSocket connection
 wss.on('connection', (ws, req) => {
   const token = new URL(req.url, 'http://localhost').searchParams.get('token');
   
@@ -318,19 +371,17 @@ wss.on('connection', (ws, req) => {
     return;
   }
   
-  console.log(`WebSocket connected: ${token}`);
+  console.log(`🔌 WebSocket connected: ${token}`);
   const device = devices.get(token);
   device.ws = ws;
   device.lastSeen = Date.now();
   
-  // Send any pending messages
+  // Send pending messages
   const pending = pendingMessages.get(token) || [];
-  pending.forEach(msg => {
-    ws.send(JSON.stringify(msg));
-  });
+  pending.forEach(msg => ws.send(JSON.stringify(msg)));
   pendingMessages.set(token, []);
   
-  // Send initial dashboard data if available
+  // Send current dashboard data
   if (latestDashboardData) {
     ws.send(JSON.stringify({
       type: 'dashboard',
@@ -339,60 +390,43 @@ wss.on('connection', (ws, req) => {
       timestamp: Date.now()
     }));
   }
-  if (latestOpenClawStatus) {
-    ws.send(JSON.stringify({
-      type: 'dashboard',
-      dashboardType: 'openclaw_status',
-      data: latestOpenClawStatus,
-      timestamp: Date.now()
-    }));
-  }
   
   ws.on('message', (data) => {
     try {
       const response = JSON.parse(data);
-      console.log(`Response from ${token}:`, response);
-
-      // Store response for OpenClaw to retrieve
-      if (!responses.has(token)) {
-        responses.set(token, []);
-      }
-      responses.get(token).push({
-        ...response,
-        receivedAt: Date.now()
-      });
+      if (!responses.has(token)) responses.set(token, []);
+      responses.get(token).push({ ...response, receivedAt: Date.now() });
     } catch (e) {
-      console.error('Invalid message from device:', e);
+      console.error('Invalid message:', e);
     }
   });
   
   ws.on('close', () => {
-    console.log(`WebSocket disconnected: ${token}`);
-    if (devices.has(token)) {
-      devices.get(token).ws = null;
-    }
+    console.log(`🔌 WebSocket disconnected: ${token}`);
+    if (devices.has(token)) devices.get(token).ws = null;
   });
   
-  ws.on('error', (err) => {
-    console.error(`WebSocket error for ${token}:`, err);
-  });
+  ws.on('error', (err) => console.error(`WebSocket error:`, err));
 });
 
-const PORT = process.env.PORT || 3000;
+// Start server
+const PORT = process.env.PORT || 3002;
 server.listen(PORT, () => {
-  console.log(`Clawk relay running on port ${PORT}`);
-  console.log(`Kishos Dashboard URL: ${KISHOS_DASHBOARD_URL}`);
+  console.log(`🚀 Clawk relay running on port ${PORT}`);
+  console.log(`📊 Dashboard URL: ${KISHOS_DASHBOARD_URL}`);
   
-  // Initialize SSE streams after server starts
-  setTimeout(initDashboardStreams, 1000);
+  // Start polling immediately
+  startPolling();
+  
+  // Try SSE for real-time updates
+  setTimeout(initSSE, 2000);
 });
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
   console.log('Shutting down...');
+  if (pollingInterval) clearInterval(pollingInterval);
   if (dashboardEventSource) dashboardEventSource.close();
   if (openclawStatusSource) openclawStatusSource.close();
-  server.close(() => {
-    process.exit(0);
-  });
+  server.close(() => process.exit(0));
 });
