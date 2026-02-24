@@ -15,11 +15,23 @@ struct ClawkMessage: Identifiable, Codable {
 class MessageStore: NSObject, ObservableObject {
     @Published var messages: [ClawkMessage] = []
     @Published var isConnected = false
+    @Published var isConnecting = false
+    @Published var logs: [String] = []
     
     private var webSocketTask: URLSessionWebSocketTask?
     private var reconnectTimer: Timer?
     private var pollTimer: Timer?
     private var receivedMessageIds = Set<String>()
+    
+    private func log(_ message: String) {
+        let timestamp = DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .medium)
+        DispatchQueue.main.async {
+            self.logs.append("[\(timestamp)] \(message)")
+            if self.logs.count > 50 {
+                self.logs.removeFirst()
+            }
+        }
+    }
     
     override init() {
         super.init()
@@ -43,6 +55,11 @@ class MessageStore: NSObject, ObservableObject {
     }
     
     func connect() {
+        DispatchQueue.main.async {
+            self.isConnecting = true
+        }
+        log("Connecting to \(Config.websocketURL)...")
+        
         var request = URLRequest(url: Config.websocketURL)
         request.timeoutInterval = 5
         
@@ -163,18 +180,32 @@ class MessageStore: NSObject, ObservableObject {
     }
 }
 
+    func manualRefresh() {
+        log("Manual refresh triggered")
+        pollMessages()
+    }
+    
+    func clearLogs() {
+        logs.removeAll()
+    }
+}
+
 extension MessageStore: URLSessionWebSocketDelegate {
     func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didOpenWithProtocol protocol: String?) {
         DispatchQueue.main.async {
             self.isConnected = true
+            self.isConnecting = false
         }
+        log("✅ WebSocket connected")
         stopPolling() // WebSocket works, no need to poll
         receive()
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        log("❌ WebSocket disconnected: \(error?.localizedDescription ?? "Unknown error")")
         DispatchQueue.main.async {
             self.isConnected = false
+            self.isConnecting = false
         }
         reconnect()
     }
