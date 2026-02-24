@@ -42,19 +42,11 @@ struct MessageCard: View {
             if !message.responded {
                 FlowLayout(spacing: 8) {
                     ForEach(Array(message.actions.enumerated()), id: \.offset) { index, action in
-                        Button(action: { 
-                            guard !message.responded else { return }
-                            onAction(action) 
-                        }) {
-                            Text(action)
-                                .font(.subheadline.weight(.medium))
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 8)
-                                .background(Color.blue)
-                                .foregroundColor(.white)
-                                .cornerRadius(8)
-                        }
-                        .disabled(message.responded)
+                        ActionButton(
+                            action: action,
+                            isEnabled: !message.responded,
+                            onTap: onAction
+                        )
                     }
                 }
             } else {
@@ -85,6 +77,29 @@ struct ConnectionStatus: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
+    }
+}
+
+struct ActionButton: View {
+    let action: String
+    let isEnabled: Bool
+    let onTap: (String) -> Void
+    
+    var body: some View {
+        Button(action: { 
+            if isEnabled {
+                onTap(action)
+            }
+        }) {
+            Text(action)
+                .font(.subheadline.weight(.medium))
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(isEnabled ? Color.blue : Color.gray)
+                .foregroundColor(.white)
+                .cornerRadius(8)
+        }
+        .disabled(!isEnabled)
     }
 }
 
