@@ -3,8 +3,8 @@ import SwiftUI
 // MARK: - Thinking Steps View
 /// Displays real-time thinking steps and tool calls during agent processing
 struct ThinkingStepsView: View {
-    let steps: [ThinkingStep]
-    
+    let steps: [GatewayThinkingStep]
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             ForEach(steps) { step in
@@ -18,24 +18,24 @@ struct ThinkingStepsView: View {
 }
 
 struct ThinkingStepRow: View {
-    let step: ThinkingStep
+    let step: GatewayThinkingStep
     @State private var isExpanded = false
-    
+
     var body: some View {
         HStack(spacing: 8) {
             // Icon based on type
             ThinkingStepIcon(step: step)
                 .frame(width: 20, height: 20)
-            
+
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text(step.displayText)
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .lineLimit(isExpanded ? nil : 1)
-                    
+
                     Spacer()
-                    
+
                     // Duration badge for completed tool calls
                     if let duration = step.durationMs {
                         Text("\(duration)ms")
@@ -46,13 +46,13 @@ struct ThinkingStepRow: View {
                             .background(Color.green.opacity(0.1))
                             .cornerRadius(4)
                     }
-                    
+
                     // Status indicator
                     if let status = step.status {
                         StatusDot(status: status)
                     }
                 }
-                
+
                 // Expandable details
                 if isExpanded, step.type == .toolCall || step.type == .toolResult {
                     if let toolName = step.toolName {
@@ -73,8 +73,8 @@ struct ThinkingStepRow: View {
 }
 
 struct ThinkingStepIcon: View {
-    let step: ThinkingStep
-    
+    let step: GatewayThinkingStep
+
     var body: some View {
         Group {
             switch step.type {
@@ -92,7 +92,7 @@ struct ThinkingStepIcon: View {
             }
         }
     }
-    
+
     private var statusIcon: String {
         switch step.status {
         case "ok", "success":
@@ -103,7 +103,7 @@ struct ThinkingStepIcon: View {
             return "info.circle.fill"
         }
     }
-    
+
     private var statusColor: Color {
         switch step.status {
         case "ok", "success":
@@ -119,7 +119,7 @@ struct ThinkingStepIcon: View {
 // MARK: - Animated Thinking Dots
 struct ThinkingDots: View {
     @State private var animationPhase = 0
-    
+
     var body: some View {
         HStack(spacing: 2) {
             ForEach(0..<3) { index in
@@ -134,7 +134,7 @@ struct ThinkingDots: View {
             }
         }
     }
-    
+
     private func opacity(for index: Int) -> Double {
         let base = Double(index) * 0.3
         let animated = Double(animationPhase) * 0.3
@@ -142,39 +142,19 @@ struct ThinkingDots: View {
     }
 }
 
-// MARK: - Status Dot
-struct StatusDot: View {
-    let status: String
-    
-    var body: some View {
-        Circle()
-            .fill(color)
-            .frame(width: 6, height: 6)
-    }
-    
-    private var color: Color {
-        switch status {
-        case "ok", "success": return .green
-        case "error", "failed": return .red
-        case "pending", "running": return .orange
-        default: return .gray
-        }
-    }
-}
-
 // MARK: - Chat Message with Thinking
 struct ChatMessageView: View {
-    let message: GatewayMessage
-    let agentIdentity: AgentIdentity?
+    let message: GatewayChatMessage
+    let agentIdentity: GatewayAgentIdentity?
     let isCurrentUser: Bool
-    
+
     var body: some View {
         HStack(alignment: .bottom, spacing: 8) {
             if !isCurrentUser {
                 // Agent avatar
                 AgentAvatar(identity: agentIdentity)
             }
-            
+
             VStack(alignment: isCurrentUser ? .trailing : .leading, spacing: 4) {
                 // Sender name
                 if !isCurrentUser, let name = agentIdentity?.name {
@@ -183,14 +163,14 @@ struct ChatMessageView: View {
                         .foregroundColor(.secondary)
                         .padding(.horizontal, 12)
                 }
-                
+
                 // Message bubble
-                MessageBubble(
+                ChatBubble(
                     content: message.content,
                     isUser: isCurrentUser,
                     color: agentIdentity?.color ?? "#6B7280"
                 )
-                
+
                 // Thinking (only for assistant messages)
                 if !isCurrentUser, let thinking = message.thinking {
                     DisclosureGroup("Thinking") {
@@ -205,7 +185,7 @@ struct ChatMessageView: View {
                     .foregroundColor(.secondary)
                     .padding(.horizontal, 12)
                 }
-                
+
                 // Tool calls
                 if let toolCalls = message.toolCalls, !toolCalls.isEmpty {
                     VStack(alignment: .leading, spacing: 4) {
@@ -215,21 +195,21 @@ struct ChatMessageView: View {
                     }
                     .padding(.horizontal, 12)
                 }
-                
+
                 // Timestamp
                 Text(formatTime(message.timestamp))
                     .font(.caption2)
                     .foregroundColor(.secondary)
                     .padding(.horizontal, 12)
             }
-            
+
             if isCurrentUser {
                 Spacer()
             }
         }
         .padding(.horizontal, 8)
     }
-    
+
     private func formatTime(_ date: Date) -> String {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .short
@@ -239,26 +219,26 @@ struct ChatMessageView: View {
 
 // MARK: - Agent Avatar
 struct AgentAvatar: View {
-    let identity: AgentIdentity?
-    
+    let identity: GatewayAgentIdentity?
+
     var body: some View {
         ZStack {
             Circle()
                 .fill(Color(hex: identity?.color ?? "#6B7280") ?? .gray)
                 .frame(width: 32, height: 32)
-            
+
             Text(identity?.emoji ?? "🤖")
                 .font(.title3)
         }
     }
 }
 
-// MARK: - Message Bubble
-struct MessageBubble: View {
+// MARK: - Chat Bubble (for Gateway chat messages)
+struct ChatBubble: View {
     let content: String
     let isUser: Bool
     let color: String
-    
+
     var body: some View {
         Text(content)
             .font(.body)
@@ -269,7 +249,7 @@ struct MessageBubble: View {
             .cornerRadius(16)
             .cornerRadius(isUser ? 16 : 4, corners: isUser ? [.topLeft, .topRight, .bottomLeft] : [.topRight, .bottomLeft, .bottomRight])
     }
-    
+
     private var backgroundColor: Color {
         if isUser {
             return Color(hex: color) ?? .blue
@@ -277,7 +257,7 @@ struct MessageBubble: View {
             return Color(.secondarySystemBackground)
         }
     }
-    
+
     private var foregroundColor: Color {
         isUser ? .white : .primary
     }
@@ -285,9 +265,9 @@ struct MessageBubble: View {
 
 // MARK: - Tool Call Badge
 struct ToolCallBadge: View {
-    let toolCall: ToolCall
+    let toolCall: GatewayToolCall
     @State private var showDetails = false
-    
+
     var body: some View {
         Button(action: { showDetails.toggle() }) {
             HStack(spacing: 4) {
@@ -310,9 +290,9 @@ struct ToolCallBadge: View {
 
 // MARK: - Tool Call Detail View
 struct ToolCallDetailView: View {
-    let toolCall: ToolCall
+    let toolCall: GatewayToolCall
     @Environment(\.dismiss) private var dismiss
-    
+
     var body: some View {
         NavigationView {
             List {
@@ -320,7 +300,7 @@ struct ToolCallDetailView: View {
                     Text(toolCall.name)
                         .font(.headline)
                 }
-                
+
                 Section("Arguments") {
                     if toolCall.arguments.isEmpty {
                         Text("No arguments")
@@ -341,7 +321,7 @@ struct ToolCallDetailView: View {
                         }
                     }
                 }
-                
+
                 Section("Timestamp") {
                     Text(toolCall.timestamp, style: .date)
                     Text(toolCall.timestamp, style: .time)
@@ -360,68 +340,27 @@ struct ToolCallDetailView: View {
     }
 }
 
-// MARK: - Corner Radius Extension
-extension View {
-    func cornerRadius(_ radius: CGFloat, corners: UIRectCorner) -> some View {
-        clipShape(RoundedCorner(radius: radius, corners: corners))
-    }
-}
-
-struct RoundedCorner: Shape {
-    var radius: CGFloat = .infinity
-    var corners: UIRectCorner = .allCorners
-    
-    func path(in rect: CGRect) -> Path {
-        let path = UIBezierPath(
-            roundedRect: rect,
-            byRoundingCorners: corners,
-            cornerRadii: CGSize(width: radius, height: radius)
-        )
-        return Path(path.cgPath)
-    }
-}
-
-// MARK: - Thinking Step Extensions
-extension ThinkingStep {
-    var displayText: String {
-        switch type {
-        case .thinking:
-            return content
-        case .toolCall:
-            if let toolName = toolName {
-                return "Using \(toolName)..."
-            }
-            return content
-        case .toolResult:
-            if let toolName = toolName {
-                return "\(toolName) completed"
-            }
-            return content
-        }
-    }
-}
-
 // MARK: - Preview
 struct ThinkingStepsView_Previews: PreviewProvider {
     static var previews: some View {
         VStack {
             ThinkingStepsView(steps: [
-                ThinkingStep(id: "1", content: "Considering options...", timestamp: Date(), type: .thinking),
-                ThinkingStep(id: "2", content: "Using web_search...", timestamp: Date(), type: .toolCall, toolName: "web_search"),
-                ThinkingStep(id: "3", content: "web_search completed", timestamp: Date(), type: .toolResult, toolName: "web_search", status: "ok", durationMs: 450)
+                GatewayThinkingStep(id: "1", content: "Considering options...", timestamp: Date(), type: .thinking),
+                GatewayThinkingStep(id: "2", content: "Using web_search...", timestamp: Date(), type: .toolCall, toolName: "web_search"),
+                GatewayThinkingStep(id: "3", content: "web_search completed", timestamp: Date(), type: .toolResult, toolName: "web_search", status: "ok", durationMs: 450)
             ])
-            
+
             Divider()
-            
+
             ChatMessageView(
-                message: GatewayMessage(
+                message: GatewayChatMessage(
                     id: "1",
                     role: "assistant",
                     content: "I found some interesting results for you!",
                     timestamp: Date(),
                     thinking: "Let me search for the latest information..."
                 ),
-                agentIdentity: AgentIdentity(name: "Claude", creature: "AI", vibe: "Helpful", emoji: "🧠", color: "#A78BFA"),
+                agentIdentity: GatewayAgentIdentity(name: "Claude", creature: "AI", vibe: "Helpful", emoji: "🧠", color: "#A78BFA"),
                 isCurrentUser: false
             )
         }
