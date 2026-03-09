@@ -7,51 +7,90 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		008080B3368DE6AEA80E6807 /* ApprovalQueueView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE29A68B30630F58BCB47CF0 /* ApprovalQueueView.swift */; };
+		04F144AAB362A6236543697B /* GatewayConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BF9B02D88EDF9A8620601CA /* GatewayConnection.swift */; };
 		05611179C1434EA208CEF157 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 641664BF743F7453554BF316 /* ContentView.swift */; };
+		13D989FEDC813BC32D37A770 /* SharedViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62E583E96D8734B6045457C9 /* SharedViews.swift */; };
+		1692CD406B2399800935424F /* GatewayChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A89B98F7C06E05A590381E2 /* GatewayChatView.swift */; };
+		182D525333F502C00AAF063A /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 227D7EAA8BA576629153DE13 /* HomeView.swift */; };
+		1CDB7EBBF886F63BA1460083 /* GatewayProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA864BCB8E5CB4DC707F8304 /* GatewayProtocol.swift */; };
+		25CAA09F895BFE70FB427FE6 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9BBBBEE778FA330FC6B2E92 /* SettingsView.swift */; };
 		2808C6EC9F10FBF1D766B1E0 /* MessageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB9ECBC77D8360B0E33A59D8 /* MessageStore.swift */; };
 		406B8FE4F7E6B617DF8742F4 /* ClawkApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A7C72458B614B76F4F4240A /* ClawkApp.swift */; };
+		4DF47FC10F47C2C8D771C0BF /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A733B461015C5FBC8DD9322E /* DashboardView.swift */; };
+		520D1CD0D409E1F4E2F2256B /* CostsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 493A6B6CB1096E8BA7B489A8 /* CostsView.swift */; };
+		544FE18D516A26C1E3093F9D /* ChatListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8E4765E74CC787BC5A5D4C7 /* ChatListView.swift */; };
+		57022D80604899DEC98B40DB /* AgentLogsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D479C595005207FF75F951E6 /* AgentLogsView.swift */; };
+		70C3FD5985DE350508CA7576 /* DashboardAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19D33F8BBD6020A9F8F43C0D /* DashboardAPIClient.swift */; };
 		796D01F37B7326029545C9CC /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67B095715EC6D0657B8EF344 /* Config.swift */; };
-		D3A1B2C4E5F6078912345678 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A1B2C4E5F60789ABCDEF01 /* DashboardView.swift */; };
-		AA1111111111111111111111 /* ChatHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB1111111111111111111111 /* ChatHistoryStore.swift */; };
-		AA2222222222222222222222 /* GatewayChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB2222222222222222222222 /* GatewayChatView.swift */; };
-		AA3333333333333333333333 /* GatewayConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB3333333333333333333333 /* GatewayConnection.swift */; };
-		AA4444444444444444444444 /* IdentitySyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB4444444444444444444444 /* IdentitySyncManager.swift */; };
-		AA5555555555555555555555 /* SessionChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB5555555555555555555555 /* SessionChatView.swift */; };
-		AA6666666666666666666666 /* ThinkingStepsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB6666666666666666666666 /* ThinkingStepsView.swift */; };
+		948B83E8BA1F40E0036CA590 /* MemoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E59A447B777F28AAE47C8346 /* MemoryView.swift */; };
+		A910280A5CEBEB328812E732 /* MoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BC007C150922B621095A597 /* MoreView.swift */; };
+		BEA296B530D3EE0B1A1037F2 /* LiveDashboardTabs.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC24015FE274E4F772DA97DD /* LiveDashboardTabs.swift */; };
+		D5E0FA06E527E6EE4F6524CE /* SessionChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FA8028A0517DF1195BA7854 /* SessionChatView.swift */; };
+		E0970E477EF5F286C09EE94C /* CronManagementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD2B0BD8253B85A1A695E980 /* CronManagementView.swift */; };
+		E5B9761377A5DDC85827D781 /* ChatDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F68684194B8B5DC79D73D38 /* ChatDetailView.swift */; };
+		E987A5A657F8E60CD3D6D53C /* ChatHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29F2E674D7271CB505C361DF /* ChatHistoryStore.swift */; };
+		F94BAA3974D909D010154B90 /* ThinkingStepsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 716ADB4A08C625A0CEDDD715 /* ThinkingStepsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		19D33F8BBD6020A9F8F43C0D /* DashboardAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardAPIClient.swift; sourceTree = "<group>"; };
+		1FA8028A0517DF1195BA7854 /* SessionChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionChatView.swift; sourceTree = "<group>"; };
+		227D7EAA8BA576629153DE13 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		29F2E674D7271CB505C361DF /* ChatHistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatHistoryStore.swift; sourceTree = "<group>"; };
+		3BC007C150922B621095A597 /* MoreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoreView.swift; sourceTree = "<group>"; };
+		3BF9B02D88EDF9A8620601CA /* GatewayConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayConnection.swift; sourceTree = "<group>"; };
+		493A6B6CB1096E8BA7B489A8 /* CostsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CostsView.swift; sourceTree = "<group>"; };
+		4F68684194B8B5DC79D73D38 /* ChatDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatDetailView.swift; sourceTree = "<group>"; };
+		5A89B98F7C06E05A590381E2 /* GatewayChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayChatView.swift; sourceTree = "<group>"; };
+		62E583E96D8734B6045457C9 /* SharedViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedViews.swift; sourceTree = "<group>"; };
 		641664BF743F7453554BF316 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
-		D3A1B2C4E5F60789ABCDEF01 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		645A6F0E142A68BB46D021FB /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		67B095715EC6D0657B8EF344 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
+		716ADB4A08C625A0CEDDD715 /* ThinkingStepsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThinkingStepsView.swift; sourceTree = "<group>"; };
 		7A7C72458B614B76F4F4240A /* ClawkApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClawkApp.swift; sourceTree = "<group>"; };
+		A733B461015C5FBC8DD9322E /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		AB9ECBC77D8360B0E33A59D8 /* MessageStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageStore.swift; sourceTree = "<group>"; };
-		BB1111111111111111111111 /* ChatHistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatHistoryStore.swift; sourceTree = "<group>"; };
-		BB2222222222222222222222 /* GatewayChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayChatView.swift; sourceTree = "<group>"; };
-		BB3333333333333333333333 /* GatewayConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayConnection.swift; sourceTree = "<group>"; };
-		BB4444444444444444444444 /* IdentitySyncManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdentitySyncManager.swift; sourceTree = "<group>"; };
-		BB5555555555555555555555 /* SessionChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionChatView.swift; sourceTree = "<group>"; };
-		BB6666666666666666666666 /* ThinkingStepsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThinkingStepsView.swift; sourceTree = "<group>"; };
+		B8E4765E74CC787BC5A5D4C7 /* ChatListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatListView.swift; sourceTree = "<group>"; };
+		CA864BCB8E5CB4DC707F8304 /* GatewayProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayProtocol.swift; sourceTree = "<group>"; };
+		CD2B0BD8253B85A1A695E980 /* CronManagementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CronManagementView.swift; sourceTree = "<group>"; };
+		D479C595005207FF75F951E6 /* AgentLogsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentLogsView.swift; sourceTree = "<group>"; };
+		DC24015FE274E4F772DA97DD /* LiveDashboardTabs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveDashboardTabs.swift; sourceTree = "<group>"; };
+		DE29A68B30630F58BCB47CF0 /* ApprovalQueueView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovalQueueView.swift; sourceTree = "<group>"; };
+		E59A447B777F28AAE47C8346 /* MemoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryView.swift; sourceTree = "<group>"; };
 		E8710FBF24E9CAA28D156CE7 /* Clawk.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Clawk.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F9BBBBEE778FA330FC6B2E92 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
 		4E841F33964A086D476BDF0F /* Clawk */ = {
 			isa = PBXGroup;
 			children = (
+				D479C595005207FF75F951E6 /* AgentLogsView.swift */,
+				DE29A68B30630F58BCB47CF0 /* ApprovalQueueView.swift */,
+				4F68684194B8B5DC79D73D38 /* ChatDetailView.swift */,
+				29F2E674D7271CB505C361DF /* ChatHistoryStore.swift */,
+				B8E4765E74CC787BC5A5D4C7 /* ChatListView.swift */,
 				7A7C72458B614B76F4F4240A /* ClawkApp.swift */,
 				67B095715EC6D0657B8EF344 /* Config.swift */,
 				641664BF743F7453554BF316 /* ContentView.swift */,
-				D3A1B2C4E5F60789ABCDEF01 /* DashboardView.swift */,
-				BB1111111111111111111111 /* ChatHistoryStore.swift */,
-				BB3333333333333333333333 /* GatewayConnection.swift */,
-				BB2222222222222222222222 /* GatewayChatView.swift */,
-				BB4444444444444444444444 /* IdentitySyncManager.swift */,
+				493A6B6CB1096E8BA7B489A8 /* CostsView.swift */,
+				CD2B0BD8253B85A1A695E980 /* CronManagementView.swift */,
+				19D33F8BBD6020A9F8F43C0D /* DashboardAPIClient.swift */,
+				A733B461015C5FBC8DD9322E /* DashboardView.swift */,
+				5A89B98F7C06E05A590381E2 /* GatewayChatView.swift */,
+				3BF9B02D88EDF9A8620601CA /* GatewayConnection.swift */,
+				CA864BCB8E5CB4DC707F8304 /* GatewayProtocol.swift */,
+				227D7EAA8BA576629153DE13 /* HomeView.swift */,
 				645A6F0E142A68BB46D021FB /* Info.plist */,
+				DC24015FE274E4F772DA97DD /* LiveDashboardTabs.swift */,
+				E59A447B777F28AAE47C8346 /* MemoryView.swift */,
 				AB9ECBC77D8360B0E33A59D8 /* MessageStore.swift */,
-				BB5555555555555555555555 /* SessionChatView.swift */,
-				BB6666666666666666666666 /* ThinkingStepsView.swift */,
+				3BC007C150922B621095A597 /* MoreView.swift */,
+				1FA8028A0517DF1195BA7854 /* SessionChatView.swift */,
+				F9BBBBEE778FA330FC6B2E92 /* SettingsView.swift */,
+				62E583E96D8734B6045457C9 /* SharedViews.swift */,
+				716ADB4A08C625A0CEDDD715 /* ThinkingStepsView.swift */,
 			);
 			path = Clawk;
 			sourceTree = "<group>";
@@ -130,17 +169,30 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				57022D80604899DEC98B40DB /* AgentLogsView.swift in Sources */,
+				008080B3368DE6AEA80E6807 /* ApprovalQueueView.swift in Sources */,
+				E5B9761377A5DDC85827D781 /* ChatDetailView.swift in Sources */,
+				E987A5A657F8E60CD3D6D53C /* ChatHistoryStore.swift in Sources */,
+				544FE18D516A26C1E3093F9D /* ChatListView.swift in Sources */,
 				406B8FE4F7E6B617DF8742F4 /* ClawkApp.swift in Sources */,
-				AA1111111111111111111111 /* ChatHistoryStore.swift in Sources */,
 				796D01F37B7326029545C9CC /* Config.swift in Sources */,
 				05611179C1434EA208CEF157 /* ContentView.swift in Sources */,
-				D3A1B2C4E5F6078912345678 /* DashboardView.swift in Sources */,
-				AA3333333333333333333333 /* GatewayConnection.swift in Sources */,
-				AA2222222222222222222222 /* GatewayChatView.swift in Sources */,
-				AA4444444444444444444444 /* IdentitySyncManager.swift in Sources */,
+				520D1CD0D409E1F4E2F2256B /* CostsView.swift in Sources */,
+				E0970E477EF5F286C09EE94C /* CronManagementView.swift in Sources */,
+				70C3FD5985DE350508CA7576 /* DashboardAPIClient.swift in Sources */,
+				4DF47FC10F47C2C8D771C0BF /* DashboardView.swift in Sources */,
+				1692CD406B2399800935424F /* GatewayChatView.swift in Sources */,
+				04F144AAB362A6236543697B /* GatewayConnection.swift in Sources */,
+				1CDB7EBBF886F63BA1460083 /* GatewayProtocol.swift in Sources */,
+				182D525333F502C00AAF063A /* HomeView.swift in Sources */,
+				BEA296B530D3EE0B1A1037F2 /* LiveDashboardTabs.swift in Sources */,
+				948B83E8BA1F40E0036CA590 /* MemoryView.swift in Sources */,
 				2808C6EC9F10FBF1D766B1E0 /* MessageStore.swift in Sources */,
-				AA5555555555555555555555 /* SessionChatView.swift in Sources */,
-				AA6666666666666666666666 /* ThinkingStepsView.swift in Sources */,
+				A910280A5CEBEB328812E732 /* MoreView.swift in Sources */,
+				D5E0FA06E527E6EE4F6524CE /* SessionChatView.swift in Sources */,
+				25CAA09F895BFE70FB427FE6 /* SettingsView.swift in Sources */,
+				13D989FEDC813BC32D37A770 /* SharedViews.swift in Sources */,
+				F94BAA3974D909D010154B90 /* ThinkingStepsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -209,7 +261,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				INFOPLIST_FILE = Clawk/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -227,7 +279,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				INFOPLIST_FILE = Clawk/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
