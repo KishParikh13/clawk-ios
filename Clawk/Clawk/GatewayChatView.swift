@@ -8,13 +8,13 @@ struct GatewayChatView: View {
     @State private var messageText = ""
     @State private var showingSettings = false
     @State private var scrollToBottom = false
-    @FocusState private isInputFocused: Bool
+    @FocusState private var isInputFocused: Bool
     
     var body: some View {
         NavigationView {
             VStack(spacing: 0) {
                 // Connection status
-                ConnectionStatusBar(connection: gateway)
+                GatewayStatusBar(connection: gateway)
                 
                 // Messages list
                 ScrollViewReader { proxy in
@@ -37,10 +37,10 @@ struct GatewayChatView: View {
                         }
                         .padding(.vertical, 8)
                     }
-                    .onChange(of: gateway.messages.count) { _ in
+                    .onChange(of: gateway.messages.count) {
                         scrollToBottom(proxy)
                     }
-                    .onChange(of: gateway.thinkingSteps.count) { _ in
+                    .onChange(of: gateway.thinkingSteps.count) {
                         scrollToBottom(proxy)
                     }
                     .onAppear {
@@ -107,8 +107,8 @@ struct GatewayChatView: View {
     }
 }
 
-// MARK: - Connection Status Bar
-struct ConnectionStatusBar: View {
+// MARK: - Gateway Status Bar
+struct GatewayStatusBar: View {
     @ObservedObject var connection: GatewayConnection
     
     var body: some View {
@@ -275,7 +275,7 @@ struct GatewaySettingsView: View {
                 }
                 
                 Section("Debug") {
-                    Text("Device Token: \(gateway.deviceToken.prefix(8))...")
+                    Text("Device Token: \(gateway.publicDeviceToken.prefix(8))...")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }

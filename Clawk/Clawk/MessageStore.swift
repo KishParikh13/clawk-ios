@@ -15,10 +15,10 @@ struct ClawkMessage: Identifiable, Codable {
 // MARK: - Dashboard Models
 
 struct DashboardSnapshot: Codable {
-    let agents: [DashboardAgent]?
-    let sessions: [DashboardSession]?
-    let totalCost: Double?
-    let lastUpdated: String?
+    var agents: [DashboardAgent]?
+    var sessions: [DashboardSession]?
+    var totalCost: Double?
+    var lastUpdated: String?
 }
 
 struct DashboardAgent: Codable, Identifiable {
@@ -161,23 +161,52 @@ struct SessionMessage: Codable, Identifiable {
     let timestamp: String?
     let cost: Double?
     let model: String?
-    let toolCalls: [ToolCall]?
-    let toolResults: [ToolResult]?
-    
+    let toolCalls: [SessionToolCall]?
+    let toolResults: [SessionToolResult]?
+
+    // API returns camelCase (toolCalls) — support both camelCase and snake_case
     enum CodingKeys: String, CodingKey {
         case id, role, content, timestamp, cost, model
+        case toolCalls, toolResults
+    }
+
+    // Fallback keys for snake_case responses
+    private enum SnakeCaseKeys: String, CodingKey {
         case toolCalls = "tool_calls"
         case toolResults = "tool_results"
     }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = (try? container.decode(String.self, forKey: .id)) ?? UUID().uuidString
+        self.role = try container.decode(String.self, forKey: .role)
+        self.content = (try? container.decode(String.self, forKey: .content)) ?? ""
+        self.timestamp = try? container.decode(String.self, forKey: .timestamp)
+        self.cost = try? container.decode(Double.self, forKey: .cost)
+        self.model = try? container.decode(String.self, forKey: .model)
+        // Try camelCase first (dashboard API), then snake_case fallback
+        if let tc = try? container.decode([SessionToolCall].self, forKey: .toolCalls) {
+            self.toolCalls = tc
+        } else {
+            let snakeContainer = try decoder.container(keyedBy: SnakeCaseKeys.self)
+            self.toolCalls = try? snakeContainer.decode([SessionToolCall].self, forKey: .toolCalls)
+        }
+        if let tr = try? container.decode([SessionToolResult].self, forKey: .toolResults) {
+            self.toolResults = tr
+        } else {
+            let snakeContainer = try decoder.container(keyedBy: SnakeCaseKeys.self)
+            self.toolResults = try? snakeContainer.decode([SessionToolResult].self, forKey: .toolResults)
+        }
+    }
 }
 
-struct ToolCall: Codable {
+struct SessionToolCall: Codable {
     let id: String?
     let name: String?
     let arguments: [String: String]?
 }
 
-struct ToolResult: Codable {
+struct SessionToolResult: Codable {
     let toolName: String?
     let status: String?
     let content: String?
@@ -323,7 +352,8 @@ class MessageStore: NSObject, ObservableObject {
     
     private func handleMessage(_ text: String) {
         // First try to parse as dashboard update
-        if let dashboardUpdate = try? JSONDecoder().decode(DashboardUpdate.self, from: text.data(using: .utf8)!) {
+        guard let textData = text.data(using: .utf8) else { return }
+        if let dashboardUpdate = try? JSONDecoder().decode(DashboardUpdate.self, from: textData) {
             handleDashboardUpdate(dashboardUpdate)
             return
         }
@@ -382,7 +412,7 @@ class MessageStore: NSObject, ObservableObject {
                 
             case "agent_status":
                 // Handle individual agent status updates
-                log("Agent status update received")
+                self?.log("Agent status update received")
                 
             case "costs":
                 // Handle cost updates
@@ -418,7 +448,9 @@ class MessageStore: NSObject, ObservableObject {
             ]
             
             if let data = try? JSONSerialization.data(withJSONObject: response) {
-                self.webSocketTask?.send(.string(String(data: data, encoding: .utf8)!)) { _ in }
+                if let text = String(data: data, encoding: .utf8) {
+                    self.webSocketTask?.send(.string(text)) { _ in }
+                }
             }
         }
     }
