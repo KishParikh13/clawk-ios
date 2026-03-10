@@ -191,7 +191,7 @@ struct SettingsView: View {
         gatewayHost = gateway.gatewayHost
         gatewayPort = "\(gateway.gatewayPort)"
         gatewayToken = UserDefaults.standard.string(forKey: "gatewayToken") ?? ""
-        dashboardURL = UserDefaults.standard.string(forKey: "dashboardBaseURL") ?? "http://localhost:4004"
+        dashboardURL = UserDefaults.standard.string(forKey: "dashboardBaseURL") ?? "http://100.96.61.83:4004"
         relayURL = Config.baseURL
     }
 

@@ -13,7 +13,7 @@ class DashboardAPIClient: ObservableObject {
     private var baseURL: String
 
     init(baseURL: String? = nil) {
-        self.baseURL = baseURL ?? UserDefaults.standard.string(forKey: "dashboardBaseURL") ?? "http://localhost:4004"
+        self.baseURL = baseURL ?? UserDefaults.standard.string(forKey: "dashboardBaseURL") ?? "http://100.96.61.83:4004"
     }
 
     func updateBaseURL(_ url: String) {

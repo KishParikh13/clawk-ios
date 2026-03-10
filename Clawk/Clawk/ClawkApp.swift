@@ -25,7 +25,7 @@ struct ClawkApp: App {
                             do {
                                 let config = try await dashboardAPI.fetchGatewayConfig()
                                 if let url = config.url {
-                                    var host = "127.0.0.1"
+                                    var host = "100.96.61.83"
                                     var port = 18789
                                     if let components = URLComponents(string: url) {
                                         host = components.host ?? host
