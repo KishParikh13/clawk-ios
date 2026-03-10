@@ -19,3 +19,6 @@ targets:
         UILaunchStoryboardName: LaunchScreen
         CFBundleShortVersionString: "1.0"
         CFBundleVersion: "1"
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+        NSLocalNetworkUsageDescription: "Clawk connects to OpenClaw Gateway and Dashboard on your local network."
