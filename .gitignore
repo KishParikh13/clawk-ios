@@ -1,0 +1,40 @@
+# Xcode
+build/
+DerivedData/
+*.xcuserdata/
+*.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.build/
+Packages/
+Package.resolved
+
+# CocoaPods (if ever used)
+Pods/
+
+# Secrets — NEVER commit these
+.env
+*.p12
+*.mobileprovision
+*.cer
+*.p8
+AuthKey_*.p8
+authkey*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+*.swp
+*~

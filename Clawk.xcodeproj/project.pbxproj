@@ -1,0 +1,363 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		004EF0BE38CE38171392A59F /* SessionChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331039EA961AFEBBC754471C /* SessionChatView.swift */; };
+		392E91EC19B341EA47D7EBB0 /* ChatHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE3DDEB1FB38D74B846855A7 /* ChatHistoryStore.swift */; };
+		3D36BD083CD31C470F5CABD1 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA57C78E9A01D1696879D404 /* ContentView.swift */; };
+		427BDB89C7F017DA83995267 /* ClawkApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33E029E49E21CB74B5904AE2 /* ClawkApp.swift */; };
+		4FA88C473B0FEAD4ABD5D25F /* ThinkingStepsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D35665FA3F56CF392745A93D /* ThinkingStepsView.swift */; };
+		5A9AFDF981044763ED36CD50 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FDE0E62C6297BA712BF617F /* DashboardView.swift */; };
+		67DA635B2C6C6F9C221B14B1 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 51AEEC294B6642639AF94BC7 /* Assets.xcassets */; };
+		6FB7A197A6CF6DBB427853FA /* GatewayConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = C57A6D7C4B4F3BFFF9FA958A /* GatewayConnection.swift */; };
+		7AFE602277E3A30D57340697 /* MessageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE180CC3714A90B36DA2F978 /* MessageStore.swift */; };
+		BFCEE54D248B4989424BB046 /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8552DF2FE554CF8365645D9 /* Config.swift */; };
+		D0D7B584226F2669F8B189CB /* IdentitySyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 920ABB543EB076FD1F47D1C8 /* IdentitySyncManager.swift */; };
+		EE32CA01BDE53F42B663D656 /* GatewayChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A29C9383EE414A58684B9F14 /* GatewayChatView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		331039EA961AFEBBC754471C /* SessionChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionChatView.swift; sourceTree = "<group>"; };
+		33E029E49E21CB74B5904AE2 /* ClawkApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClawkApp.swift; sourceTree = "<group>"; };
+		51AEEC294B6642639AF94BC7 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		920ABB543EB076FD1F47D1C8 /* IdentitySyncManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdentitySyncManager.swift; sourceTree = "<group>"; };
+		9FDE0E62C6297BA712BF617F /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
+		A29C9383EE414A58684B9F14 /* GatewayChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayChatView.swift; sourceTree = "<group>"; };
+		C57A6D7C4B4F3BFFF9FA958A /* GatewayConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayConnection.swift; sourceTree = "<group>"; };
+		D35665FA3F56CF392745A93D /* ThinkingStepsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThinkingStepsView.swift; sourceTree = "<group>"; };
+		DE180CC3714A90B36DA2F978 /* MessageStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageStore.swift; sourceTree = "<group>"; };
+		E8552DF2FE554CF8365645D9 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
+		E8710FBF24E9CAA28D156CE7 /* Clawk.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Clawk.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		EA57C78E9A01D1696879D404 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		FE3DDEB1FB38D74B846855A7 /* ChatHistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatHistoryStore.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		4E841F33964A086D476BDF0F /* Clawk */ = {
+			isa = PBXGroup;
+			children = (
+				C469A24BE78153FC2DFA858F /* Clawk */,
+			);
+			path = Clawk;
+			sourceTree = "<group>";
+		};
+		C469A24BE78153FC2DFA858F /* Clawk */ = {
+			isa = PBXGroup;
+			children = (
+				51AEEC294B6642639AF94BC7 /* Assets.xcassets */,
+				FE3DDEB1FB38D74B846855A7 /* ChatHistoryStore.swift */,
+				33E029E49E21CB74B5904AE2 /* ClawkApp.swift */,
+				E8552DF2FE554CF8365645D9 /* Config.swift */,
+				EA57C78E9A01D1696879D404 /* ContentView.swift */,
+				9FDE0E62C6297BA712BF617F /* DashboardView.swift */,
+				A29C9383EE414A58684B9F14 /* GatewayChatView.swift */,
+				C57A6D7C4B4F3BFFF9FA958A /* GatewayConnection.swift */,
+				920ABB543EB076FD1F47D1C8 /* IdentitySyncManager.swift */,
+				DE180CC3714A90B36DA2F978 /* MessageStore.swift */,
+				331039EA961AFEBBC754471C /* SessionChatView.swift */,
+				D35665FA3F56CF392745A93D /* ThinkingStepsView.swift */,
+			);
+			path = Clawk;
+			sourceTree = "<group>";
+		};
+		E2CBAB2EEB3B310BC3BE53AD = {
+			isa = PBXGroup;
+			children = (
+				4E841F33964A086D476BDF0F /* Clawk */,
+				FF47E99327B575DC454AC59C /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		FF47E99327B575DC454AC59C /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				E8710FBF24E9CAA28D156CE7 /* Clawk.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		1549E8CABB9B75930BDC8B33 /* Clawk */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 69E1EC7F38785B2031E2BA3A /* Build configuration list for PBXNativeTarget "Clawk" */;
+			buildPhases = (
+				208DBEBD8890A387DE22E529 /* Sources */,
+				55F38AC531947E13E49A3A6F /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Clawk;
+			packageProductDependencies = (
+			);
+			productName = Clawk;
+			productReference = E8710FBF24E9CAA28D156CE7 /* Clawk.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		C0CE5586F71B4AFA40F4FCF1 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					1549E8CABB9B75930BDC8B33 = {
+						DevelopmentTeam = GN3TH9WD6W;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 1A46257AD25B0AB80ADB6B4C /* Build configuration list for PBXProject "Clawk" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = E2CBAB2EEB3B310BC3BE53AD;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				1549E8CABB9B75930BDC8B33 /* Clawk */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		55F38AC531947E13E49A3A6F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				67DA635B2C6C6F9C221B14B1 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		208DBEBD8890A387DE22E529 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				392E91EC19B341EA47D7EBB0 /* ChatHistoryStore.swift in Sources */,
+				427BDB89C7F017DA83995267 /* ClawkApp.swift in Sources */,
+				BFCEE54D248B4989424BB046 /* Config.swift in Sources */,
+				3D36BD083CD31C470F5CABD1 /* ContentView.swift in Sources */,
+				5A9AFDF981044763ED36CD50 /* DashboardView.swift in Sources */,
+				EE32CA01BDE53F42B663D656 /* GatewayChatView.swift in Sources */,
+				6FB7A197A6CF6DBB427853FA /* GatewayConnection.swift in Sources */,
+				D0D7B584226F2669F8B189CB /* IdentitySyncManager.swift in Sources */,
+				7AFE602277E3A30D57340697 /* MessageStore.swift in Sources */,
+				004EF0BE38CE38171392A59F /* SessionChatView.swift in Sources */,
+				4FA88C473B0FEAD4ABD5D25F /* ThinkingStepsView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		1CDE696A1F606B3D91ABC11F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = GN3TH9WD6W;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Clawk;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		7E51E3D18D85DBB71247525E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.kishparikh.clawk;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		9B8EB2BD52C84935AE3314C0 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.kishparikh.clawk;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		BE260EB993A2BA3E1786B0DC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = GN3TH9WD6W;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Clawk;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		1A46257AD25B0AB80ADB6B4C /* Build configuration list for PBXProject "Clawk" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BE260EB993A2BA3E1786B0DC /* Debug */,
+				1CDE696A1F606B3D91ABC11F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		69E1EC7F38785B2031E2BA3A /* Build configuration list for PBXNativeTarget "Clawk" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7E51E3D18D85DBB71247525E /* Debug */,
+				9B8EB2BD52C84935AE3314C0 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = C0CE5586F71B4AFA40F4FCF1 /* Project object */;
+}
