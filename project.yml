@@ -16,6 +16,7 @@ settings:
     CODE_SIGN_STYLE: Automatic
     ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     SWIFT_VERSION: "5.0"
+    TARGETED_DEVICE_FAMILY: "1"
 targets:
   Clawk:
     type: application
