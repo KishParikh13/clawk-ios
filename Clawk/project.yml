@@ -1,4 +1,17 @@
 name: Clawk
+schemes:
+  KishOSMac:
+    build:
+      targets:
+        KishOSMac: all
+        KishOSMacTests: [test]
+    run:
+      config: Debug
+      executable: KishOSMac
+    test:
+      config: Debug
+      targets:
+        - KishOSMacTests
 targets:
   Clawk:
     type: application
@@ -6,8 +19,10 @@ targets:
     deploymentTarget: "17.0"
     sources:
       - Clawk
+      - KishOSCore
     settings:
       base:
+        PRODUCT_NAME: KishOS
         PRODUCT_BUNDLE_IDENTIFIER: com.kishparikh.clawk
         INFOPLIST_FILE: Clawk/Info.plist
         CODE_SIGN_STYLE: Automatic
@@ -22,4 +37,44 @@ targets:
         CFBundleVersion: "1"
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
-        NSLocalNetworkUsageDescription: "Clawk connects to OpenClaw Gateway and Dashboard on your local network."
+        NSLocalNetworkUsageDescription: "KishOS connects to kish-agent on your local network."
+        NSMicrophoneUsageDescription: "KishOS uses the microphone for push-to-talk messages."
+        NSSpeechRecognitionUsageDescription: "KishOS uses speech recognition to turn voice into chat messages."
+  KishOSMac:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - KishOSMac
+      - KishOSCore
+    settings:
+      base:
+        PRODUCT_NAME: KishOS
+        PRODUCT_BUNDLE_IDENTIFIER: com.kishparikh.kishos.mac
+        INFOPLIST_FILE: KishOSMac/Info.plist
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: GN3TH9WD6W
+    info:
+      path: KishOSMac/Info.plist
+      properties:
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: "1"
+        LSMinimumSystemVersion: "14.0"
+        NSMicrophoneUsageDescription: "KishOS uses the microphone for push-to-talk messages."
+        NSSpeechRecognitionUsageDescription: "KishOS uses speech recognition to turn voice into chat messages."
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+  KishOSMacTests:
+    type: bundle.unit-test
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - KishOSMacTests
+    dependencies:
+      - target: KishOSMac
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.kishparikh.kishos.mac.tests
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/KishOS.app/Contents/MacOS/KishOS"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        GENERATE_INFOPLIST_FILE: YES

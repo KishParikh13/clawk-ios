@@ -1,53 +1,11 @@
 import SwiftUI
-import SwiftData
 
 @main
 struct ClawkApp: App {
-    @StateObject private var gateway = GatewayConnection()
-    @StateObject private var dashboardAPI = DashboardAPIClient()
-    @StateObject private var messageStore = MessageStore()
-
     var body: some Scene {
         WindowGroup {
-            MainTabView()
-                .environmentObject(gateway)
-                .environmentObject(dashboardAPI)
-                .environmentObject(messageStore)
-                .onAppear {
-                    Task {
-                        // Check dashboard health first
-                        await dashboardAPI.checkHealth()
-
-                        print("[App] Gateway token from UserDefaults: \(gateway.gatewayToken.isEmpty ? "EMPTY" : String(gateway.gatewayToken.prefix(8)) + "...")")
-
-                        // Auto-discover gateway config from dashboard if no token saved
-                        if gateway.gatewayToken.isEmpty {
-                            do {
-                                let config = try await dashboardAPI.fetchGatewayConfig()
-                                if let url = config.url {
-                                    var host = "wss://kishs-mac-mini-1.tail6e4c16.ts.net/ws"
-                                    var port = 18790
-                                    if let components = URLComponents(string: url) {
-                                        host = components.host ?? host
-                                        port = components.port ?? port
-                                    }
-                                    let token = config.token ?? ""
-                                    gateway.updateConnection(host: host, port: port, token: token)
-                                    return
-                                }
-                            } catch {
-                                print("[App] Auto-discover failed: \(error)")
-                            }
-                        }
-
-                        // Connect with existing config
-                        if !gateway.isConnected && !gateway.isConnecting {
-                            gateway.connect()
-                        }
-                    }
-                }
+            KishOSIOSRootView()
         }
-        .modelContainer(for: [PersistedMessage.self, PersistedSession.self, AgentIdentityRecord.self])
     }
 }
 

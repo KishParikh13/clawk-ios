@@ -13,6 +13,7 @@
 		13D989FEDC813BC32D37A770 /* SharedViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62E583E96D8734B6045457C9 /* SharedViews.swift */; };
 		1692CD406B2399800935424F /* GatewayChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A89B98F7C06E05A590381E2 /* GatewayChatView.swift */; };
 		182D525333F502C00AAF063A /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 227D7EAA8BA576629153DE13 /* HomeView.swift */; };
+		1AFDFA4A2AC2CEE77CD4C856 /* ConversationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9440A6471F2F63111CB49B46 /* ConversationStore.swift */; };
 		1CDB7EBBF886F63BA1460083 /* GatewayProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA864BCB8E5CB4DC707F8304 /* GatewayProtocol.swift */; };
 		25CAA09F895BFE70FB427FE6 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9BBBBEE778FA330FC6B2E92 /* SettingsView.swift */; };
 		2808C6EC9F10FBF1D766B1E0 /* MessageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB9ECBC77D8360B0E33A59D8 /* MessageStore.swift */; };
@@ -20,49 +21,102 @@
 		4DF47FC10F47C2C8D771C0BF /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A733B461015C5FBC8DD9322E /* DashboardView.swift */; };
 		520D1CD0D409E1F4E2F2256B /* CostsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 493A6B6CB1096E8BA7B489A8 /* CostsView.swift */; };
 		544FE18D516A26C1E3093F9D /* ChatListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8E4765E74CC787BC5A5D4C7 /* ChatListView.swift */; };
+		5693E81908F23485ACF4340B /* KishOSIOSRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D387D95D0B541A46D648E1C0 /* KishOSIOSRootView.swift */; };
 		57022D80604899DEC98B40DB /* AgentLogsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D479C595005207FF75F951E6 /* AgentLogsView.swift */; };
+		5867E09D19864EF00D3856F9 /* ConversationStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57945B542C95784AEA518EA7 /* ConversationStoreTests.swift */; };
+		6B004850282B901FDC7DFBCF /* Conversation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D66F48AF324D00EE65E801F /* Conversation.swift */; };
 		70C3FD5985DE350508CA7576 /* DashboardAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19D33F8BBD6020A9F8F43C0D /* DashboardAPIClient.swift */; };
+		71970BDF43769ECE44DC4FED /* ConversationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75E96526AACAAE4CF7DDFF93 /* ConversationTests.swift */; };
+		74447BD79F9DC75DD521D7A0 /* VoiceController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6FCA3DA8BE4B76E2A75DD23 /* VoiceController.swift */; };
+		7666D67DF6BC6148AD3BF7EC /* KishOSFeaturePlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47CE52D6F6C3B3791B2874BF /* KishOSFeaturePlan.swift */; };
 		796D01F37B7326029545C9CC /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67B095715EC6D0657B8EF344 /* Config.swift */; };
+		81647F15B3A011B04AB5F3D2 /* ConversationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9440A6471F2F63111CB49B46 /* ConversationStore.swift */; };
+		89D3E7F8286D9CCF88978618 /* VoiceController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6FCA3DA8BE4B76E2A75DD23 /* VoiceController.swift */; };
+		8EA0D1D5917487AA69C3C978 /* KishOSMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61D254F493783576AAF3D410 /* KishOSMacApp.swift */; };
 		948B83E8BA1F40E0036CA590 /* MemoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E59A447B777F28AAE47C8346 /* MemoryView.swift */; };
+		9F2ABD0D551D1F7292C5A5F9 /* AgentClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F0A10E61286CFABA0ACA0C /* AgentClientTests.swift */; };
 		A910280A5CEBEB328812E732 /* MoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BC007C150922B621095A597 /* MoreView.swift */; };
+		AF059C6FC928B2316266DA4A /* AgentClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A57A732EA4AFC2B553AF70A /* AgentClient.swift */; };
+		B8036E2296F7628A5C0572CE /* AgentClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A57A732EA4AFC2B553AF70A /* AgentClient.swift */; };
 		BEA296B530D3EE0B1A1037F2 /* LiveDashboardTabs.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC24015FE274E4F772DA97DD /* LiveDashboardTabs.swift */; };
+		CC774E2820437531FBB8D8EE /* KishOSWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = F873185D94B16907C1073B00 /* KishOSWorkspace.swift */; };
 		D5E0FA06E527E6EE4F6524CE /* SessionChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FA8028A0517DF1195BA7854 /* SessionChatView.swift */; };
+		D8B63FA9F24AA1FF0F35754C /* KishOSFeaturePlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47CE52D6F6C3B3791B2874BF /* KishOSFeaturePlan.swift */; };
+		E0764B563F6690479678CB27 /* KishOSWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = F873185D94B16907C1073B00 /* KishOSWorkspace.swift */; };
 		E0970E477EF5F286C09EE94C /* CronManagementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD2B0BD8253B85A1A695E980 /* CronManagementView.swift */; };
 		E5B9761377A5DDC85827D781 /* ChatDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F68684194B8B5DC79D73D38 /* ChatDetailView.swift */; };
 		E987A5A657F8E60CD3D6D53C /* ChatHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29F2E674D7271CB505C361DF /* ChatHistoryStore.swift */; };
+		ECD45AB1DC169FB9AF51B23D /* Conversation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D66F48AF324D00EE65E801F /* Conversation.swift */; };
 		F94BAA3974D909D010154B90 /* ThinkingStepsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 716ADB4A08C625A0CEDDD715 /* ThinkingStepsView.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		7FBB694F93CB4F799B0368C5 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C0CE5586F71B4AFA40F4FCF1 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F228BF02D6952AEAF0E6B08E;
+			remoteInfo = KishOSMac;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
+		04F0A10E61286CFABA0ACA0C /* AgentClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentClientTests.swift; sourceTree = "<group>"; };
+		185356541FC2C862D03FB7A2 /* KishOSMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KishOSMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		19D33F8BBD6020A9F8F43C0D /* DashboardAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardAPIClient.swift; sourceTree = "<group>"; };
 		1FA8028A0517DF1195BA7854 /* SessionChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionChatView.swift; sourceTree = "<group>"; };
 		227D7EAA8BA576629153DE13 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		29F2E674D7271CB505C361DF /* ChatHistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatHistoryStore.swift; sourceTree = "<group>"; };
 		3BC007C150922B621095A597 /* MoreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoreView.swift; sourceTree = "<group>"; };
 		3BF9B02D88EDF9A8620601CA /* GatewayConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayConnection.swift; sourceTree = "<group>"; };
+		47CE52D6F6C3B3791B2874BF /* KishOSFeaturePlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KishOSFeaturePlan.swift; sourceTree = "<group>"; };
 		493A6B6CB1096E8BA7B489A8 /* CostsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CostsView.swift; sourceTree = "<group>"; };
+		4A57A732EA4AFC2B553AF70A /* AgentClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentClient.swift; sourceTree = "<group>"; };
 		4F68684194B8B5DC79D73D38 /* ChatDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatDetailView.swift; sourceTree = "<group>"; };
+		57945B542C95784AEA518EA7 /* ConversationStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationStoreTests.swift; sourceTree = "<group>"; };
 		5A89B98F7C06E05A590381E2 /* GatewayChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayChatView.swift; sourceTree = "<group>"; };
+		61D254F493783576AAF3D410 /* KishOSMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KishOSMacApp.swift; sourceTree = "<group>"; };
 		62E583E96D8734B6045457C9 /* SharedViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedViews.swift; sourceTree = "<group>"; };
 		641664BF743F7453554BF316 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		645A6F0E142A68BB46D021FB /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		67B095715EC6D0657B8EF344 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
+		6D66F48AF324D00EE65E801F /* Conversation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Conversation.swift; sourceTree = "<group>"; };
 		716ADB4A08C625A0CEDDD715 /* ThinkingStepsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThinkingStepsView.swift; sourceTree = "<group>"; };
+		75E96526AACAAE4CF7DDFF93 /* ConversationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationTests.swift; sourceTree = "<group>"; };
 		7A7C72458B614B76F4F4240A /* ClawkApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClawkApp.swift; sourceTree = "<group>"; };
+		9440A6471F2F63111CB49B46 /* ConversationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationStore.swift; sourceTree = "<group>"; };
 		A733B461015C5FBC8DD9322E /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		AB9ECBC77D8360B0E33A59D8 /* MessageStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageStore.swift; sourceTree = "<group>"; };
+		AD712A5FAAB152C8254982BC /* KishOSMacTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = KishOSMacTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B8E4765E74CC787BC5A5D4C7 /* ChatListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatListView.swift; sourceTree = "<group>"; };
+		C6FCA3DA8BE4B76E2A75DD23 /* VoiceController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceController.swift; sourceTree = "<group>"; };
 		CA864BCB8E5CB4DC707F8304 /* GatewayProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayProtocol.swift; sourceTree = "<group>"; };
 		CD2B0BD8253B85A1A695E980 /* CronManagementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CronManagementView.swift; sourceTree = "<group>"; };
+		D2D7F8370605F68579B5D56D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		D387D95D0B541A46D648E1C0 /* KishOSIOSRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KishOSIOSRootView.swift; sourceTree = "<group>"; };
 		D479C595005207FF75F951E6 /* AgentLogsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentLogsView.swift; sourceTree = "<group>"; };
 		DC24015FE274E4F772DA97DD /* LiveDashboardTabs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveDashboardTabs.swift; sourceTree = "<group>"; };
 		DE29A68B30630F58BCB47CF0 /* ApprovalQueueView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovalQueueView.swift; sourceTree = "<group>"; };
 		E59A447B777F28AAE47C8346 /* MemoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryView.swift; sourceTree = "<group>"; };
 		E8710FBF24E9CAA28D156CE7 /* Clawk.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Clawk.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F873185D94B16907C1073B00 /* KishOSWorkspace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KishOSWorkspace.swift; sourceTree = "<group>"; };
 		F9BBBBEE778FA330FC6B2E92 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
+		3E7D35ADFF5183E2A2A5B42A /* KishOSCore */ = {
+			isa = PBXGroup;
+			children = (
+				4A57A732EA4AFC2B553AF70A /* AgentClient.swift */,
+				6D66F48AF324D00EE65E801F /* Conversation.swift */,
+				9440A6471F2F63111CB49B46 /* ConversationStore.swift */,
+				47CE52D6F6C3B3791B2874BF /* KishOSFeaturePlan.swift */,
+				F873185D94B16907C1073B00 /* KishOSWorkspace.swift */,
+				C6FCA3DA8BE4B76E2A75DD23 /* VoiceController.swift */,
+			);
+			path = KishOSCore;
+			sourceTree = "<group>";
+		};
 		4E841F33964A086D476BDF0F /* Clawk */ = {
 			isa = PBXGroup;
 			children = (
@@ -83,6 +137,7 @@
 				CA864BCB8E5CB4DC707F8304 /* GatewayProtocol.swift */,
 				227D7EAA8BA576629153DE13 /* HomeView.swift */,
 				645A6F0E142A68BB46D021FB /* Info.plist */,
+				D387D95D0B541A46D648E1C0 /* KishOSIOSRootView.swift */,
 				DC24015FE274E4F772DA97DD /* LiveDashboardTabs.swift */,
 				E59A447B777F28AAE47C8346 /* MemoryView.swift */,
 				AB9ECBC77D8360B0E33A59D8 /* MessageStore.swift */,
@@ -95,10 +150,32 @@
 			path = Clawk;
 			sourceTree = "<group>";
 		};
+		84851657C062D5CB9B1EE155 /* KishOSMacTests */ = {
+			isa = PBXGroup;
+			children = (
+				04F0A10E61286CFABA0ACA0C /* AgentClientTests.swift */,
+				57945B542C95784AEA518EA7 /* ConversationStoreTests.swift */,
+				75E96526AACAAE4CF7DDFF93 /* ConversationTests.swift */,
+			);
+			path = KishOSMacTests;
+			sourceTree = "<group>";
+		};
+		8897B66058A2CF85EAECA3F8 /* KishOSMac */ = {
+			isa = PBXGroup;
+			children = (
+				D2D7F8370605F68579B5D56D /* Info.plist */,
+				61D254F493783576AAF3D410 /* KishOSMacApp.swift */,
+			);
+			path = KishOSMac;
+			sourceTree = "<group>";
+		};
 		E2CBAB2EEB3B310BC3BE53AD = {
 			isa = PBXGroup;
 			children = (
 				4E841F33964A086D476BDF0F /* Clawk */,
+				3E7D35ADFF5183E2A2A5B42A /* KishOSCore */,
+				8897B66058A2CF85EAECA3F8 /* KishOSMac */,
+				84851657C062D5CB9B1EE155 /* KishOSMacTests */,
 				FF47E99327B575DC454AC59C /* Products */,
 			);
 			sourceTree = "<group>";
@@ -107,6 +184,8 @@
 			isa = PBXGroup;
 			children = (
 				E8710FBF24E9CAA28D156CE7 /* Clawk.app */,
+				185356541FC2C862D03FB7A2 /* KishOSMac.app */,
+				AD712A5FAAB152C8254982BC /* KishOSMacTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -131,6 +210,41 @@
 			productReference = E8710FBF24E9CAA28D156CE7 /* Clawk.app */;
 			productType = "com.apple.product-type.application";
 		};
+		BC64B75872CEC41E6DA71BA3 /* KishOSMacTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 6158E55E44A0D3EB7E35DB44 /* Build configuration list for PBXNativeTarget "KishOSMacTests" */;
+			buildPhases = (
+				37BEDF19813519203A671D05 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				0CF7584B85EB5D3647B1BBD3 /* PBXTargetDependency */,
+			);
+			name = KishOSMacTests;
+			packageProductDependencies = (
+			);
+			productName = KishOSMacTests;
+			productReference = AD712A5FAAB152C8254982BC /* KishOSMacTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		F228BF02D6952AEAF0E6B08E /* KishOSMac */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BC03BAC2F133F667E4900663 /* Build configuration list for PBXNativeTarget "KishOSMac" */;
+			buildPhases = (
+				D9D42BC51AE12BDF96C28ABB /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = KishOSMac;
+			packageProductDependencies = (
+			);
+			productName = KishOSMac;
+			productReference = 185356541FC2C862D03FB7A2 /* KishOSMac.app */;
+			productType = "com.apple.product-type.application";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -144,10 +258,13 @@
 						DevelopmentTeam = GN3TH9WD6W;
 						ProvisioningStyle = Automatic;
 					};
+					F228BF02D6952AEAF0E6B08E = {
+						DevelopmentTeam = GN3TH9WD6W;
+						ProvisioningStyle = Automatic;
+					};
 				};
 			};
 			buildConfigurationList = 1A46257AD25B0AB80ADB6B4C /* Build configuration list for PBXProject "Clawk" */;
-			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -157,10 +274,13 @@
 			mainGroup = E2CBAB2EEB3B310BC3BE53AD;
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
+			productRefGroup = FF47E99327B575DC454AC59C /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
 				1549E8CABB9B75930BDC8B33 /* Clawk */,
+				F228BF02D6952AEAF0E6B08E /* KishOSMac */,
+				BC64B75872CEC41E6DA71BA3 /* KishOSMacTests */,
 			);
 		};
 /* End PBXProject section */
@@ -170,6 +290,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AF059C6FC928B2316266DA4A /* AgentClient.swift in Sources */,
 				57022D80604899DEC98B40DB /* AgentLogsView.swift in Sources */,
 				008080B3368DE6AEA80E6807 /* ApprovalQueueView.swift in Sources */,
 				E5B9761377A5DDC85827D781 /* ChatDetailView.swift in Sources */,
@@ -178,6 +299,8 @@
 				406B8FE4F7E6B617DF8742F4 /* ClawkApp.swift in Sources */,
 				796D01F37B7326029545C9CC /* Config.swift in Sources */,
 				05611179C1434EA208CEF157 /* ContentView.swift in Sources */,
+				ECD45AB1DC169FB9AF51B23D /* Conversation.swift in Sources */,
+				81647F15B3A011B04AB5F3D2 /* ConversationStore.swift in Sources */,
 				520D1CD0D409E1F4E2F2256B /* CostsView.swift in Sources */,
 				E0970E477EF5F286C09EE94C /* CronManagementView.swift in Sources */,
 				70C3FD5985DE350508CA7576 /* DashboardAPIClient.swift in Sources */,
@@ -186,6 +309,9 @@
 				04F144AAB362A6236543697B /* GatewayConnection.swift in Sources */,
 				1CDB7EBBF886F63BA1460083 /* GatewayProtocol.swift in Sources */,
 				182D525333F502C00AAF063A /* HomeView.swift in Sources */,
+				7666D67DF6BC6148AD3BF7EC /* KishOSFeaturePlan.swift in Sources */,
+				5693E81908F23485ACF4340B /* KishOSIOSRootView.swift in Sources */,
+				E0764B563F6690479678CB27 /* KishOSWorkspace.swift in Sources */,
 				BEA296B530D3EE0B1A1037F2 /* LiveDashboardTabs.swift in Sources */,
 				948B83E8BA1F40E0036CA590 /* MemoryView.swift in Sources */,
 				2808C6EC9F10FBF1D766B1E0 /* MessageStore.swift in Sources */,
@@ -194,12 +320,64 @@
 				25CAA09F895BFE70FB427FE6 /* SettingsView.swift in Sources */,
 				13D989FEDC813BC32D37A770 /* SharedViews.swift in Sources */,
 				F94BAA3974D909D010154B90 /* ThinkingStepsView.swift in Sources */,
+				89D3E7F8286D9CCF88978618 /* VoiceController.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		37BEDF19813519203A671D05 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9F2ABD0D551D1F7292C5A5F9 /* AgentClientTests.swift in Sources */,
+				5867E09D19864EF00D3856F9 /* ConversationStoreTests.swift in Sources */,
+				71970BDF43769ECE44DC4FED /* ConversationTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D9D42BC51AE12BDF96C28ABB /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B8036E2296F7628A5C0572CE /* AgentClient.swift in Sources */,
+				6B004850282B901FDC7DFBCF /* Conversation.swift in Sources */,
+				1AFDFA4A2AC2CEE77CD4C856 /* ConversationStore.swift in Sources */,
+				D8B63FA9F24AA1FF0F35754C /* KishOSFeaturePlan.swift in Sources */,
+				8EA0D1D5917487AA69C3C978 /* KishOSMacApp.swift in Sources */,
+				CC774E2820437531FBB8D8EE /* KishOSWorkspace.swift in Sources */,
+				74447BD79F9DC75DD521D7A0 /* VoiceController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		0CF7584B85EB5D3647B1BBD3 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F228BF02D6952AEAF0E6B08E /* KishOSMac */;
+			targetProxy = 7FBB694F93CB4F799B0368C5 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		10644BAADD046A27A0BF164B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = GN3TH9WD6W;
+				INFOPLIST_FILE = KishOSMac/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.kishparikh.kishos.mac;
+				PRODUCT_NAME = KishOS;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
 		1CDE696A1F606B3D91ABC11F /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -248,12 +426,48 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.0;
 			};
 			name = Release;
+		};
+		2D9365DF8A4737BCF705D657 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEVELOPMENT_TEAM = GN3TH9WD6W;
+				INFOPLIST_FILE = KishOSMac/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.kishparikh.kishos.mac;
+				PRODUCT_NAME = KishOS;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		47E668399EB208ABEE49B3F8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.kishparikh.kishos.mac.tests;
+				SDKROOT = macosx;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/KishOS.app/Contents/MacOS/KishOS";
+			};
+			name = Debug;
 		};
 		7E51E3D18D85DBB71247525E /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -269,6 +483,7 @@
 					"@executable_path/Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.kishparikh.clawk;
+				PRODUCT_NAME = KishOS;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -288,8 +503,27 @@
 					"@executable_path/Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.kishparikh.clawk;
+				PRODUCT_NAME = KishOS;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		B008A43E963B10F921C82E5F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.kishparikh.kishos.mac.tests;
+				SDKROOT = macosx;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/KishOS.app/Contents/MacOS/KishOS";
 			};
 			name = Release;
 		};
@@ -348,7 +582,6 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
@@ -367,11 +600,29 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};
+		6158E55E44A0D3EB7E35DB44 /* Build configuration list for PBXNativeTarget "KishOSMacTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				47E668399EB208ABEE49B3F8 /* Debug */,
+				B008A43E963B10F921C82E5F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		69E1EC7F38785B2031E2BA3A /* Build configuration list for PBXNativeTarget "Clawk" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				7E51E3D18D85DBB71247525E /* Debug */,
 				9B8EB2BD52C84935AE3314C0 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		BC03BAC2F133F667E4900663 /* Build configuration list for PBXNativeTarget "KishOSMac" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2D9365DF8A4737BCF705D657 /* Debug */,
+				10644BAADD046A27A0BF164B /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
