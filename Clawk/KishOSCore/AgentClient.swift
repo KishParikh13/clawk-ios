@@ -357,6 +357,67 @@ final class KishAgentClient: ObservableObject {
         return decoded.projects ?? []
     }
 
+    func fetchProjectBranches(projectPath: String) async throws -> [ProjectBranch] {
+        var components = URLComponents(url: baseURL.appendingPathComponent("projects/branches"), resolvingAgainstBaseURL: false)!
+        components.queryItems = [URLQueryItem(name: "path", value: projectPath)]
+        var request = URLRequest(url: components.url!)
+        request.timeoutInterval = 12
+        let (data, response) = try await session.data(for: request)
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+        let decoded = try Self.decoder.decode(ProjectBranchListResponse.self, from: data)
+        guard statusCode == 200 && decoded.ok else {
+            if statusCode == 404 {
+                throw AgentClientError.requestFailed("Branch switching needs the updated kish-agent")
+            }
+            throw AgentClientError.requestFailed(decoded.error ?? "Branch list returned HTTP \(statusCode)")
+        }
+        return decoded.branches ?? []
+    }
+
+    func fetchProjectFiles(projectPath: String, branch: String? = nil) async throws -> [ProjectFile] {
+        var components = URLComponents(url: baseURL.appendingPathComponent("projects/files"), resolvingAgainstBaseURL: false)!
+        var queryItems = [
+            URLQueryItem(name: "path", value: projectPath),
+            URLQueryItem(name: "limit", value: "5000"),
+            URLQueryItem(
+                name: "exclude",
+                value: "node_modules,.git,build,dist,.next,.nuxt,.turbo,.cache,.parcel-cache,.svelte-kit,.vercel,coverage,out,target,vendor,Pods,DerivedData,.build,.gradle,.expo"
+            ),
+        ]
+        if let branch, !branch.isEmpty {
+            queryItems.append(URLQueryItem(name: "branch", value: branch))
+        }
+        components.queryItems = queryItems
+        var request = URLRequest(url: components.url!)
+        request.timeoutInterval = 15
+        let (data, response) = try await session.data(for: request)
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+        let decoded = try Self.decoder.decode(ProjectFileListResponse.self, from: data)
+        guard statusCode == 200 && decoded.ok else {
+            if statusCode == 404 {
+                throw AgentClientError.requestFailed("File references need the updated kish-agent")
+            }
+            throw AgentClientError.requestFailed(decoded.error ?? "Project files returned HTTP \(statusCode)")
+        }
+        return decoded.files ?? []
+    }
+
+    func switchProjectBranch(projectPath: String, branch: String, dirtyAction: ProjectDirtyAction? = nil) async throws -> ProjectBranchSwitchResponse {
+        var request = URLRequest(url: baseURL.appendingPathComponent("projects/switch-branch"))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 30
+        request.httpBody = try JSONEncoder().encode(ProjectBranchSwitchRequest(projectPath: projectPath, branch: branch, dirtyAction: dirtyAction))
+
+        let (data, response) = try await session.data(for: request)
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+        let decoded = try Self.decoder.decode(ProjectBranchSwitchResponse.self, from: data)
+        guard decoded.ok || decoded.requiresDirtyAction == true else {
+            throw AgentClientError.requestFailed(decoded.error ?? "Branch switch returned HTTP \(statusCode)")
+        }
+        return decoded
+    }
+
     func deleteConversation(_ id: UUID) async throws {
         var request = URLRequest(url: baseURL.appendingPathComponent("conversations/\(id.uuidString.lowercased())"))
         request.httpMethod = "DELETE"
@@ -520,6 +581,25 @@ struct ChatRequestReference: Codable, Equatable {
     let path: String
     let title: String
     let kind: String
+    let repoPath: String?
+    let branch: String?
+    let relPath: String?
+
+    init(
+        path: String,
+        title: String,
+        kind: String,
+        repoPath: String? = nil,
+        branch: String? = nil,
+        relPath: String? = nil
+    ) {
+        self.path = path
+        self.title = title
+        self.kind = kind
+        self.repoPath = repoPath
+        self.branch = branch
+        self.relPath = relPath
+    }
 }
 
 struct UploadedAttachment: Decodable, Equatable {
@@ -659,6 +739,12 @@ private struct ChatRequest: Encodable {
 
 private struct CancelRequest: Encodable {
     let threadId: String
+}
+
+private struct ProjectBranchSwitchRequest: Encodable {
+    let projectPath: String
+    let branch: String
+    let dirtyAction: ProjectDirtyAction?
 }
 
 private struct ConversationListResponse: Decodable {

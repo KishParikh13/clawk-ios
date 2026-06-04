@@ -7,6 +7,7 @@ final class VoiceController: ObservableObject {
     @Published var isRecording = false
     @Published var transcript = ""
     @Published var status = "Off"
+    @Published var waveformLevels = Array(repeating: CGFloat(0.04), count: 32)
 
     private let recognizer = SFSpeechRecognizer()
     private let audioEngine = AVAudioEngine()
@@ -45,6 +46,7 @@ final class VoiceController: ObservableObject {
         recognitionTask?.cancel()
         recognitionTask = nil
         transcript = ""
+        waveformLevels = Array(repeating: CGFloat(0.04), count: 32)
 
         let recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
         recognitionRequest.shouldReportPartialResults = true
@@ -56,6 +58,10 @@ final class VoiceController: ObservableObject {
         input.removeTap(onBus: 0)
         input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak recognitionRequest] buffer, _ in
             recognitionRequest?.append(buffer)
+            let level = Self.normalizedLevel(from: buffer)
+            Task { @MainActor [weak self] in
+                self?.appendWaveformLevel(level)
+            }
         }
 
         audioEngine.prepare()
@@ -94,6 +100,7 @@ final class VoiceController: ObservableObject {
         recognitionTask = nil
         isRecording = false
         status = "Ready"
+        waveformLevels = Array(repeating: CGFloat(0.04), count: 32)
         deactivateAudioSession()
 
         let clean = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -123,5 +130,35 @@ final class VoiceController: ObservableObject {
         #if os(iOS)
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         #endif
+    }
+
+    private func appendWaveformLevel(_ level: CGFloat) {
+        waveformLevels.append(level)
+        if waveformLevels.count > 32 {
+            waveformLevels.removeFirst(waveformLevels.count - 32)
+        }
+    }
+
+    nonisolated private static func normalizedLevel(from buffer: AVAudioPCMBuffer) -> CGFloat {
+        guard let channelData = buffer.floatChannelData else { return 0.04 }
+        let channelCount = Int(buffer.format.channelCount)
+        let frameCount = Int(buffer.frameLength)
+        guard channelCount > 0, frameCount > 0 else { return 0.04 }
+
+        var sum: Float = 0
+        for channel in 0..<channelCount {
+            let samples = channelData[channel]
+            for frame in 0..<frameCount {
+                let sample = samples[frame]
+                sum += sample * sample
+            }
+        }
+
+        let mean = sum / Float(channelCount * frameCount)
+        let rms = sqrt(max(mean, 0))
+        let decibels = 20 * log10(max(rms, 0.000_01))
+        let linear = min(max((decibels + 58) / 48, 0), 1)
+        let dramatic = pow(linear, 0.56)
+        return CGFloat(max(0.035, min(1, dramatic)))
     }
 }

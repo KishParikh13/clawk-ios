@@ -366,13 +366,8 @@ final class KishOSWorkspace: ObservableObject {
         let remoteIDs = Set(remote.map(\.id))
         var byId = Dictionary(uniqueKeysWithValues: conversations.map { ($0.id, $0) })
 
-        for missingRemoteID in remoteConversationIDs.subtracting(remoteIDs) {
-            byId.removeValue(forKey: missingRemoteID)
-            deletedConversationIDs.insert(missingRemoteID)
-        }
-
         for remoteConversation in remote {
-            guard !deletedConversationIDs.contains(remoteConversation.id) else { continue }
+            deletedConversationIDs.remove(remoteConversation.id)
             if let localConversation = byId[remoteConversation.id],
                localConversation.updatedAt >= remoteConversation.updatedAt {
                 if shouldUse(remoteConversation.lastReadAt, over: localConversation.lastReadAt) {

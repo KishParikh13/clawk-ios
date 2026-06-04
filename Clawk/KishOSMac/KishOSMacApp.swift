@@ -773,7 +773,7 @@ private struct ChatView: View {
         let references = pendingReferences
         draft = ""
         pendingAttachments = []
-        pendingReferences = []
+        pendingReferences = pendingReferences.filter(\.isLocked)
         onSend(trimmed, attachments, references)
     }
 
@@ -1648,12 +1648,6 @@ private struct ChatComposer: View {
         draft = existing.isEmpty ? clean : "\(existing) \(clean)"
     }
 
-    private func appendReferenceToken(_ reference: ChatReference) {
-        let token = reference.promptToken
-        let existing = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        draft = existing.isEmpty ? token : "\(existing) \(token)"
-    }
-
     private func chooseFiles() {
         let panel = NSOpenPanel()
         panel.canChooseFiles = true
@@ -1687,7 +1681,6 @@ private struct ChatComposer: View {
             let reference = try MacReferenceFactory.reference(from: url)
             guard !references.contains(where: { $0.path == reference.path }) else { return }
             references.append(reference)
-            appendReferenceToken(reference)
         } catch {
             attachmentError = error.localizedDescription
         }
@@ -1695,10 +1688,6 @@ private struct ChatComposer: View {
 
     private func removeReference(_ reference: ChatReference) {
         references.removeAll { $0.id == reference.id }
-        draft = draft
-            .replacingOccurrences(of: reference.promptToken, with: "")
-            .replacingOccurrences(of: "  ", with: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func handleDrop(_ providers: [NSItemProvider]) -> Bool {

@@ -48,8 +48,7 @@ struct LiveCallView: View {
                 elapsedSeconds: controller.elapsedSeconds,
                 route: audio.statusLabel,
                 miniStatus: client.miniStatus,
-                chatStatus: client.chatStatus,
-                onClose: endAndDismiss
+                chatStatus: client.chatStatus
             )
 
             Divider()
@@ -110,7 +109,6 @@ struct LiveCallView: View {
                 onMute: controller.toggleMute,
                 onOutput: controller.toggleOutput,
                 onSubmitSpeech: controller.submitCurrentUtterance,
-                onInterrupt: controller.interruptAndListen,
                 onEnd: endAndDismiss
             )
             .padding(.horizontal, 18)
@@ -164,7 +162,6 @@ private struct LiveCallHeader: View {
     let route: String
     let miniStatus: String
     let chatStatus: String
-    let onClose: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
@@ -187,15 +184,6 @@ private struct LiveCallHeader: View {
             }
 
             Spacer()
-
-            Button(action: onClose) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 14, weight: .bold))
-                    .frame(width: 34, height: 34)
-            }
-            .buttonStyle(.plain)
-            .background(Color(uiColor: .secondarySystemBackground), in: Circle())
-            .accessibilityLabel("Close call")
         }
         .padding(.horizontal, 18)
         .padding(.top, 14)
@@ -397,7 +385,7 @@ private struct LiveCallFailureBar: View {
     }
 }
 
-private struct LiveCallControls: View {
+struct LiveCallControls: View {
     let state: LiveCallController.CallState
     let isMuted: Bool
     let isOutputEnabled: Bool
@@ -405,7 +393,6 @@ private struct LiveCallControls: View {
     let onMute: () -> Void
     let onOutput: () -> Void
     let onSubmitSpeech: () -> Void
-    let onInterrupt: () -> Void
     let onEnd: () -> Void
 
     var body: some View {
@@ -430,12 +417,6 @@ private struct LiveCallControls: View {
                     title: "Send",
                     isProminent: true,
                     action: onSubmitSpeech
-                )
-            } else {
-                CallControlButton(
-                    systemName: "hand.raised.fill",
-                    title: "Interrupt",
-                    action: onInterrupt
                 )
             }
 

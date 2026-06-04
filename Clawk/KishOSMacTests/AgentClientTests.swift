@@ -316,6 +316,130 @@ final class AgentClientTests: XCTestCase {
         XCTAssertNotNil(projects[0].lastModified)
     }
 
+    func testFetchProjectBranchesUsesBranchesEndpoint() async throws {
+        let client = makeClient { request in
+            XCTAssertEqual(request.url?.path, "/projects/branches")
+            XCTAssertEqual(request.url?.query, "path=/Users/kishparikh/Code/clawk-ios")
+            return jsonResponse(
+                """
+                {
+                  "ok": true,
+                  "branches": [
+                    { "name": "main", "isCurrent": true, "isRemote": false, "worktreePath": "/Users/kishparikh/Code/clawk-ios" },
+                    { "name": "origin/feature", "isCurrent": false, "isRemote": true, "worktreePath": null }
+                  ]
+                }
+                """
+            )
+        }
+
+        let branches = try await client.fetchProjectBranches(projectPath: "/Users/kishparikh/Code/clawk-ios")
+
+        XCTAssertEqual(branches.map(\.name), ["main", "origin/feature"])
+        XCTAssertEqual(branches.first?.isCurrent, true)
+        XCTAssertEqual(branches.first?.worktreePath, "/Users/kishparikh/Code/clawk-ios")
+    }
+
+    func testFetchProjectFilesUsesFilesEndpoint() async throws {
+        let client = makeClient { request in
+            XCTAssertEqual(request.url?.path, "/projects/files")
+            XCTAssertEqual(
+                request.url?.query,
+                "path=/Users/kishparikh/Code/clawk-ios&limit=5000&exclude=node_modules,.git,build,dist,.next,.nuxt,.turbo,.cache,.parcel-cache,.svelte-kit,.vercel,coverage,out,target,vendor,Pods,DerivedData,.build,.gradle,.expo&branch=feature"
+            )
+            return jsonResponse(
+                """
+                {
+                  "ok": true,
+                  "files": [
+                    {
+                      "name": "App.swift",
+                      "path": "/Users/kishparikh/Code/clawk-ios/Sources/App.swift",
+                      "relPath": "Sources/App.swift",
+                      "repoPath": "/Users/kishparikh/Code/clawk-ios",
+                      "branch": "feature"
+                    }
+                  ],
+                  "truncated": false
+                }
+                """
+            )
+        }
+
+        let files = try await client.fetchProjectFiles(projectPath: "/Users/kishparikh/Code/clawk-ios", branch: "feature")
+
+        XCTAssertEqual(files.count, 1)
+        XCTAssertEqual(files[0].name, "App.swift")
+        XCTAssertEqual(files[0].path, "/Users/kishparikh/Code/clawk-ios/Sources/App.swift")
+        XCTAssertEqual(files[0].relPath, "Sources/App.swift")
+        XCTAssertEqual(files[0].repoPath, "/Users/kishparikh/Code/clawk-ios")
+        XCTAssertEqual(files[0].branch, "feature")
+    }
+
+    func testSwitchProjectBranchPostsBranchRequest() async throws {
+        var capturedBody: Data?
+        let client = makeClient { request in
+            XCTAssertEqual(request.url?.path, "/projects/switch-branch")
+            XCTAssertEqual(request.httpMethod, "POST")
+            capturedBody = requestBodyData(from: request)
+            return jsonResponse(
+                """
+                {
+                  "ok": true,
+                  "usedExistingWorktree": true,
+                  "project": {
+                    "name": "clawk-ios-feature",
+                    "path": "/Users/kishparikh/conductor/workspaces/clawk-ios/feature",
+                    "relPath": "~/conductor/workspaces/clawk-ios/feature",
+                    "branch": "feature",
+                    "lastModified": "2026-06-04T05:20:00.000Z"
+                  }
+                }
+                """
+            )
+        }
+
+        let result = try await client.switchProjectBranch(
+            projectPath: "/Users/kishparikh/Code/clawk-ios",
+            branch: "feature",
+            dirtyAction: .stash
+        )
+
+        let body = try XCTUnwrap(capturedBody)
+        let request = try JSONDecoder().decode(TestBranchSwitchRequest.self, from: body)
+        XCTAssertEqual(request.projectPath, "/Users/kishparikh/Code/clawk-ios")
+        XCTAssertEqual(request.branch, "feature")
+        XCTAssertEqual(request.dirtyAction, "stash")
+        XCTAssertEqual(result.project?.branch, "feature")
+        XCTAssertEqual(result.usedExistingWorktree, true)
+    }
+
+    func testSwitchProjectBranchReturnsDirtyPromptResponse() async throws {
+        let client = makeClient { request in
+            XCTAssertEqual(request.url?.path, "/projects/switch-branch")
+            return jsonResponse(
+                """
+                {
+                  "ok": false,
+                  "error": "dirty_worktree",
+                  "requiresDirtyAction": true,
+                  "dirtySummary": {
+                    "isDirty": true,
+                    "changedFiles": ["README.md", "Sources/App.swift"]
+                  }
+                }
+                """,
+                statusCode: 409
+            )
+        }
+
+        let result = try await client.switchProjectBranch(projectPath: "/Users/kishparikh/Code/clawk-ios", branch: "feature")
+
+        XCTAssertEqual(result.ok, false)
+        XCTAssertEqual(result.requiresDirtyAction, true)
+        XCTAssertEqual(result.dirtySummary?.changedFiles, ["README.md", "Sources/App.swift"])
+    }
+
     func testCancelPostsThreadId() async throws {
         var capturedBody: Data?
         let client = makeClient { request in
@@ -631,6 +755,12 @@ private struct TestApprovalAnswerRequest: Decodable {
     let approvalId: String
     let approved: Bool
     let answer: String?
+}
+
+private struct TestBranchSwitchRequest: Decodable {
+    let projectPath: String
+    let branch: String
+    let dirtyAction: String?
 }
 
 private func jsonResponse(_ json: String, statusCode: Int = 200) -> (HTTPURLResponse, Data) {

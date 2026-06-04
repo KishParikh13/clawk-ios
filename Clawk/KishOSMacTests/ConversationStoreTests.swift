@@ -370,7 +370,7 @@ final class ConversationStoreTests: XCTestCase {
         XCTAssertEqual(store.savedConversations.map(\.title), ["new", "old"])
     }
 
-    func testRemoteMergeDoesNotResurrectLocallyDeletedConversation() {
+    func testRemoteMergeRestoresConversationWhenRemoteReturnsItAgain() {
         let store = MemoryConversationStore()
         let workspace = KishOSWorkspace(store: store)
         let id = UUID(uuidString: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")!
@@ -383,12 +383,12 @@ final class ConversationStoreTests: XCTestCase {
         workspace.deleteConversation(id)
         workspace.mergeRemoteConversations([remote])
 
-        XCTAssertNil(workspace.conversation(id: id))
-        XCTAssertTrue(store.savedConversations.isEmpty)
-        XCTAssertEqual(store.savedDeletedConversationIDs, [id])
+        XCTAssertEqual(workspace.conversation(id: id)?.title, "remote")
+        XCTAssertEqual(store.savedConversations.first?.id, id)
+        XCTAssertTrue(store.savedDeletedConversationIDs.isEmpty)
     }
 
-    func testRemoteMergeRemovesPreviouslySeenConversationMissingFromRemote() {
+    func testRemoteMergePreservesPreviouslySeenConversationMissingFromRemote() {
         let store = MemoryConversationStore()
         let workspace = KishOSWorkspace(store: store)
         let id = UUID(uuidString: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")!
@@ -397,10 +397,10 @@ final class ConversationStoreTests: XCTestCase {
         workspace.mergeRemoteConversations([remote])
         workspace.mergeRemoteConversations([])
 
-        XCTAssertNil(workspace.conversation(id: id))
-        XCTAssertTrue(store.savedConversations.isEmpty)
-        XCTAssertEqual(store.savedDeletedConversationIDs, [id])
-        XCTAssertTrue(store.savedRemoteConversationIDs.isEmpty)
+        XCTAssertEqual(workspace.conversation(id: id)?.title, "remote")
+        XCTAssertEqual(store.savedConversations.first?.id, id)
+        XCTAssertTrue(store.savedDeletedConversationIDs.isEmpty)
+        XCTAssertEqual(store.savedRemoteConversationIDs, [id])
     }
 
     func testRemoteMergeEmptyResponsePreservesLocalOnlyConversation() {

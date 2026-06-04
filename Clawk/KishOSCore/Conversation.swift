@@ -383,14 +383,57 @@ struct ChatReference: Identifiable, Codable, Equatable {
     var kind: Kind
     var title: String
     var path: String
+    var repoPath: String?
+    var branch: String?
+    var relPath: String?
     var createdAt: Date
+    var isLocked: Bool
 
-    init(id: UUID = UUID(), kind: Kind, title: String, path: String, createdAt: Date = Date()) {
+    enum CodingKeys: String, CodingKey {
+        case id
+        case kind
+        case title
+        case path
+        case repoPath
+        case branch
+        case relPath
+        case createdAt
+        case isLocked
+    }
+
+    init(
+        id: UUID = UUID(),
+        kind: Kind,
+        title: String,
+        path: String,
+        repoPath: String? = nil,
+        branch: String? = nil,
+        relPath: String? = nil,
+        createdAt: Date = Date(),
+        isLocked: Bool = false
+    ) {
         self.id = id
         self.kind = kind
         self.title = title
         self.path = path
+        self.repoPath = repoPath
+        self.branch = branch
+        self.relPath = relPath
         self.createdAt = createdAt
+        self.isLocked = isLocked
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        kind = try container.decode(Kind.self, forKey: .kind)
+        title = try container.decode(String.self, forKey: .title)
+        path = try container.decode(String.self, forKey: .path)
+        repoPath = try container.decodeIfPresent(String.self, forKey: .repoPath)
+        branch = try container.decodeIfPresent(String.self, forKey: .branch)
+        relPath = try container.decodeIfPresent(String.self, forKey: .relPath)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        isLocked = try container.decodeIfPresent(Bool.self, forKey: .isLocked) ?? false
     }
 
     var promptToken: String {
@@ -585,7 +628,10 @@ func chatRequestReferences(for references: [ChatReference]) -> [ChatRequestRefer
         ChatRequestReference(
             path: reference.path,
             title: reference.title,
-            kind: reference.kind.rawValue
+            kind: reference.kind.rawValue,
+            repoPath: reference.repoPath,
+            branch: reference.branch,
+            relPath: reference.relPath
         )
     }
 }
@@ -616,11 +662,20 @@ func messageTextForAgent(_ text: String, attachments: [ChatAttachment], referenc
     let renderedReferences = references.map { reference in
         contextIndex += 1
         let kindLabel = reference.kind == .folder ? "Folder reference" : "File reference"
-        return """
-        [Context \(contextIndex): \(kindLabel) \(reference.promptToken)]
-        Path: \(reference.path)
-        [/Context \(contextIndex)]
-        """
+        var lines = [
+            "[Context \(contextIndex): \(kindLabel) \(reference.promptToken)]",
+            "Path: \(reference.path)",
+        ]
+        if let repoPath = reference.repoPath, let branch = reference.branch, let relPath = reference.relPath {
+            lines.append(contentsOf: [
+                "Git repo: \(repoPath)",
+                "Git branch: \(branch)",
+                "Repository path: \(relPath)",
+                "Read exact branch content with: git -C \(repoPath) show \(branch):\(relPath)",
+            ])
+        }
+        lines.append("[/Context \(contextIndex)]")
+        return lines.joined(separator: "\n")
     }
 
     let renderedContexts = renderedAttachments + renderedReferences

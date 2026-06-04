@@ -13,12 +13,7 @@ private enum IOSTheme {
 private enum IOSChatSelection: Equatable {
     case newChat
     case conversation(UUID)
-}
-
-private struct LiveCallSession: Identifiable {
-    let id = UUID()
-    let conversationID: UUID?
-    let project: Project?
+    case settings
 }
 
 struct KishOSIOSRootView: View {
@@ -35,62 +30,79 @@ struct KishOSIOSRootView: View {
     @State private var selection: IOSChatSelection = .newChat
     @State private var showingConversations = false
     @State private var isDrainingQueuedMessages = false
-    @State private var liveCallSession: LiveCallSession?
-    @State private var pendingProject: Project?
-    @State private var showingProjectPicker = false
+    @State private var activeCallController: LiveCallController?
     @State private var activeSendTasks: [UUID: Task<Void, Never>] = [:]
 
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .leading) {
                 NavigationStack {
+                    Group {
+                        if selection == .settings {
+                            IOSSettingsPage(
+                                client: client,
+                                audio: audio,
+                                wake: wake,
+                                agentURL: client.agentURLString,
+                                onReconnect: reconnect
+                            )
+                            .navigationTitle("Control Panel")
+                            .navigationBarTitleDisplayMode(.inline)
+                            .toolbar {
+                                ToolbarItem(placement: .topBarLeading) {
+                                    Button(action: openSidebar) {
+                                        Image(systemName: "sidebar.left")
+                                    }
+                                    .accessibilityLabel("Conversations")
+                                }
+                            }
+                        } else {
                     ChatScreen(
                         client: client,
+                        projectCatalog: projectCatalog,
+                        projectStore: projectStore,
                         conversation: selectedConversation,
                         isSending: currentIsRunning,
-                        runState: selectedConversation?.runState,
-                        agentStatus: selectedConversation?.agentStatusSummary,
-                        queuedMessageCount: selectedConversation?.queuedUserMessageCount ?? workspace.queuedMessageCount,
-                        approvals: selectedConversation?.approvals ?? [],
-                        projectName: activeProjectName,
-                        projectBranch: activeProjectBranch,
-                        projectLocked: activeProjectIsLocked,
-                        voice: voice,
-                        audio: audio,
-                        onSend: send,
-                        onStop: stopSelectedConversation,
-                        onStartCall: startLiveCall,
-                        onPickProject: { showingProjectPicker = true },
-                        onRetry: retrySelectedConversation,
-                        onQuestionAnswer: answerQuestion,
-                        onQuestionCancel: cancelQuestion
-                    )
-                    .navigationTitle(selectedConversation?.title ?? "KishOS")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .topBarLeading) {
-                            Button {
-                                withAnimation(.easeInOut(duration: 0.22)) {
-                                    showingConversations = true
+                                runState: selectedConversation?.runState,
+                                agentStatus: selectedConversation?.agentStatusSummary,
+                                queuedMessageCount: selectedConversation?.queuedUserMessageCount ?? workspace.queuedMessageCount,
+                                approvals: selectedConversation?.approvals ?? [],
+                                voice: voice,
+                                audio: audio,
+                                callController: activeCallController,
+                                onSend: send,
+                                onStop: stopSelectedConversation,
+                                onStartCall: startLiveCall,
+                                onEndCall: endLiveCall,
+                                onRetry: retrySelectedConversation,
+                                onQuestionAnswer: answerQuestion,
+                                onQuestionCancel: cancelQuestion
+                            )
+                            .navigationTitle(selectedConversation?.title ?? "KishOS")
+                            .navigationBarTitleDisplayMode(.inline)
+                            .toolbar {
+                                ToolbarItem(placement: .topBarLeading) {
+                                    Button(action: openSidebar) {
+                                        Image(systemName: "sidebar.left")
+                                    }
+                                    .accessibilityLabel("Conversations")
                                 }
-                            } label: {
-                                Image(systemName: "sidebar.left")
-                            }
-                            .accessibilityLabel("Conversations")
-                        }
 
-                        ToolbarItem(placement: .principal) {
-                            IOSChatHeaderTitle(conversation: selectedConversation)
-                        }
+                                ToolbarItem(placement: .principal) {
+                                    IOSChatHeaderTitle(conversation: selectedConversation)
+                                }
 
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Button(action: startNewChat) {
-                                Image(systemName: "square.and.pencil")
+                                ToolbarItem(placement: .topBarTrailing) {
+                                    Button(action: startNewChat) {
+                                        Image(systemName: "square.and.pencil")
+                                    }
+                                    .accessibilityLabel("New chat")
+                                }
                             }
-                            .accessibilityLabel("New chat")
                         }
                     }
                     .toolbar(showingConversations ? .hidden : .visible, for: .navigationBar)
+                    .toolbar(activeCallController == nil ? .visible : .hidden, for: .navigationBar)
                     .task {
                         await client.startHealthPolling()
                     }
@@ -132,7 +144,7 @@ struct KishOSIOSRootView: View {
                         refreshWakeSuppression()
                         requestNotificationsForActiveWorkIfNeeded()
                     }
-                    .onChange(of: liveCallSession?.id) {
+                    .onChange(of: activeCallController?.activeConversationID) {
                         refreshWakeSuppression()
                     }
                     .onChange(of: wake.detectionCount) { oldValue, newValue in
@@ -165,6 +177,10 @@ struct KishOSIOSRootView: View {
                             startNewChat()
                             closeConversations()
                         },
+                        onOpenSettings: {
+                            openSettings()
+                            closeConversations()
+                        },
                         onDelete: deleteConversation,
                         onCopyTranscript: { conversation in
                             copyToPasteboard(conversation.transcriptText)
@@ -190,35 +206,6 @@ struct KishOSIOSRootView: View {
             }
             .animation(.easeInOut(duration: 0.22), value: showingConversations)
         }
-        .fullScreenCover(item: $liveCallSession) { session in
-            LiveCallView(
-                client: client,
-                workspace: workspace,
-                voice: voice,
-                audio: audio,
-                initialConversationID: session.conversationID,
-                initialProject: session.project,
-                onConversationStarted: { id in
-                    selection = .conversation(id)
-                    pendingProject = nil
-                },
-                onDismiss: {
-                    liveCallSession = nil
-                    refreshWakeSuppression()
-                    refreshLiveActivitySummary()
-                }
-            )
-        }
-        .sheet(isPresented: $showingProjectPicker) {
-            ProjectPickerSheet(
-                client: client,
-                catalog: projectCatalog,
-                pinned: projectStore,
-                onSelect: { project in
-                    pendingProject = project
-                }
-            )
-        }
     }
 
     private var selectedConversation: Conversation? {
@@ -237,27 +224,40 @@ struct KishOSIOSRootView: View {
         selectedConversation?.isRunning ?? client.isSending
     }
 
-    private var activeProjectName: String {
-        selectedConversation?.displayProjectName ?? pendingProject?.name ?? "Home"
-    }
-
-    private var activeProjectBranch: String? {
-        selectedConversation?.branch ?? pendingProject?.branch
-    }
-
-    private var activeProjectIsLocked: Bool {
-        selectedConversation != nil
-    }
-
     private func startNewChat() {
         selection = .newChat
-        pendingProject = nil
+    }
+
+    private func openSettings() {
+        selection = .settings
     }
 
     private func startLiveCall() {
-        guard liveCallSession == nil else { return }
+        guard activeCallController == nil else { return }
         wake.updateSuppression(true)
-        liveCallSession = LiveCallSession(conversationID: selectedConversationID, project: selectedConversationID == nil ? pendingProject : nil)
+        let controller = LiveCallController(
+            client: client,
+            workspace: workspace,
+            voice: voice,
+            initialConversationID: selectedConversationID,
+            initialProject: nil,
+            onConversationStarted: { id in
+                selection = .conversation(id)
+            }
+        )
+        activeCallController = controller
+        Task {
+            audio.start()
+            await audio.activatePreferredHandsFreeRoute()
+            await controller.start()
+        }
+    }
+
+    private func endLiveCall() {
+        activeCallController?.endCall()
+        activeCallController = nil
+        refreshWakeSuppression()
+        refreshLiveActivitySummary()
     }
 
     private func handleWakeDetected() {
@@ -269,7 +269,7 @@ struct KishOSIOSRootView: View {
     }
 
     private func refreshWakeSuppression() {
-        wake.updateSuppression(voice.isRecording || currentIsRunning || liveCallSession != nil)
+        wake.updateSuppression(voice.isRecording || currentIsRunning || activeCallController != nil)
     }
 
     private func requestNotificationsForActiveWorkIfNeeded() {
@@ -306,6 +306,18 @@ struct KishOSIOSRootView: View {
         }
     }
 
+    private func openSidebar() {
+        withAnimation(.easeInOut(duration: 0.22)) {
+            showingConversations = true
+        }
+    }
+
+    private func reconnect() {
+        Task {
+            await client.reconnect()
+        }
+    }
+
     private func sidebarWidth(for containerWidth: CGFloat) -> CGFloat {
         min(356, max(304, containerWidth * 0.84))
     }
@@ -331,11 +343,10 @@ struct KishOSIOSRootView: View {
                 firstMessage: outgoingText,
                 attachments: attachments,
                 references: references,
-                projectPath: pendingProject?.path,
-                projectName: pendingProject?.name
+                projectPath: nil,
+                projectName: nil
             )
             selection = .conversation(conversation.id)
-            pendingProject = nil
         }
 
         sendPreparedMessage(
@@ -408,10 +419,9 @@ struct KishOSIOSRootView: View {
                 firstMessage: text,
                 attachments: attachments,
                 references: references,
-                projectPath: pendingProject?.path,
-                projectName: pendingProject?.name
+                projectPath: nil,
+                projectName: nil
             )
-            pendingProject = nil
         }
         selection = .conversation(conversation.id)
     }
@@ -608,21 +618,21 @@ struct KishOSIOSRootView: View {
 
 private struct ChatScreen: View {
     @ObservedObject var client: KishAgentClient
+    @ObservedObject var projectCatalog: ProjectCatalog
+    @ObservedObject var projectStore: ProjectStore
     let conversation: Conversation?
     let isSending: Bool
     let runState: ConversationRunState?
     let agentStatus: AgentStatusSummary?
     let queuedMessageCount: Int
     let approvals: [ApprovalRequest]
-    let projectName: String
-    let projectBranch: String?
-    let projectLocked: Bool
     @ObservedObject var voice: VoiceController
     @ObservedObject var audio: AudioRouteMonitor
+    let callController: LiveCallController?
     let onSend: (String, [ChatAttachment], [ChatReference]) -> Void
     let onStop: () -> Void
     let onStartCall: () -> Void
-    let onPickProject: () -> Void
+    let onEndCall: () -> Void
     let onRetry: (() -> Void)?
     let onQuestionAnswer: (ApprovalRequest, String) -> Void
     let onQuestionCancel: (ApprovalRequest) -> Void
@@ -630,6 +640,7 @@ private struct ChatScreen: View {
     @State private var draft = ""
     @State private var pendingAttachments: [ChatAttachment] = []
     @State private var pendingReferences: [ChatReference] = []
+    @Namespace private var composerNamespace
 
     private var messages: [ChatMessage] {
         conversation?.messages ?? []
@@ -637,16 +648,28 @@ private struct ChatScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            if let callController {
+                IOSInlineCallHeader(
+                    controller: callController,
+                    route: audio.statusLabel,
+                    miniStatus: client.miniStatus,
+                    chatStatus: client.chatStatus
+                )
+                .transition(.asymmetric(
+                    insertion: .opacity.combined(with: .move(edge: .top)),
+                    removal: .opacity
+                ))
+
+                Divider()
+            }
+
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 18) {
                         if messages.isEmpty {
-                            EmptyIOSChat(
-                                projectName: projectName,
-                                projectBranch: projectBranch,
-                                showsProjectPicker: conversation == nil,
-                                onPickProject: onPickProject
-                            )
+                            if callController == nil {
+                                EmptyIOSChat()
+                            }
                         } else {
                             ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
                                 IOSMessageTurn(
@@ -657,6 +680,11 @@ private struct ChatScreen: View {
                                 .id(message.id)
                             }
                         }
+
+                        if let callController, !callController.activeUserPartial.isEmpty {
+                            IOSCallPartialTurn(text: callController.activeUserPartial)
+                                .id("active-user")
+                        }
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 18)
@@ -666,6 +694,9 @@ private struct ChatScreen: View {
                     scrollToBottom(proxy)
                 }
                 .onChange(of: messages.last?.text) {
+                    scrollToBottom(proxy)
+                }
+                .onChange(of: callController?.activeUserPartial) {
                     scrollToBottom(proxy)
                 }
             }
@@ -699,31 +730,56 @@ private struct ChatScreen: View {
                 )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             } else {
-                IOSComposer(
-                    draft: $draft,
-                    attachments: $pendingAttachments,
-                    references: $pendingReferences,
-                    client: client,
-                    isSending: client.isSending,
-                    isDisabled: client.isSending || isSending,
-                    runState: runState,
-                    allowsReferences: conversation != nil,
-                    voice: voice,
-                    audio: audio,
-                    onSend: sendDraft,
-                    onStop: onStop,
-                    onStartCall: onStartCall
-                )
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+                if let callController {
+                    IOSCallModeComposer(
+                        state: callController.state,
+                        transcript: callController.activeUserPartial,
+                        levels: voice.waveformLevels,
+                        isMuted: callController.isMuted,
+                        isOutputEnabled: callController.isOutputEnabled,
+                        canSubmitSpeech: !callController.activeUserPartial.isEmpty,
+                        namespace: composerNamespace,
+                        onMute: callController.toggleMute,
+                        onOutput: callController.toggleOutput,
+                        onSubmitSpeech: callController.submitCurrentUtterance,
+                        onEnd: onEndCall
+                    )
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .scale(scale: 0.98, anchor: .bottom)),
+                        removal: .opacity.combined(with: .scale(scale: 0.98, anchor: .bottom))
+                    ))
+                } else {
+                    IOSComposer(
+                        draft: $draft,
+                        attachments: $pendingAttachments,
+                        references: $pendingReferences,
+                        client: client,
+                        projectCatalog: projectCatalog,
+                        projectStore: projectStore,
+                        isSending: client.isSending,
+                        isDisabled: client.isSending || isSending,
+                        runState: runState,
+                        voice: voice,
+                        audio: audio,
+                        namespace: composerNamespace,
+                        onSend: sendDraft,
+                        onStop: onStop,
+                        onStartCall: onStartCall
+                    )
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             }
 
-            IOSConnectionBar(client: client, voice: voice, audio: audio)
         }
         .background(IOSTheme.background)
         .animation(.easeInOut(duration: 0.2), value: approvals.first?.id)
         .animation(.easeInOut(duration: 0.2), value: client.isSending || isSending)
+        .animation(.spring(response: 0.34, dampingFraction: 0.88), value: callController != nil)
         .animation(.easeInOut(duration: 0.2), value: queuedMessageCount)
         .animation(.easeInOut(duration: 0.2), value: agentStatus?.detail)
+        .onChange(of: voice.transcript) { _, transcript in
+            callController?.handleTranscriptChange(transcript)
+        }
     }
 
     private func sendDraft() {
@@ -740,7 +796,7 @@ private struct ChatScreen: View {
         let references = pendingReferences
         draft = ""
         pendingAttachments = []
-        pendingReferences = []
+        pendingReferences = pendingReferences.filter(\.isLocked)
         onSend(trimmed, attachments, references)
     }
 
@@ -757,9 +813,12 @@ private struct ChatScreen: View {
     }
 
     private func scrollToBottom(_ proxy: ScrollViewProxy) {
-        guard let last = messages.last else { return }
         withAnimation(.easeOut(duration: 0.2)) {
-            proxy.scrollTo(last.id, anchor: .bottom)
+            if callController?.activeUserPartial.isEmpty == false {
+                proxy.scrollTo("active-user", anchor: .bottom)
+            } else if let last = messages.last {
+                proxy.scrollTo(last.id, anchor: .bottom)
+            }
         }
     }
 
@@ -791,6 +850,253 @@ private struct IOSChatHeaderTitle: View {
             }
         }
         .frame(maxWidth: 220)
+    }
+}
+
+private struct IOSInlineCallHeader: View {
+    @ObservedObject var controller: LiveCallController
+    let route: String
+    let miniStatus: String
+    let chatStatus: String
+
+    var body: some View {
+        HStack(spacing: 9) {
+            IOSInlineCallStatusDot(value: controller.state.label)
+
+            Text(controller.state.label)
+                .fontWeight(.semibold)
+
+            Text(Self.formatElapsed(controller.elapsedSeconds))
+                .monospacedDigit()
+
+            Text(route)
+
+            ForEach(connectionLabels, id: \.self) { label in
+                Text(label)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .font(.callout)
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+        .minimumScaleFactor(0.78)
+        .padding(.horizontal, 18)
+        .padding(.top, 10)
+        .padding(.bottom, 10)
+        .background(IOSTheme.background)
+    }
+
+    private static func formatElapsed(_ seconds: Int) -> String {
+        let minutes = seconds / 60
+        let remaining = seconds % 60
+        return String(format: "%d:%02d", minutes, remaining)
+    }
+
+    private var connectionLabels: [String] {
+        var labels: [String] = []
+        if !Self.isHealthyMiniStatus(miniStatus) {
+            labels.append("Mini \(miniStatus)")
+        }
+        if !Self.isHealthyChatStatus(chatStatus) {
+            labels.append("Chat \(chatStatus)")
+        }
+        return labels
+    }
+
+    private static func isHealthyMiniStatus(_ status: String) -> Bool {
+        status == "Online" || status == "Checking"
+    }
+
+    private static func isHealthyChatStatus(_ status: String) -> Bool {
+        status == "Ready" || status == "Idle" || status == "Checking" || status == "Sending"
+    }
+}
+
+private struct IOSInlineCallStatusDot: View {
+    let value: String
+
+    var body: some View {
+        Circle()
+            .fill(tint)
+            .frame(width: 10, height: 10)
+    }
+
+    private var tint: Color {
+        switch value {
+        case "Listening", "Speaking":
+            return .green
+        case "Working", "Sending", "Connecting", "Question":
+            return .orange
+        case "Failed":
+            return .red
+        default:
+            return .secondary
+        }
+    }
+}
+
+private struct IOSCallPartialTurn: View {
+    let text: String
+
+    var body: some View {
+        HStack {
+            Spacer(minLength: 48)
+            VStack(alignment: .trailing, spacing: 5) {
+                Text("You")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+
+                Text(text)
+                    .font(.title2)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 13)
+                    .padding(.vertical, 10)
+                    .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+}
+
+private struct IOSCallModeComposer: View {
+    let state: LiveCallController.CallState
+    let transcript: String
+    let levels: [CGFloat]
+    let isMuted: Bool
+    let isOutputEnabled: Bool
+    let canSubmitSpeech: Bool
+    let namespace: Namespace.ID
+    let onMute: () -> Void
+    let onOutput: () -> Void
+    let onSubmitSpeech: () -> Void
+    let onEnd: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            IOSComposerTranscriptText(text: surfaceText)
+                .padding(.horizontal, 16)
+                .padding(.top, 14)
+                .padding(.bottom, 4)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+
+            HStack(alignment: .center, spacing: 8) {
+                Button(action: onMute) {
+                    Circle()
+                        .fill(isMuted ? Color(uiColor: .systemOrange).opacity(0.18) : IOSTheme.elevatedBackground)
+                        .overlay {
+                            Image(systemName: isMuted ? "mic.slash.fill" : "mic.fill")
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundStyle(isMuted ? Color(uiColor: .systemOrange) : Color(uiColor: .label))
+                        }
+                        .overlay(Circle().stroke(IOSTheme.hairline))
+                        .frame(width: 46, height: 46)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(isMuted ? "Unmute" : "Mute")
+                .matchedGeometryEffect(id: "composerLeadingButton", in: namespace)
+
+                IOSWaveformBars(levels: levels)
+                    .frame(maxWidth: .infinity, minHeight: 40)
+                    .padding(.leading, 4)
+                    .padding(.trailing, 12)
+
+                Button(action: auxiliaryAction) {
+                    Image(systemName: auxiliaryIconName)
+                        .font(.system(size: 15, weight: .bold))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(auxiliaryForeground)
+                .frame(width: 40, height: 40)
+                .background(auxiliaryBackground, in: Circle())
+                .overlay(Circle().stroke(auxiliaryStroke))
+                .accessibilityLabel(auxiliaryAccessibilityLabel)
+                .matchedGeometryEffect(id: "composerAuxiliaryButton", in: namespace)
+
+                Button(action: onEnd) {
+                    Image(systemName: "phone.down.fill")
+                        .font(.system(size: 15, weight: .bold))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.white)
+                .frame(width: 40, height: 40)
+                .background(Color(uiColor: .systemRed), in: Circle())
+                .accessibilityLabel("End call")
+                .matchedGeometryEffect(id: "composerTrailingButton", in: namespace)
+            }
+            .padding(.horizontal, 6)
+            .padding(.bottom, 5)
+        }
+        .background(IOSTheme.background, in: RoundedRectangle(cornerRadius: 27, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 27, style: .continuous).stroke(IOSTheme.hairline))
+        .matchedGeometryEffect(id: "composerSurface", in: namespace)
+        .padding(.horizontal, 12)
+        .padding(.top, 8)
+        .padding(.bottom, 8)
+        .accessibilityElement(children: .contain)
+    }
+
+    private var surfaceText: String {
+        let clean = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !clean.isEmpty {
+            return clean
+        }
+        if isMuted {
+            return "Muted"
+        }
+        switch state {
+        case .connecting:
+            return "Connecting"
+        case .agentThinking, .sendingTurn:
+            return "Working"
+        case .agentSpeaking:
+            return "Speaking"
+        case .needsAnswer:
+            return "Question"
+        case .failed:
+            return "Call failed"
+        case .ended:
+            return "Call ended"
+        case .listening, .userSpeaking:
+            return ""
+        }
+    }
+
+    private var auxiliaryIconName: String {
+        if canSubmitSpeech {
+            return "arrow.up"
+        }
+        return isOutputEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill"
+    }
+
+    private var auxiliaryForeground: Color {
+        canSubmitSpeech ? .white : Color(uiColor: .label)
+    }
+
+    private var auxiliaryBackground: Color {
+        if canSubmitSpeech {
+            return Color(uiColor: .label)
+        }
+        return isOutputEnabled ? IOSTheme.elevatedBackground : Color(uiColor: .systemOrange).opacity(0.18)
+    }
+
+    private var auxiliaryStroke: Color {
+        canSubmitSpeech ? Color.clear : IOSTheme.hairline
+    }
+
+    private var auxiliaryAccessibilityLabel: String {
+        if canSubmitSpeech {
+            return "Submit speech"
+        }
+        return isOutputEnabled ? "Turn audio off" : "Turn audio on"
+    }
+
+    private func auxiliaryAction() {
+        if canSubmitSpeech {
+            onSubmitSpeech()
+        } else {
+            onOutput()
+        }
     }
 }
 
@@ -1020,12 +1326,14 @@ private struct IOSComposer: View {
     @Binding var attachments: [ChatAttachment]
     @Binding var references: [ChatReference]
     @ObservedObject var client: KishAgentClient
+    @ObservedObject var projectCatalog: ProjectCatalog
+    @ObservedObject var projectStore: ProjectStore
     let isSending: Bool
     let isDisabled: Bool
     let runState: ConversationRunState?
-    let allowsReferences: Bool
     @ObservedObject var voice: VoiceController
     @ObservedObject var audio: AudioRouteMonitor
+    let namespace: Namespace.ID
     let onSend: () -> Void
     let onStop: () -> Void
     let onStartCall: () -> Void
@@ -1064,6 +1372,9 @@ private struct IOSComposer: View {
                         ForEach(references) { reference in
                             IOSReferenceChip(
                                 reference: reference,
+                                onToggleLock: {
+                                    toggleReferenceLock(reference)
+                                },
                                 onRemove: {
                                     removeReference(reference)
                                 }
@@ -1085,76 +1396,100 @@ private struct IOSComposer: View {
                     .lineLimit(1)
             }
 
-            HStack(alignment: .bottom, spacing: 8) {
-                if voice.isRecording {
-                    IOSComposerCircleButton(
-                        systemName: "stop.fill",
-                        tint: .red,
-                        isEnabled: true,
-                        action: cancelDictation
-                    )
-                    .accessibilityLabel("Stop dictation")
-                } else {
-                    Menu {
-                        Button("Camera", systemImage: "camera") {
-                            attachmentError = nil
-                            showingCameraPicker = true
-                        }
-                        Button("Choose a photo", systemImage: "photo") {
-                            attachmentError = nil
-                            showingPhotoPicker = true
-                        }
-                        Button("Select a file", systemImage: "doc") {
-                            attachmentError = nil
-                            showingFilePicker = true
-                        }
-                    } label: {
-                        Circle()
-                            .fill(IOSTheme.elevatedBackground)
-                            .overlay {
-                                Image(systemName: "plus")
-                                    .font(.system(size: 18, weight: .semibold))
-                                    .foregroundStyle(Color(uiColor: .label))
-                            }
-                            .overlay(Circle().stroke(IOSTheme.hairline))
-                            .frame(width: 46, height: 46)
-                    }
-                    .tint(Color(uiColor: .label))
-                    .disabled(isDisabled)
-                    .accessibilityLabel("Add")
-                }
-
-                if allowsReferences && !voice.isRecording {
-                    IOSComposerCircleButton(
-                        systemName: "at",
-                        tint: Color(uiColor: .label),
-                        isEnabled: !isDisabled,
-                        action: {
-                            showingReferencePicker = true
-                        }
-                    )
-                    .accessibilityLabel("Reference file or folder")
-                }
-
-                HStack(alignment: .bottom, spacing: 8) {
-                    Group {
-                        if voice.isRecording {
-                            IOSWaveformInputSurface(transcript: voice.transcript)
-                        } else {
-                            TextField("Ask KishOS", text: $draft, axis: .vertical)
-                                .lineLimit(1...5)
-                                .textFieldStyle(.plain)
-                                .onSubmit {
-                                    if hasSendableContent {
-                                        onSend()
-                                    }
+            VStack(alignment: .leading, spacing: 4) {
+                Group {
+                    if voice.isRecording {
+                        IOSComposerTranscriptText(text: voice.transcript)
+                            .padding(.horizontal, 16)
+                            .padding(.top, 14)
+                            .padding(.bottom, 4)
+                    } else {
+                        TextField("Ask KishOS", text: $draft, axis: .vertical)
+                            .lineLimit(1...5)
+                            .textFieldStyle(.plain)
+                            .onSubmit {
+                                if hasSendableContent {
+                                    onSend()
                                 }
-                                .disabled(isDisabled)
-                                .padding(.leading, 16)
-                                .padding(.vertical, 13)
-                        }
+                            }
+                            .disabled(isDisabled)
+                            .padding(.horizontal, 16)
+                            .padding(.top, 14)
+                            .padding(.bottom, 4)
                     }
-                    .frame(maxWidth: .infinity, minHeight: 46, alignment: .leading)
+                }
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+
+                HStack(alignment: .center, spacing: 6) {
+                    if voice.isRecording {
+                        Button(action: cancelDictation) {
+                            Circle()
+                                .fill(Color.red.opacity(0.14))
+                                .overlay {
+                                    Image(systemName: "stop.fill")
+                                        .font(.system(size: 15, weight: .bold))
+                                        .foregroundStyle(.red)
+                                }
+                                .overlay(Circle().stroke(IOSTheme.hairline))
+                                .frame(width: 40, height: 40)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Stop dictation")
+                        .matchedGeometryEffect(id: "composerLeadingButton", in: namespace)
+
+                        IOSWaveformBars(levels: voice.waveformLevels)
+                            .frame(maxWidth: .infinity, minHeight: 40)
+                            .padding(.horizontal, 4)
+                    } else {
+                        Menu {
+                            Button("Camera", systemImage: "camera") {
+                                attachmentError = nil
+                                showingCameraPicker = true
+                            }
+                            Button("Choose a photo", systemImage: "photo") {
+                                attachmentError = nil
+                                showingPhotoPicker = true
+                            }
+                            Button("Upload a file", systemImage: "doc") {
+                                attachmentError = nil
+                                showingFilePicker = true
+                            }
+                        } label: {
+                            Circle()
+                                .fill(IOSTheme.elevatedBackground)
+                                .overlay {
+                                    Image(systemName: "plus")
+                                        .font(.system(size: 18, weight: .semibold))
+                                        .foregroundStyle(Color(uiColor: .label))
+                                }
+                                .overlay(Circle().stroke(IOSTheme.hairline))
+                                .frame(width: 40, height: 40)
+                        }
+                        .tint(Color(uiColor: .label))
+                        .disabled(isDisabled)
+                        .accessibilityLabel("Add")
+                        .matchedGeometryEffect(id: "composerLeadingButton", in: namespace)
+
+                        Button {
+                            attachmentError = nil
+                            showingReferencePicker = true
+                        } label: {
+                            Circle()
+                                .fill(IOSTheme.elevatedBackground)
+                                .overlay {
+                                    Text("@")
+                                        .font(.system(size: 19, weight: .semibold))
+                                        .foregroundStyle(Color(uiColor: .label))
+                                }
+                                .overlay(Circle().stroke(IOSTheme.hairline))
+                                .frame(width: 40, height: 40)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(isDisabled)
+                        .accessibilityLabel("Reference files")
+                    }
+
+                    Spacer(minLength: 6)
 
                     if showsCallButton {
                         Button(action: onStartCall) {
@@ -1168,6 +1503,7 @@ private struct IOSComposer: View {
                         .overlay(Circle().stroke(IOSTheme.hairline))
                         .disabled(isDisabled || isSending)
                         .accessibilityLabel("Start call")
+                        .matchedGeometryEffect(id: "composerAuxiliaryButton", in: namespace)
                     }
 
                     Button(action: trailingAction) {
@@ -1185,12 +1521,14 @@ private struct IOSComposer: View {
                     .background(trailingButtonColor, in: Circle())
                     .disabled(trailingButtonDisabled)
                     .accessibilityLabel(trailingAccessibilityLabel)
-                    .padding(.trailing, 5)
-                    .padding(.vertical, 4)
+                    .matchedGeometryEffect(id: "composerTrailingButton", in: namespace)
                 }
-                .background(IOSTheme.background, in: RoundedRectangle(cornerRadius: 27, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 27, style: .continuous).stroke(IOSTheme.hairline))
+                .padding(.horizontal, 6)
+                .padding(.bottom, 5)
             }
+            .background(IOSTheme.background, in: RoundedRectangle(cornerRadius: 27, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 27, style: .continuous).stroke(IOSTheme.hairline))
+            .matchedGeometryEffect(id: "composerSurface", in: namespace)
         }
         .opacity(isDisabled ? 0.62 : 1)
         .padding(.horizontal, 12)
@@ -1221,12 +1559,23 @@ private struct IOSComposer: View {
             })
         }
         .sheet(isPresented: $showingReferencePicker) {
-            IOSReferencePickerView(onResult: { result in
-                handleReferenceSelection(result)
-                showingReferencePicker = false
-            }, onCancel: {
-                showingReferencePicker = false
-            })
+            ProjectPickerSheet(
+                client: client,
+                catalog: projectCatalog,
+                pinned: projectStore,
+                title: "References",
+                includesHome: true,
+                pinsSelection: false,
+                mode: .referenceFiles,
+                onSelect: { project in
+                    handleReferenceProjectSelection(project)
+                    showingReferencePicker = false
+                },
+                onSelectReferences: { references in
+                    handleReferenceSelections(references)
+                    showingReferencePicker = false
+                }
+            )
         }
         .sheet(item: $pendingSnapshotReview) { item in
             IOSSnapshotReviewView(
@@ -1393,18 +1742,34 @@ private struct IOSComposer: View {
             attachmentError = nil
             guard !references.contains(where: { $0.path == reference.path }) else { return }
             references.append(reference)
-            appendReferenceToken(reference)
         case .failure(let error):
             attachmentError = error.localizedDescription
         }
     }
 
+    private func handleReferenceProjectSelection(_ project: Project?) {
+        guard let project, let path = project.path else { return }
+        let reference = ChatReference(
+            kind: .folder,
+            title: project.name,
+            path: path
+        )
+        handleReferenceSelection(.success(reference))
+    }
+
+    private func handleReferenceSelections(_ selectedReferences: [ChatReference]) {
+        for reference in selectedReferences {
+            handleReferenceSelection(.success(reference))
+        }
+    }
+
     private func removeReference(_ reference: ChatReference) {
         references.removeAll { $0.id == reference.id }
-        draft = draft
-            .replacingOccurrences(of: reference.promptToken, with: "")
-            .replacingOccurrences(of: "  ", with: " ")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func toggleReferenceLock(_ reference: ChatReference) {
+        guard let index = references.firstIndex(where: { $0.id == reference.id }) else { return }
+        references[index].isLocked.toggle()
     }
 
     private func retryUpload(_ attachmentId: UUID) {
@@ -1482,11 +1847,6 @@ private struct IOSComposer: View {
         let clean = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !clean.isEmpty else { return }
         appendText(clean)
-    }
-
-    private func appendReferenceToken(_ reference: ChatReference) {
-        let token = reference.promptToken
-        appendText(token)
     }
 
     private func appendText(_ text: String) {
@@ -1595,50 +1955,9 @@ private struct IOSComposerCircleButton: View {
     }
 }
 
-private struct IOSProjectChip: View {
-    let name: String
-    let branch: String?
-    let isLocked: Bool
-    let isDisabled: Bool
-    let onTap: () -> Void
-
-    var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 5) {
-                Image(systemName: name == "Home" ? "house" : "folder")
-                    .font(.caption.weight(.semibold))
-                Text(label)
-                    .font(.caption.weight(.semibold))
-                    .lineLimit(1)
-            }
-            .foregroundStyle(.primary)
-            .padding(.horizontal, 10)
-            .frame(height: 46)
-            .background(IOSTheme.elevatedBackground, in: Capsule())
-            .overlay(Capsule().stroke(IOSTheme.hairline))
-            .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .disabled(isDisabled || isLocked)
-        .opacity(isLocked ? 0.74 : 1)
-        .accessibilityLabel("Project \(label)")
-    }
-
-    private var label: String {
-        let cleanBranch = (branch ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        return cleanBranch.isEmpty ? name : "\(name) \(cleanBranch)"
-    }
-}
-
 private struct IOSWaveformInputSurface: View {
     let transcript: String
-    @State private var isAnimating = false
-
-    private let bars: [CGFloat] = [
-        0.34, 0.62, 0.46, 0.82, 0.52, 0.72, 0.38, 0.66,
-        0.44, 0.78, 0.48, 0.60, 0.36, 0.68, 0.50, 0.86,
-        0.54, 0.74, 0.40, 0.64, 0.46, 0.80, 0.52, 0.70
-    ]
+    let levels: [CGFloat]
 
     private var cleanTranscript: String {
         transcript.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1646,52 +1965,77 @@ private struct IOSWaveformInputSurface: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(cleanTranscript.isEmpty ? "Listening" : cleanTranscript)
-                .font(.callout)
-                .foregroundStyle(cleanTranscript.isEmpty ? .tertiary : .primary)
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            GeometryReader { proxy in
-                HStack(alignment: .center, spacing: 4) {
-                    ForEach(Array(bars.enumerated()), id: \.offset) { index, value in
-                        Capsule()
-                            .fill(Color(uiColor: .label).opacity(0.86))
-                            .frame(
-                                width: barWidth(for: proxy.size.width),
-                                height: barHeight(value, index: index)
-                            )
-                            .animation(
-                                .easeInOut(duration: 0.55 + Double(index % 3) * 0.08)
-                                    .repeatForever(autoreverses: true),
-                                value: isAnimating
-                            )
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                .clipped()
-            }
-            .frame(height: 24)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(cleanTranscript.isEmpty ? "Listening" : cleanTranscript)
+            IOSComposerTranscriptText(text: cleanTranscript)
+            IOSWaveformBars(levels: levels)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.leading, 16)
         .padding(.vertical, cleanTranscript.isEmpty ? 9 : 8)
-        .onAppear {
-            isAnimating = true
+    }
+}
+
+private struct IOSComposerTranscriptText: View {
+    let text: String
+
+    private var cleanText: String {
+        text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var body: some View {
+        Text(cleanText.isEmpty ? "Listening" : cleanText)
+            .font(.callout)
+            .foregroundStyle(cleanText.isEmpty ? .tertiary : .primary)
+            .lineLimit(1)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityLabel(cleanText.isEmpty ? "Listening" : cleanText)
+    }
+}
+
+private struct IOSWaveformBars: View {
+    let levels: [CGFloat]
+
+    private var displayLevels: [CGFloat] {
+        let targetCount = 32
+        let clean = levels.map { min(max($0, 0.035), 1) }
+        if clean.count >= targetCount {
+            return Array(clean.suffix(targetCount))
         }
+        return Array(repeating: CGFloat(0.035), count: targetCount - clean.count) + clean
     }
 
     private func barWidth(for availableWidth: CGFloat) -> CGFloat {
-        let totalSpacing = CGFloat(max(0, bars.count - 1)) * 4
-        return max(3, min(7, (availableWidth - totalSpacing) / CGFloat(bars.count)))
+        let totalSpacing = CGFloat(max(0, displayLevels.count - 1)) * 4
+        return max(3, min(7, (availableWidth - totalSpacing) / CGFloat(displayLevels.count)))
     }
 
-    private func barHeight(_ value: CGFloat, index: Int) -> CGFloat {
-        let base = 6 + value * 16
-        let delta = isAnimating ? CGFloat((index % 2) == 0 ? 6 : -4) : 0
-        return max(6, min(24, base + delta))
+    private func barHeight(_ value: CGFloat) -> CGFloat {
+        let shaped = pow(value, 0.72)
+        return max(5, min(30, 5 + shaped * 27))
+    }
+
+    private func barColor(for value: CGFloat) -> Color {
+        Color(uiColor: .label)
+            .opacity(0.42 + min(max(value, 0), 1) * 0.52)
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            HStack(alignment: .center, spacing: 4) {
+                ForEach(Array(displayLevels.enumerated()), id: \.offset) { _, value in
+                    Capsule()
+                        .fill(barColor(for: value))
+                        .frame(
+                            width: barWidth(for: proxy.size.width),
+                            height: barHeight(value)
+                        )
+                        .animation(.interactiveSpring(response: 0.18, dampingFraction: 0.72), value: value)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+            .clipped()
+        }
+        .frame(height: 24)
+        .accessibilityHidden(true)
     }
 }
 
@@ -1825,59 +2169,6 @@ private struct IOSQuestionComposer: View {
         let clean = otherAnswer.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !clean.isEmpty else { return }
         onAnswer(clean)
-    }
-}
-
-private struct IOSConnectionBar: View {
-    @ObservedObject var client: KishAgentClient
-    @ObservedObject var voice: VoiceController
-    @ObservedObject var audio: AudioRouteMonitor
-
-    var body: some View {
-        HStack(spacing: 8) {
-            StatusChip(title: "Mini", value: client.miniStatus)
-            StatusChip(title: "Agent", value: client.agentStatus)
-            StatusChip(title: "Chat", value: client.chatStatus)
-            StatusChip(title: "Audio", value: voice.isRecording ? "Listening" : audio.statusLabel)
-        }
-        .lineLimit(1)
-        .minimumScaleFactor(0.82)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.bar)
-    }
-
-}
-
-private struct StatusChip: View {
-    let title: String
-    let value: String
-
-    var body: some View {
-        HStack(spacing: 5) {
-            Circle()
-                .fill(tint)
-                .frame(width: 7, height: 7)
-            Text(title)
-                .foregroundStyle(.secondary)
-        }
-        .font(.caption2)
-        .accessibilityLabel(title)
-        .accessibilityValue(value)
-    }
-
-    private var tint: Color {
-        switch value {
-        case "Online", "Ready", "On", "System", "Built-in", "Bluetooth", "Glasses", "Headset":
-            return .green
-        case "Sending", "Checking", "Listening", "Question":
-            return .orange
-        case "Error", "Offline":
-            return .red
-        default:
-            return .secondary
-        }
     }
 }
 
@@ -2077,15 +2368,37 @@ private struct IOSContextChip: View {
 
 private struct IOSReferenceChip: View {
     let reference: ChatReference
+    var onToggleLock: (() -> Void)?
     var onRemove: (() -> Void)?
 
+    @ViewBuilder
     var body: some View {
+        if let onToggleLock {
+            chipContent
+                .contextMenu {
+                    Button {
+                        onToggleLock()
+                    } label: {
+                        Label(reference.isLocked ? "Unlock" : "Lock", systemImage: reference.isLocked ? "lock.open" : "lock")
+                    }
+                }
+        } else {
+            chipContent
+        }
+    }
+
+    private var chipContent: some View {
         HStack(spacing: 6) {
             Image(systemName: reference.kind == .folder ? "folder" : "doc.text")
                 .font(.caption2.weight(.semibold))
             Text(reference.promptToken)
                 .font(.caption.weight(.medium))
                 .lineLimit(1)
+            if reference.isLocked {
+                Image(systemName: "lock.fill")
+                    .font(.caption2.weight(.semibold))
+                    .accessibilityLabel("Locked")
+            }
             if let onRemove {
                 Button(action: onRemove) {
                     Image(systemName: "xmark")
@@ -2103,73 +2416,6 @@ private struct IOSReferenceChip: View {
     }
 }
 
-private struct IOSReferencePickerView: UIViewControllerRepresentable {
-    let onResult: (Result<ChatReference, Error>) -> Void
-    let onCancel: () -> Void
-
-    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
-        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.item, .folder])
-        picker.delegate = context.coordinator
-        picker.allowsMultipleSelection = false
-        return picker
-    }
-
-    func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {}
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(onResult: onResult, onCancel: onCancel)
-    }
-
-    final class Coordinator: NSObject, UIDocumentPickerDelegate {
-        private let onResult: (Result<ChatReference, Error>) -> Void
-        private let onCancel: () -> Void
-
-        init(onResult: @escaping (Result<ChatReference, Error>) -> Void, onCancel: @escaping () -> Void) {
-            self.onResult = onResult
-            self.onCancel = onCancel
-        }
-
-        func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
-            onCancel()
-        }
-
-        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
-            guard let url = urls.first else {
-                onResult(.failure(ReferencePickerError.noSelection))
-                return
-            }
-
-            let didAccess = url.startAccessingSecurityScopedResource()
-            defer {
-                if didAccess {
-                    url.stopAccessingSecurityScopedResource()
-                }
-            }
-
-            do {
-                let values = try url.resourceValues(forKeys: [.isDirectoryKey])
-                let title = url.lastPathComponent.isEmpty ? "Reference" : url.lastPathComponent
-                let reference = ChatReference(
-                    kind: values.isDirectory == true ? .folder : .file,
-                    title: title,
-                    path: url.path
-                )
-                onResult(.success(reference))
-            } catch {
-                onResult(.failure(error))
-            }
-        }
-    }
-}
-
-private enum ReferencePickerError: LocalizedError {
-    case noSelection
-
-    var errorDescription: String? {
-        "No reference selected."
-    }
-}
-
 private struct ConversationPicker: View {
     let conversations: [Conversation]
     let selectedID: UUID?
@@ -2178,12 +2424,12 @@ private struct ConversationPicker: View {
     @ObservedObject var wake: WakePhraseController
     let onSelect: (UUID) -> Void
     let onNewChat: () -> Void
+    let onOpenSettings: () -> Void
     let onDelete: (UUID) -> Void
     let onCopyTranscript: (Conversation) -> Void
     let onCopyChatID: (Conversation) -> Void
     let onClose: () -> Void
 
-    @State private var agentURLDraft = ""
     @State private var searchQuery = ""
 
     var body: some View {
@@ -2200,6 +2446,18 @@ private struct ConversationPicker: View {
 
                 Spacer()
 
+                Button(action: onNewChat) {
+                    Image(systemName: "square.and.pencil")
+                        .font(.system(size: 15, weight: .bold))
+                        .frame(width: 34, height: 34)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.accentColor)
+                .background(IOSTheme.elevatedBackground.opacity(0.9), in: Circle())
+                .overlay(Circle().stroke(IOSTheme.hairline))
+                .accessibilityLabel("New chat")
+
                 Button(action: onClose) {
                     Image(systemName: "xmark")
                         .font(.system(size: 14, weight: .bold))
@@ -2209,40 +2467,11 @@ private struct ConversationPicker: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
                 .background(IOSTheme.elevatedBackground.opacity(0.85), in: Circle())
+                .overlay(Circle().stroke(IOSTheme.hairline))
                 .accessibilityLabel("Close conversations")
             }
             .padding(.horizontal, 18)
             .padding(.top, 64)
-            .padding(.bottom, 14)
-
-            Button(action: onNewChat) {
-                HStack(spacing: 12) {
-                    Image(systemName: "plus.bubble")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 34, height: 34)
-                        .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-
-                    Text("New chat")
-                        .font(.callout.weight(.semibold))
-                        .foregroundStyle(.primary)
-
-                    Spacer()
-
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(.tertiary)
-                }
-                .padding(.horizontal, 12)
-                .frame(height: 58)
-                .background(IOSTheme.elevatedBackground.opacity(0.82), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(IOSTheme.hairline)
-                )
-            }
-            .buttonStyle(.plain)
-            .padding(.horizontal, 18)
             .padding(.bottom, 12)
 
             HStack(spacing: 8) {
@@ -2270,17 +2499,6 @@ private struct ConversationPicker: View {
             .overlay(
                 RoundedRectangle(cornerRadius: 13, style: .continuous)
                     .stroke(IOSTheme.hairline)
-            )
-            .padding(.horizontal, 18)
-            .padding(.bottom, 12)
-
-            IOSConnectionPanel(
-                client: client,
-                audio: audio,
-                wake: wake,
-                agentURLDraft: $agentURLDraft,
-                onReconnect: reconnect,
-                onReset: resetAgentURL
             )
             .padding(.horizontal, 18)
             .padding(.bottom, 18)
@@ -2354,7 +2572,7 @@ private struct ConversationPicker: View {
                 Spacer(minLength: 0)
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 6) {
+                    LazyVStack(spacing: 0) {
                         ForEach(filteredConversations) { conversation in
                             ConversationPickerRow(
                                 conversation: conversation,
@@ -2378,17 +2596,28 @@ private struct ConversationPicker: View {
                                     onDelete(conversation.id)
                                 }
                             }
+
+                            if conversation.id != filteredConversations.last?.id {
+                                Divider()
+                            }
                         }
                     }
-                    .padding(.horizontal, 12)
                     .padding(.bottom, 14)
                 }
                 .scrollIndicators(.hidden)
             }
+
+            IOSConnectionPanel(
+                client: client,
+                audio: audio,
+                onOpenSettings: onOpenSettings
+            )
+            .padding(.horizontal, 18)
+            .padding(.top, 10)
+            .padding(.bottom, 48)
         }
         .background(IOSTheme.groupedBackground.opacity(0.72))
         .onAppear {
-            agentURLDraft = client.agentURLString
             audio.refresh()
         }
     }
@@ -2419,316 +2648,225 @@ private struct ConversationPicker: View {
         return formatter
     }()
 
-    private func reconnect() {
-        _ = client.updateBaseURL(agentURLDraft)
-        Task {
-            await client.reconnect()
-            agentURLDraft = client.agentURLString
-        }
-    }
-
-    private func resetAgentURL() {
-        client.resetBaseURL()
-        agentURLDraft = client.agentURLString
-        Task {
-            await client.reconnect()
-        }
-    }
 }
 
 private struct IOSConnectionPanel: View {
     @ObservedObject var client: KishAgentClient
     @ObservedObject var audio: AudioRouteMonitor
-    @ObservedObject var wake: WakePhraseController
-    @Binding var agentURLDraft: String
-    let onReconnect: () -> Void
-    let onReset: () -> Void
-
-    @State private var capabilitiesExpanded = false
-    @State private var showingAudioSettings = false
+    let onOpenSettings: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                TextField("Agent URL", text: $agentURLDraft)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .keyboardType(.URL)
-                    .font(.caption)
-                    .textFieldStyle(.plain)
-                    .padding(.horizontal, 10)
-                    .frame(height: 34)
-                    .background(IOSTheme.secondaryBackground, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(IOSTheme.hairline))
+        Button(action: onOpenSettings) {
+            HStack(spacing: 10) {
+                Circle()
+                    .fill(overallTint)
+                    .frame(width: 8, height: 8)
 
-                Button(action: onReconnect) {
-                    Image(systemName: "arrow.clockwise")
-                        .frame(width: 32, height: 32)
-                }
-                .buttonStyle(.plain)
-                .background(IOSTheme.secondaryBackground, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .accessibilityLabel("Reconnect")
-
-                Button(action: onReset) {
-                    Image(systemName: "arrow.uturn.backward")
-                        .frame(width: 32, height: 32)
-                }
-                .buttonStyle(.plain)
-                .background(IOSTheme.secondaryBackground, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .accessibilityLabel("Reset agent URL")
-            }
-
-            HStack(spacing: 8) {
-                StatusChip(title: "Mini", value: client.miniStatus)
-                StatusChip(title: "Agent", value: client.agentStatus)
-                StatusChip(title: "Chat", value: client.chatStatus)
-                StatusChip(title: "Audio", value: audio.statusLabel)
-            }
-
-            HStack(spacing: 8) {
-                Button {
-                    audio.setPrefersHandsFreeRoute(!audio.prefersHandsFreeRoute)
-                } label: {
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(audio.prefersHandsFreeRoute ? Color.green : Color.secondary)
-                            .frame(width: 7, height: 7)
-                        Text("External")
-                            .font(.caption.weight(.medium))
-                    }
-                    .padding(.horizontal, 10)
-                    .frame(height: 30)
-                    .background(IOSTheme.secondaryBackground, in: Capsule())
-                    .overlay(Capsule().stroke(IOSTheme.hairline))
-                }
-                .buttonStyle(.plain)
-
-                Button {
-                    wake.setEnabled(!wake.isEnabled)
-                } label: {
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(wakeTint)
-                            .frame(width: 7, height: 7)
-                        Text("Wake")
-                            .font(.caption.weight(.medium))
-                    }
-                    .padding(.horizontal, 10)
-                    .frame(height: 30)
-                    .background(IOSTheme.secondaryBackground, in: Capsule())
-                    .overlay(Capsule().stroke(IOSTheme.hairline))
-                }
-                .buttonStyle(.plain)
-
-                Text(wake.statusLabel)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-
-                Text(audio.routeDetail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-
-                Spacer(minLength: 0)
-
-                Button {
-                    showingAudioSettings = true
-                } label: {
-                    Image(systemName: "slider.horizontal.3")
-                        .font(.caption.weight(.semibold))
-                        .frame(width: 30, height: 30)
-                        .background(IOSTheme.secondaryBackground, in: Circle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Audio settings")
-            }
-
-            DisclosureGroup(isExpanded: $capabilitiesExpanded) {
-                IOSCapabilityDetails(inventory: client.toolInventory, inventoryStatus: client.toolInventoryStatus)
-                    .padding(.top, 4)
-            } label: {
-                HStack(spacing: 8) {
-                    Text("Capabilities")
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("KishOS settings")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.primary)
-                    Spacer(minLength: 8)
-                    Text(capabilitySummary)
-                        .font(.caption)
+                    Text(overallSummary)
+                        .font(.caption2)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
+
+                Spacer(minLength: 8)
+
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
             }
-            .font(.caption)
-            .tint(.secondary)
+            .contentShape(Rectangle())
         }
-        .padding(10)
-        .background(IOSTheme.elevatedBackground.opacity(0.74), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(IOSTheme.hairline))
-        .sheet(isPresented: $showingAudioSettings) {
-            IOSAudioSettingsSheet(
-                audio: audio,
-                wake: wake,
-                onRefresh: {
-                    audio.refresh()
-                }
-            )
-            .presentationDetents([.medium, .large])
-        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 12)
+        .frame(height: 50)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(IOSTheme.hairline))
     }
 
-    private var capabilitySummary: String {
-        client.toolInventoryStatus == "Ready" ? client.toolInventory.compactSummary : client.toolInventoryStatus
+    private var overallSummary: String {
+        if [client.miniStatus, client.agentStatus, client.chatStatus, audio.statusLabel].allSatisfy(iosIsHealthyStatus) {
+            return "Ready to help"
+        }
+        if client.isDisconnected {
+            return "Needs connection"
+        }
+        if client.isSending {
+            return "Working"
+        }
+        return [client.miniStatus, client.agentStatus, client.chatStatus, audio.statusLabel]
+            .filter { !iosIsHealthyStatus($0) }
+            .map(iosFriendlyStatus)
+            .first ?? "Checking"
     }
 
-    private var wakeTint: Color {
-        if wake.isListening {
+    private var overallTint: Color {
+        switch overallSummary {
+        case "Ready to help":
             return .green
+        case "Needs connection":
+            return .red
+        case "Working", "Checking":
+            return .orange
+        default:
+            return .secondary
         }
-        return wake.isEnabled ? .orange : .secondary
     }
 }
 
-private struct IOSAudioSettingsSheet: View {
+private struct IOSSettingsPage: View {
+    @ObservedObject var client: KishAgentClient
     @ObservedObject var audio: AudioRouteMonitor
     @ObservedObject var wake: WakePhraseController
-    let onRefresh: () -> Void
-    @Environment(\.dismiss) private var dismiss
+    let agentURL: String
+    let onReconnect: () -> Void
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(audio.glassesSummary)
-                            .font(.title3.weight(.semibold))
-                            .lineLimit(2)
-                        HStack(spacing: 8) {
-                            IOSSettingsStatusPill(title: "Route", value: audio.statusLabel, tint: routeTint)
-                            IOSSettingsStatusPill(title: "Health", value: audio.routeHealthLabel, tint: healthTint)
-                        }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Text("Bot Health")
+                            .font(.headline)
+                        Spacer()
+                        IOSSettingsStatusPill(title: connectionSummary, tint: connectionTint)
                     }
 
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Audio")
-                            .font(.headline)
-                        IOSAudioSettingRow(title: "Input", value: audio.inputName, tint: .green)
-                        IOSAudioSettingRow(title: "Output", value: audio.outputName, tint: .green)
-                        IOSAudioSettingRow(title: "Mode", value: audio.routeModeLabel, tint: audio.prefersHandsFreeRoute ? .green : .secondary)
-                        if !audio.activationDetail.isEmpty {
-                            Text(audio.activationDetail)
+                    Button(action: onReconnect) {
+                        HStack(spacing: 7) {
+                            Image(systemName: "arrow.clockwise")
+                            Text("Check link")
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.78)
+                        }
+                        .font(.callout.weight(.semibold))
+                        .frame(height: 42)
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Color(uiColor: .label))
+
+                    Button {
+                        audio.refresh()
+                    } label: {
+                        HStack(spacing: 7) {
+                            Image(systemName: "arrow.clockwise")
+                            Text("Check audio")
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.78)
+                        }
+                        .font(.callout.weight(.semibold))
+                        .frame(height: 42)
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+
+                    HStack(spacing: 8) {
+                        Image(systemName: "server.rack")
+                            .foregroundStyle(.secondary)
+                        Text(agentURL)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    .padding(.horizontal, 10)
+                    .frame(height: 34)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(IOSTheme.secondaryBackground, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+                .settingsCard()
+
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Settings")
+                        .font(.headline)
+
+                    Toggle(isOn: Binding(
+                        get: { wake.isEnabled },
+                        set: { wake.setEnabled($0) }
+                    )) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Wake phrase")
+                            Text("Start listening by voice.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
-
-                        HStack(spacing: 8) {
-                            Button {
-                                audio.setPrefersHandsFreeRoute(!audio.prefersHandsFreeRoute)
-                            } label: {
-                                Text(audio.prefersHandsFreeRoute ? "Use System" : "Prefer External")
-                                    .frame(maxWidth: .infinity)
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .tint(Color(uiColor: .label))
-
-                            Button(action: onRefresh) {
-                                Image(systemName: "arrow.clockwise")
-                                    .frame(width: 42)
-                            }
-                            .buttonStyle(.bordered)
-                            .accessibilityLabel("Refresh audio routes")
-                        }
                     }
-                    .settingsCard()
 
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Routes")
-                            .font(.headline)
-                        if audio.availableRoutes.isEmpty {
-                            Text("No external routes exposed by iOS.")
+                    Toggle(isOn: Binding(
+                        get: { audio.prefersHandsFreeRoute },
+                        set: { audio.setPrefersHandsFreeRoute($0) }
+                    )) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Use glasses or headset")
+                            Text(audio.glassesSummary)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
-                        } else {
-                            ForEach(audio.availableRoutes) { route in
-                                IOSAudioRouteRow(route: route)
-                            }
+                                .lineLimit(1)
                         }
                     }
-                    .settingsCard()
 
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Hands-free")
-                            .font(.headline)
-                        Toggle(isOn: Binding(
-                            get: { wake.isEnabled },
-                            set: { wake.setEnabled($0) }
-                        )) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Wake phrase")
-                                Text(wake.statusLabel)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
+                    Toggle(isOn: .constant(false)) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Use glasses camera")
+                            Text("Coming soon.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
-                        IOSAudioSettingRow(title: "Wake detections", value: "\(wake.detectionCount)", tint: wake.isListening ? .green : .secondary)
                     }
-                    .settingsCard()
+                    .disabled(true)
 
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Capabilities")
-                            .font(.headline)
-                        ForEach(audio.capabilityLines) { line in
-                            IOSAudioCapabilityRow(line: line)
+                    Toggle(isOn: .constant(false)) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Show replies on glasses")
+                            Text("Coming soon.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
                     }
-                    .settingsCard()
+                    .disabled(true)
                 }
-                .padding(16)
+                .settingsCard()
             }
-            .background(IOSTheme.groupedBackground)
-            .navigationTitle("Audio")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                }
-            }
-            .onAppear(perform: onRefresh)
+            .padding(16)
+        }
+        .background(IOSTheme.groupedBackground)
+        .onAppear {
+            audio.refresh()
         }
     }
 
-    private var routeTint: Color {
-        switch audio.statusLabel {
-        case "Glasses", "Bluetooth", "Headset", "System", "Built-in":
+    private var connectionSummary: String {
+        if client.isDisconnected {
+            return "Not connected"
+        }
+        if client.isSending {
+            return "Working"
+        }
+        if [client.miniStatus, client.agentStatus, client.chatStatus].allSatisfy(iosIsHealthyStatus) {
+            return "Connected"
+        }
+        return "Checking"
+    }
+
+    private var connectionTint: Color {
+        switch connectionSummary {
+        case "Connected":
             return .green
-        case "Listening":
+        case "Working", "Checking":
             return .orange
-        case "Unavailable":
-            return .red
         default:
-            return .secondary
+            return .red
         }
     }
 
-    private var healthTint: Color {
-        switch audio.routeHealthLabel {
-        case "Active", "Ready":
-            return .green
-        case "Switching", "Waiting":
-            return .orange
-        case "Unavailable":
-            return .red
-        default:
-            return .secondary
-        }
-    }
 }
 
 private struct IOSSettingsStatusPill: View {
     let title: String
-    let value: String
     let tint: Color
 
     var body: some View {
@@ -2737,98 +2875,50 @@ private struct IOSSettingsStatusPill: View {
                 .fill(tint)
                 .frame(width: 7, height: 7)
             Text(title)
-                .foregroundStyle(.secondary)
-            Text(value)
-                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.84)
         }
-        .font(.caption.weight(.medium))
+        .font(.caption.weight(.semibold))
+        .foregroundStyle(.secondary)
         .padding(.horizontal, 10)
-        .frame(height: 30)
+        .frame(height: 28)
         .background(IOSTheme.secondaryBackground, in: Capsule())
     }
 }
 
-private struct IOSAudioSettingRow: View {
-    let title: String
-    let value: String
-    let tint: Color
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Circle()
-                .fill(tint)
-                .frame(width: 7, height: 7)
-            Text(title)
-            Spacer(minLength: 8)
-            Text(value)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-        }
-        .font(.caption)
+private func iosIsHealthyStatus(_ value: String) -> Bool {
+    switch value {
+    case "Online", "Ready", "On", "System", "Built-in", "Bluetooth", "Glasses", "Headset", "Idle":
+        return true
+    default:
+        return false
     }
 }
 
-private struct IOSAudioRouteRow: View {
-    let route: AudioRouteCandidate
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Circle()
-                .fill(route.isActive ? .green : (route.isPreferredCandidate ? .orange : .secondary))
-                .frame(width: 7, height: 7)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(route.name)
-                    .font(.caption.weight(.medium))
-                    .lineLimit(1)
-                Text(route.portType)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 8)
-            Text(routeLabel)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-        }
-    }
-
-    private var routeLabel: String {
-        var parts = [route.kind.rawValue]
-        if route.isInput {
-            parts.append("In")
-        }
-        if route.isOutput {
-            parts.append("Out")
-        }
-        if route.isActive {
-            parts.append("Active")
-        }
-        return parts.joined(separator: " · ")
-    }
-}
-
-private struct IOSAudioCapabilityRow: View {
-    let line: AudioCapabilityLine
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 8) {
-                Circle()
-                    .fill(line.isReady ? .green : .secondary)
-                    .frame(width: 7, height: 7)
-                Text(line.title)
-                    .font(.caption.weight(.medium))
-                Spacer(minLength: 8)
-                Text(line.state)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Text(line.detail)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .padding(.leading, 15)
-        }
+private func iosFriendlyStatus(_ value: String) -> String {
+    switch value {
+    case "Online", "Ready", "On":
+        return "Ready"
+    case "System", "Built-in":
+        return "Phone"
+    case "Bluetooth", "Glasses", "Headset":
+        return value
+    case "Sending":
+        return "Working"
+    case "Checking":
+        return "Checking"
+    case "Listening":
+        return "Listening"
+    case "Idle":
+        return "Ready"
+    case "Question":
+        return "Needs answer"
+    case "Error":
+        return "Problem"
+    case "Offline", "Unavailable":
+        return "Not connected"
+    default:
+        return value
     }
 }
 
@@ -2836,7 +2926,7 @@ private extension View {
     func settingsCard() -> some View {
         self
             .padding(12)
-            .background(IOSTheme.elevatedBackground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(IOSTheme.hairline))
     }
 }
@@ -2995,20 +3085,11 @@ private struct ConversationPickerRow: View {
 
     var body: some View {
         Button(action: onSelect) {
-            HStack(spacing: 11) {
-                ZStack {
-                    Circle()
-                        .fill(isSelected ? Color.accentColor : Color.secondary.opacity(0.13))
-                    Image(systemName: isSelected ? "text.bubble.fill" : "text.bubble")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(isSelected ? .white : .secondary)
-                }
-                .frame(width: 34, height: 34)
-
+            HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
                         Text(conversation.title)
-                            .font(.callout.weight(isSelected ? .semibold : .medium))
+                            .font(.headline.weight(isSelected ? .semibold : .medium))
                             .foregroundStyle(.primary)
                             .lineLimit(1)
                             .truncationMode(.tail)
@@ -3020,24 +3101,25 @@ private struct ConversationPickerRow: View {
                         Spacer(minLength: 8)
 
                         Text(updatedText)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .font(.callout)
+                            .foregroundStyle(metadataForeground)
                             .lineLimit(1)
+
+                        if isSelected {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundStyle(Color.accentColor)
+                                .accessibilityHidden(true)
+                        }
                     }
 
                     Text(rowDetail)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(.subheadline)
+                        .foregroundStyle(metadataForeground)
                         .lineLimit(1)
                         .truncationMode(.tail)
                 }
-
-                if isSelected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(Color.accentColor)
-                        .accessibilityHidden(true)
-                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .contentShape(Rectangle())
         }
@@ -3048,24 +3130,25 @@ private struct ConversationPickerRow: View {
             Divider()
             Button("Delete", role: .destructive, action: onDelete)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 10)
-        .background(rowBackground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(isSelected ? Color.accentColor.opacity(0.22) : IOSTheme.hairline)
-        )
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(rowBackground)
     }
 
     private var rowBackground: Color {
-        isSelected ? Color.accentColor.opacity(0.10) : IOSTheme.elevatedBackground.opacity(0.74)
+        isSelected ? Color.accentColor.opacity(0.10) : Color.clear
+    }
+
+    private var metadataForeground: Color {
+        isSelected ? Color(uiColor: .label).opacity(0.74) : Color(uiColor: .secondaryLabel)
     }
 
     private var rowDetail: String {
         if conversation.runState.isActive {
-            return "\(conversation.projectBadgeText) - \(conversation.runState.label) - \(conversation.updatedTimestampText)"
+            return "\(conversation.projectBadgeText) - \(conversation.runState.label)"
         }
-        return "\(conversation.projectBadgeText) - \(conversation.updatedDetailText)"
+        return conversation.projectBadgeText
     }
 }
 
@@ -3163,11 +3246,6 @@ private struct IOSOfflineQueueBar: View {
 }
 
 private struct EmptyIOSChat: View {
-    let projectName: String
-    let projectBranch: String?
-    let showsProjectPicker: Bool
-    let onPickProject: () -> Void
-
     var body: some View {
         VStack(spacing: 12) {
             Image(systemName: "sparkle.magnifyingglass")
@@ -3175,17 +3253,6 @@ private struct EmptyIOSChat: View {
                 .foregroundStyle(.secondary)
             Text("Ask KishOS")
                 .font(.title3.weight(.semibold))
-
-            if showsProjectPicker {
-                IOSProjectChip(
-                    name: projectName,
-                    branch: projectBranch,
-                    isLocked: false,
-                    isDisabled: false,
-                    onTap: onPickProject
-                )
-                .padding(.top, 2)
-            }
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 140)
