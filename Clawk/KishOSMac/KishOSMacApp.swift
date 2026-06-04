@@ -44,6 +44,15 @@ private struct MacRootView: View {
                 }
 
                 if !workspace.conversations.isEmpty {
+                    if !pendingDecisionConversations.isEmpty {
+                        Section("Questions") {
+                            ForEach(pendingDecisionConversations) { conversation in
+                                DecisionRow(conversation: conversation)
+                                    .tag(SidebarSelection.conversation(conversation.id))
+                            }
+                        }
+                    }
+
                     Section("Conversations") {
                         ForEach(workspace.conversations) { conversation in
                             ConversationRow(
@@ -151,6 +160,10 @@ private struct MacRootView: View {
 
     private var isSidebarCollapsed: Bool {
         columnVisibility == .detailOnly
+    }
+
+    private var pendingDecisionConversations: [Conversation] {
+        workspace.conversations.filter { !$0.approvals.isEmpty }
     }
 
     private func retry(_ conversationId: UUID) {
@@ -403,6 +416,34 @@ private struct ConversationRow: View {
             return conversation.runState.label
         }
         return conversation.threadId
+    }
+}
+
+private struct DecisionRow: View {
+    let conversation: Conversation
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 6) {
+                Image(systemName: "questionmark.circle.fill")
+                    .foregroundStyle(.orange)
+                Text(conversation.title)
+                    .font(.subheadline.weight(.medium))
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                Text("\(conversation.approvals.count)")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(conversation.approvals.first?.summary.isEmpty == false ? conversation.approvals.first?.summary ?? "Needs answer" : "Needs answer")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 6)
+        .background(Color.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: 8))
     }
 }
 
@@ -1372,73 +1413,80 @@ private struct SettingsView: View {
     @State private var agentURLDraft = ""
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Header(title: "Settings", subtitle: client.status)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                Header(title: "Settings", subtitle: client.status)
 
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Connection")
-                    .font(.headline)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Connection")
+                        .font(.headline)
 
-                HStack(spacing: 8) {
-                    TextField("Agent URL", text: $agentURLDraft)
-                        .textFieldStyle(.roundedBorder)
-                        .onSubmit(reconnect)
-                    Button("Reconnect", action: reconnect)
-                    Button("Reset") {
-                        client.resetBaseURL()
-                        agentURLDraft = client.agentURLString
-                        Task {
-                            await client.reconnect()
+                    HStack(spacing: 8) {
+                        TextField("Agent URL", text: $agentURLDraft)
+                            .textFieldStyle(.roundedBorder)
+                            .onSubmit(reconnect)
+                        Button("Reconnect", action: reconnect)
+                        Button("Reset") {
+                            client.resetBaseURL()
+                            agentURLDraft = client.agentURLString
+                            Task {
+                                await client.reconnect()
+                            }
                         }
                     }
                 }
-            }
-            .padding(14)
-            .background(.background, in: RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(.quaternary))
+                .padding(12)
+                .background(.background, in: RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(.quaternary))
 
-            VStack(spacing: 10) {
-                StatusRow(title: "Mac mini", value: client.miniStatus, tint: client.miniStatus == "Online" ? .green : .secondary)
-                StatusRow(title: "HTTP", value: client.httpStatus, tint: client.httpStatus == "Online" ? .green : .secondary)
-                StatusRow(title: "Agent", value: client.agentStatus, tint: client.agentStatus == "Online" ? .green : .secondary)
-                StatusRow(title: "History", value: storeError == nil ? "On" : "Error", tint: storeError == nil ? .green : .red)
-                StatusRow(title: "Tools", value: client.toolInventoryStatus, tint: client.toolInventoryStatus == "Ready" ? .green : .secondary)
-            }
+                LazyVGrid(columns: statusColumns, spacing: 8) {
+                    StatusRow(title: "Mac mini", value: client.miniStatus, tint: client.miniStatus == "Online" ? .green : .secondary)
+                    StatusRow(title: "HTTP", value: client.httpStatus, tint: client.httpStatus == "Online" ? .green : .secondary)
+                    StatusRow(title: "Agent", value: client.agentStatus, tint: client.agentStatus == "Online" ? .green : .secondary)
+                    StatusRow(title: "History", value: storeError == nil ? "On" : "Error", tint: storeError == nil ? .green : .red)
+                    StatusRow(title: "Tools", value: client.toolInventoryStatus, tint: client.toolInventoryStatus == "Ready" ? .green : .secondary)
+                }
 
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Text("Audio")
-                        .font(.headline)
-                    Spacer()
-                    Button("Refresh") {
-                        audio.refresh(isRecording: voice.isRecording)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Audio")
+                            .font(.headline)
+                        Spacer()
+                        Button("Refresh") {
+                            audio.refresh(isRecording: voice.isRecording)
+                        }
+                    }
+                    LazyVGrid(columns: statusColumns, spacing: 8) {
+                        StatusRow(title: "Input", value: audio.inputName, tint: audio.statusLabel == "Unavailable" ? .red : .green)
+                        StatusRow(title: "Output", value: audio.outputName, tint: audio.statusLabel == "Unavailable" ? .red : .green)
+                        StatusRow(title: "Route", value: audio.statusLabel, tint: audioTint)
                     }
                 }
-                StatusRow(title: "Input", value: audio.inputName, tint: audio.statusLabel == "Unavailable" ? .red : .green)
-                StatusRow(title: "Output", value: audio.outputName, tint: audio.statusLabel == "Unavailable" ? .red : .green)
-                StatusRow(title: "Route", value: audio.statusLabel, tint: audioTint)
+                .padding(12)
+                .background(.background, in: RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(.quaternary))
+
+                ToolInventorySection(inventory: client.toolInventory)
+
+                if let storeError {
+                    Text(storeError)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
             }
-            .padding(14)
-            .background(.background, in: RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(.quaternary))
-
-            ToolInventorySection(inventory: client.toolInventory)
-
-            if let storeError {
-                Text(storeError)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-            }
-
-            Spacer()
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .padding(16)
         }
-        .padding(22)
         .background(Color(nsColor: .controlBackgroundColor))
         .onAppear {
             agentURLDraft = client.agentURLString
             audio.refresh(isRecording: voice.isRecording)
         }
+    }
+
+    private var statusColumns: [GridItem] {
+        [GridItem(.adaptive(minimum: 150), spacing: 8, alignment: .top)]
     }
 
     private var audioTint: Color {
@@ -1467,11 +1515,11 @@ private struct ToolInventorySection: View {
     let inventory: ToolInventory
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             Text("Tools")
                 .font(.headline)
 
-            HStack(alignment: .top, spacing: 12) {
+            LazyVGrid(columns: columns, spacing: 10) {
                 ToolGroup(title: "Engines", items: inventory.engines.map { item in
                     ToolLine(title: item.name, detail: item.detail ?? item.status, status: item.status)
                 })
@@ -1479,18 +1527,22 @@ private struct ToolInventorySection: View {
                 ToolGroup(title: "Commands", items: inventory.commands.map { item in
                     ToolLine(title: item.name, detail: item.status, status: item.status)
                 })
-            }
 
-            ToolGroup(title: "Recent", items: inventory.recentTools.prefix(8).map { item in
-                ToolLine(title: item.name, detail: "\(item.count)", status: "Available")
-            })
+                ToolGroup(title: "Recent", items: inventory.recentTools.prefix(6).map { item in
+                    ToolLine(title: item.name, detail: "\(item.count)", status: "Available")
+                })
+            }
         }
-        .padding(14)
+        .padding(12)
         .background(.background, in: RoundedRectangle(cornerRadius: 8))
         .overlay(
             RoundedRectangle(cornerRadius: 8)
                 .stroke(.quaternary)
         )
+    }
+
+    private var columns: [GridItem] {
+        [GridItem(.adaptive(minimum: 190), spacing: 12, alignment: .top)]
     }
 }
 
@@ -1499,7 +1551,7 @@ private struct ToolGroup: View {
     let items: [ToolLine]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: 5) {
             Text(title)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
@@ -1643,17 +1695,19 @@ private struct StatusRow: View {
     let tint: Color
 
     var body: some View {
-        HStack {
+        HStack(spacing: 7) {
             Circle()
                 .fill(tint)
-                .frame(width: 8, height: 8)
+                .frame(width: 7, height: 7)
             Text(title)
             Spacer()
             Text(value)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
         }
-        .padding(12)
+        .font(.caption)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
         .background(.background, in: RoundedRectangle(cornerRadius: 8))
         .overlay(
             RoundedRectangle(cornerRadius: 8)

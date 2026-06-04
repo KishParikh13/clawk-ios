@@ -1173,6 +1173,32 @@ private struct ConversationPicker: View {
             .padding(.horizontal, 18)
             .padding(.bottom, 18)
 
+            if !pendingDecisionConversations.isEmpty {
+                HStack {
+                    Text("Questions")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .textCase(.uppercase)
+                    Spacer()
+                }
+                .padding(.horizontal, 18)
+                .padding(.bottom, 8)
+
+                VStack(spacing: 6) {
+                    ForEach(pendingDecisionConversations) { conversation in
+                        DecisionPickerRow(
+                            conversation: conversation,
+                            isSelected: selectedID == conversation.id,
+                            onSelect: {
+                                onSelect(conversation.id)
+                            }
+                        )
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 18)
+            }
+
             HStack {
                 Text("Recent")
                     .font(.caption.weight(.semibold))
@@ -1235,6 +1261,10 @@ private struct ConversationPicker: View {
 
     private var sortedConversations: [Conversation] {
         conversations.sorted { $0.updatedAt > $1.updatedAt }
+    }
+
+    private var pendingDecisionConversations: [Conversation] {
+        sortedConversations.filter { !$0.approvals.isEmpty }
     }
 
     private var conversationCountText: String {
@@ -1342,6 +1372,56 @@ private struct IOSConnectionPanel: View {
         .padding(10)
         .background(IOSTheme.elevatedBackground.opacity(0.74), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(IOSTheme.hairline))
+    }
+}
+
+private struct DecisionPickerRow: View {
+    let conversation: Conversation
+    let isSelected: Bool
+    let onSelect: () -> Void
+
+    var body: some View {
+        Button(action: onSelect) {
+            HStack(spacing: 11) {
+                Image(systemName: "questionmark.circle.fill")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.orange)
+                    .frame(width: 34, height: 34)
+                    .background(Color.orange.opacity(0.13), in: Circle())
+
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Text(conversation.title)
+                            .font(.callout.weight(.semibold))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                        Spacer(minLength: 8)
+                        Text("\(conversation.approvals.count)")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Text(summary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 10)
+        .background(isSelected ? Color.orange.opacity(0.14) : IOSTheme.elevatedBackground.opacity(0.74), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(isSelected ? Color.orange.opacity(0.25) : IOSTheme.hairline)
+        )
+    }
+
+    private var summary: String {
+        let clean = conversation.approvals.first?.summary.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return clean.isEmpty ? "Needs answer" : clean
     }
 }
 
