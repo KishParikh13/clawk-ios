@@ -109,9 +109,10 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
     }
 
     func interruptAndListen() {
-        speechSynthesizer.stopSpeaking(at: .immediate)
-        activeAgentText = ""
-        Task { await beginListening() }
+        Task {
+            await stopActiveRun()
+            await beginListening()
+        }
     }
 
     func submitCurrentUtterance() {
@@ -153,8 +154,13 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
 
     func endCall() {
         finalizeTask?.cancel()
-        activeSendTask?.cancel()
         elapsedTask?.cancel()
+        let threadId = activeConversationID.flatMap { workspace.conversation(id: $0)?.threadId }
+        activeSendTask?.cancel()
+        if let activeConversationID,
+           workspace.conversation(id: activeConversationID)?.isRunning == true {
+            workspace.cancelActiveResponse(in: activeConversationID)
+        }
         _ = voice.stopRecording()
         speechSynthesizer.stopSpeaking(at: .immediate)
         activeUserPartial = ""
@@ -162,6 +168,9 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
         state = .ended
         liveActivity.endLiveCall()
         hasLiveActivitySession = false
+        if let threadId {
+            Task { try? await client.cancel(threadId: threadId) }
+        }
     }
 
     private func beginListening() async {
@@ -253,6 +262,15 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
                 self.syncLiveActivity(detailOverride: "Reply ready")
                 self.speak(result.text)
             } catch {
+                if self.isCancellation(error) {
+                    self.workspace.cancelActiveResponse(in: conversation.id)
+                    self.failureMessage = nil
+                    self.activeAgentText = ""
+                    if self.state != .ended {
+                        await self.beginListening()
+                    }
+                    return
+                }
                 if self.isOfflineError(error),
                    let messageID,
                    self.workspace.requeueMessageAfterOfflineFailure(conversationID: conversation.id, messageID: messageID) {
@@ -264,6 +282,25 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
                 self.state = .failed
             }
         }
+    }
+
+    private func stopActiveRun() async {
+        finalizeTask?.cancel()
+        activeSendTask?.cancel()
+        activeSendTask = nil
+        _ = voice.stopRecording()
+        speechSynthesizer.stopSpeaking(at: .immediate)
+        activeUserPartial = ""
+        activeAgentText = ""
+
+        guard let activeConversationID,
+              let conversation = workspace.conversation(id: activeConversationID)
+        else { return }
+
+        if conversation.isRunning {
+            workspace.cancelActiveResponse(in: activeConversationID)
+        }
+        try? await client.cancel(threadId: conversation.threadId)
     }
 
     private func appendUserTurn(_ text: String) -> Conversation? {
@@ -375,6 +412,17 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
     private func isOfflineError(_ error: Error) -> Bool {
         guard let agentError = error as? AgentClientError else { return false }
         if case .network = agentError {
+            return true
+        }
+        return false
+    }
+
+    private func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError {
+            return true
+        }
+        guard let agentError = error as? AgentClientError else { return false }
+        if case .cancelled = agentError {
             return true
         }
         return false

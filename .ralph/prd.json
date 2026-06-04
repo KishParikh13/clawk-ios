@@ -95,6 +95,21 @@
       "priority": 6,
       "passes": true,
       "notes": "Added shared conversation search matching across title, idea, project, branch, thread id, message text, attachment names/text, and file/folder references. Added Mac sidebar search and iOS overlay search with compact no-match states. Verified with .ralph/verify.sh."
+    },
+    {
+      "id": "US-007",
+      "title": "Cancel live-call agent runs",
+      "description": "Make live-call interrupt and end actions stop the real backend run, clear local running UI, and avoid showing cancellation as a failure.",
+      "acceptanceCriteria": [
+        "Ending a live call cancels the active local stream task",
+        "Ending a live call sends a cancel request to kish-agent for the active thread",
+        "Interrupting a running live-call turn cancels the backend run before returning to listening",
+        "Cancelled live-call streams clear the assistant placeholder without a failure banner",
+        "Verification command passes"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": "Updated LiveCallController so interrupt/end cancels the local stream, clears the running assistant placeholder, sends /cancel to kish-agent for the active thread, and treats cancelled streams as neutral instead of a failure banner. Verified with .ralph/verify.sh."
     }
   ]
 }
