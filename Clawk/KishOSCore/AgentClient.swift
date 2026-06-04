@@ -16,6 +16,14 @@ final class KishAgentClient: ObservableObject {
     private let session: URLSession
     private var pollingStarted = false
 
+    var isDisconnected: Bool {
+        status == "Offline" || httpStatus == "Offline" || agentStatus == "Offline" || chatStatus == "Offline"
+    }
+
+    var canSendQueuedMessages: Bool {
+        !isSending && httpStatus == "Online" && agentStatus == "Online" && chatStatus == "Ready"
+    }
+
     init(
         baseURL: URL = URL(string: "http://kishs-mac-mini-1:17891")!,
         session: URLSession = .shared

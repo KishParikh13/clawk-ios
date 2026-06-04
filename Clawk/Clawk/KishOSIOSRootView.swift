@@ -3,6 +3,8 @@ import SwiftUI
 private enum IOSTheme {
     static let background = Color(uiColor: .systemBackground)
     static let secondaryBackground = Color(uiColor: .secondarySystemBackground)
+    static let groupedBackground = Color(uiColor: .systemGroupedBackground)
+    static let elevatedBackground = Color(uiColor: .tertiarySystemBackground)
     static let hairline = Color.secondary.opacity(0.18)
 }
 
@@ -18,15 +20,17 @@ struct KishOSIOSRootView: View {
 
     @State private var selection: IOSChatSelection = .newChat
     @State private var showingConversations = false
+    @State private var isDrainingQueuedMessages = false
 
     var body: some View {
-        NavigationStack {
-            GeometryReader { geometry in
-                ZStack(alignment: .leading) {
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                NavigationStack {
                     ChatScreen(
                         client: client,
                         conversation: selectedConversation,
                         isSending: currentIsRunning,
+                        queuedMessageCount: selectedConversation?.queuedUserMessageCount ?? workspace.queuedMessageCount,
                         approvals: selectedConversation?.approvals ?? [],
                         voice: voice,
                         onSend: send,
@@ -55,47 +59,56 @@ struct KishOSIOSRootView: View {
                             .accessibilityLabel("New chat")
                         }
                     }
-
-                    if showingConversations {
-                        Color.black.opacity(0.22)
-                            .ignoresSafeArea()
-                            .onTapGesture {
-                                closeConversations()
-                            }
-                            .transition(.opacity)
-
-                        ConversationPicker(
-                            conversations: workspace.conversations,
-                            selectedID: selectedConversationID,
-                            onSelect: { id in
-                                selection = .conversation(id)
-                                closeConversations()
-                            },
-                            onNewChat: {
-                                startNewChat()
-                                closeConversations()
-                            },
-                            onDelete: deleteConversation,
-                            onClose: closeConversations
-                        )
-                        .frame(width: sidebarWidth(for: geometry.size.width))
-                        .frame(maxHeight: .infinity)
-                        .background(IOSTheme.background)
-                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                        .shadow(color: .black.opacity(0.18), radius: 24, x: 10, y: 0)
-                        .padding(.vertical, 8)
-                        .padding(.leading, 8)
-                        .transition(.move(edge: .leading).combined(with: .opacity))
+                    .toolbar(showingConversations ? .hidden : .visible, for: .navigationBar)
+                    .task {
+                        await client.startHealthPolling()
+                    }
+                    .task {
+                        await startSharedConversationSyncLoop()
+                    }
+                    .task {
+                        await startQueuedMessageLoop()
                     }
                 }
-                .animation(.easeInOut(duration: 0.22), value: showingConversations)
+                .disabled(showingConversations)
+
+                if showingConversations {
+                    Color.black.opacity(0.22)
+                        .ignoresSafeArea()
+                        .onTapGesture {
+                            closeConversations()
+                        }
+                        .transition(.opacity)
+
+                    ConversationPicker(
+                        conversations: workspace.conversations,
+                        selectedID: selectedConversationID,
+                        onSelect: { id in
+                            selection = .conversation(id)
+                            closeConversations()
+                        },
+                        onNewChat: {
+                            startNewChat()
+                            closeConversations()
+                        },
+                        onDelete: deleteConversation,
+                        onClose: closeConversations
+                    )
+                    .frame(width: sidebarWidth(for: geometry.size.width))
+                    .frame(maxHeight: .infinity)
+                    .background(.regularMaterial)
+                    .clipShape(RoundedCorner(radius: 28, corners: [.topRight, .bottomRight]))
+                    .overlay(alignment: .trailing) {
+                        Rectangle()
+                            .fill(IOSTheme.hairline)
+                            .frame(width: 1)
+                    }
+                    .shadow(color: .black.opacity(0.16), radius: 30, x: 10, y: 0)
+                    .ignoresSafeArea(edges: .vertical)
+                    .transition(.move(edge: .leading).combined(with: .opacity))
+                }
             }
-            .task {
-                await client.startHealthPolling()
-            }
-            .task {
-                await startSharedConversationSyncLoop()
-            }
+            .animation(.easeInOut(duration: 0.22), value: showingConversations)
         }
     }
 
@@ -126,12 +139,17 @@ struct KishOSIOSRootView: View {
     }
 
     private func sidebarWidth(for containerWidth: CGFloat) -> CGFloat {
-        min(340, max(292, containerWidth * 0.86))
+        min(356, max(304, containerWidth * 0.84))
     }
 
     private func send(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+
+        if client.isDisconnected {
+            queue(trimmed)
+            return
+        }
 
         let conversation: Conversation
         if let selectedConversationID,
@@ -142,18 +160,38 @@ struct KishOSIOSRootView: View {
             selection = .conversation(conversation.id)
         }
 
+        sendPreparedMessage(trimmed, in: conversation, messageID: conversation.messages.last?.id)
+    }
+
+    private func sendPreparedMessage(_ text: String, in conversation: Conversation, messageID: UUID?) {
         Task {
             do {
                 workspace.beginAgentResponse(in: conversation.id)
-                let result = try await client.sendStreaming(trimmed, threadId: conversation.threadId, conversationId: conversation.id) { event in
+                let result = try await client.sendStreaming(text, threadId: conversation.threadId, conversationId: conversation.id) { event in
                     handleStreamEvent(event, conversationId: conversation.id)
                 }
                 workspace.apply(result, to: conversation.id)
                 await syncSharedConversations()
             } catch {
+                if isOfflineError(error),
+                   let messageID,
+                   workspace.requeueMessageAfterOfflineFailure(conversationID: conversation.id, messageID: messageID) {
+                    return
+                }
                 workspace.applyFailure(error, to: conversation.id)
             }
         }
+    }
+
+    private func queue(_ text: String) {
+        let conversation: Conversation
+        if let selectedConversationID,
+           let existing = workspace.queueUserMessage(text, to: selectedConversationID) {
+            conversation = existing
+        } else {
+            conversation = workspace.queueConversation(firstMessage: text)
+        }
+        selection = .conversation(conversation.id)
     }
 
     private func retrySelectedConversation() {
@@ -269,12 +307,64 @@ struct KishOSIOSRootView: View {
             try? await Task.sleep(for: .seconds(8))
         }
     }
+
+    private func startQueuedMessageLoop() async {
+        while !Task.isCancelled {
+            if client.canSendQueuedMessages {
+                await drainQueuedMessages()
+            }
+            try? await Task.sleep(for: .seconds(3))
+        }
+    }
+
+    private func drainQueuedMessages() async {
+        guard !isDrainingQueuedMessages else { return }
+        isDrainingQueuedMessages = true
+        defer { isDrainingQueuedMessages = false }
+
+        while client.canSendQueuedMessages, let queued = workspace.nextQueuedMessage() {
+            guard let prepared = workspace.prepareQueuedMessageForSending(
+                conversationID: queued.conversation.id,
+                messageID: queued.message.id
+            ) else {
+                continue
+            }
+
+            do {
+                workspace.beginAgentResponse(in: prepared.conversation.id)
+                let result = try await client.sendStreaming(
+                    prepared.message,
+                    threadId: prepared.conversation.threadId,
+                    conversationId: prepared.conversation.id
+                ) { event in
+                    handleStreamEvent(event, conversationId: prepared.conversation.id)
+                }
+                workspace.apply(result, to: prepared.conversation.id)
+                await syncSharedConversations()
+            } catch {
+                if isOfflineError(error),
+                   workspace.requeueMessageAfterOfflineFailure(conversationID: prepared.conversation.id, messageID: queued.message.id) {
+                    return
+                }
+                workspace.applyFailure(error, to: prepared.conversation.id)
+            }
+        }
+    }
+
+    private func isOfflineError(_ error: Error) -> Bool {
+        guard let agentError = error as? AgentClientError else { return false }
+        if case .network = agentError {
+            return true
+        }
+        return false
+    }
 }
 
 private struct ChatScreen: View {
     @ObservedObject var client: KishAgentClient
     let conversation: Conversation?
     let isSending: Bool
+    let queuedMessageCount: Int
     let approvals: [ApprovalRequest]
     @ObservedObject var voice: VoiceController
     let onSend: (String) -> Void
@@ -322,6 +412,14 @@ private struct ChatScreen: View {
                 IOSErrorBar(message: lastError, onRetry: onRetry)
             }
 
+            if queuedMessageCount > 0 {
+                IOSOfflineQueueBar(count: queuedMessageCount, isConnected: client.canSendQueuedMessages)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else if client.isDisconnected {
+                IOSOfflineQueueBar(count: 0, isConnected: false)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
             if let pendingQuestion = approvals.first {
                 IOSQuestionComposer(
                     approval: pendingQuestion,
@@ -349,6 +447,7 @@ private struct ChatScreen: View {
         .background(IOSTheme.background)
         .animation(.easeInOut(duration: 0.2), value: approvals.first?.id)
         .animation(.easeInOut(duration: 0.2), value: client.isSending || isSending)
+        .animation(.easeInOut(duration: 0.2), value: queuedMessageCount)
     }
 
     private func sendDraft() {
@@ -392,18 +491,57 @@ private struct IOSMessageTurn: View {
                     Spacer(minLength: 48)
                 }
 
-                IOSMarkdownText(text: message.text, isUser: message.sender == .user)
-                    .padding(.horizontal, message.sender == .user ? 13 : 0)
-                    .padding(.vertical, message.sender == .user ? 10 : 0)
-                    .background(message.sender == .user ? Color.accentColor : Color.clear, in: RoundedRectangle(cornerRadius: 17))
-                    .foregroundStyle(message.sender == .user ? .white : .primary)
-                    .textSelection(.enabled)
+                VStack(alignment: message.sender == .user ? .trailing : .leading, spacing: 5) {
+                    IOSMarkdownText(text: message.text, isUser: message.sender == .user)
+                        .padding(.horizontal, message.sender == .user ? 13 : 0)
+                        .padding(.vertical, message.sender == .user ? 10 : 0)
+                        .background(message.sender == .user ? Color.accentColor : Color.clear, in: RoundedRectangle(cornerRadius: 17))
+                        .foregroundStyle(message.sender == .user ? .white : .primary)
+                        .textSelection(.enabled)
+
+                    if let deliveryText {
+                        Label(deliveryText, systemImage: deliveryIcon)
+                            .font(.caption2)
+                            .foregroundStyle(deliveryTint)
+                    }
+                }
 
                 if message.sender == .agent {
                     Spacer(minLength: 48)
                 }
             }
         }
+    }
+
+    private var deliveryText: String? {
+        guard message.sender == .user else { return nil }
+        switch message.deliveryState {
+        case .queued:
+            return "Saved locally"
+        case .sending:
+            return "Sending"
+        case .failed:
+            return "Failed"
+        case .sent:
+            return nil
+        }
+    }
+
+    private var deliveryIcon: String {
+        switch message.deliveryState {
+        case .queued:
+            return "clock"
+        case .sending:
+            return "arrow.up"
+        case .failed:
+            return "exclamationmark.circle"
+        case .sent:
+            return "checkmark"
+        }
+    }
+
+    private var deliveryTint: Color {
+        message.deliveryState == .failed ? .red : .secondary
     }
 }
 
@@ -744,10 +882,10 @@ private struct IOSConnectionBar: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            StatusChip(title: "Mini", online: client.miniStatus == "Online")
-            StatusChip(title: "Agent", online: client.agentStatus == "Online")
-            StatusChip(title: "Chat", online: client.chatStatus == "Ready")
-            StatusChip(title: "Mic", online: voice.isRecording)
+            StatusChip(title: "Mini", value: client.miniStatus)
+            StatusChip(title: "Agent", value: client.agentStatus)
+            StatusChip(title: "Chat", value: client.chatStatus)
+            StatusChip(title: "Mic", value: voice.isRecording ? "Listening" : voice.status)
         }
         .lineLimit(1)
         .minimumScaleFactor(0.82)
@@ -761,19 +899,32 @@ private struct IOSConnectionBar: View {
 
 private struct StatusChip: View {
     let title: String
-    let online: Bool
+    let value: String
 
     var body: some View {
         HStack(spacing: 5) {
             Circle()
-                .fill(online ? .green : .secondary)
+                .fill(tint)
                 .frame(width: 7, height: 7)
             Text(title)
                 .foregroundStyle(.secondary)
         }
         .font(.caption2)
         .accessibilityLabel(title)
-        .accessibilityValue(online ? "On" : "Off")
+        .accessibilityValue(value)
+    }
+
+    private var tint: Color {
+        switch value {
+        case "Online", "Ready", "On":
+            return .green
+        case "Sending", "Checking", "Listening", "Question":
+            return .orange
+        case "Error", "Offline":
+            return .red
+        default:
+            return .secondary
+        }
     }
 }
 
@@ -786,52 +937,195 @@ private struct ConversationPicker: View {
     let onClose: () -> Void
 
     var body: some View {
-        NavigationStack {
-            List {
-                Button(action: onNewChat) {
-                    Label("New chat", systemImage: "plus.bubble")
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Chats")
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Text(conversationCountText)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
-                Section("Conversations") {
-                    ForEach(conversations) { conversation in
-                        Button {
-                            onSelect(conversation.id)
-                        } label: {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(conversation.title)
-                                        .lineLimit(1)
-                                    Text(conversation.idea)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(1)
-                                }
-                                Spacer()
-                                if selectedID == conversation.id {
-                                    Image(systemName: "checkmark")
-                                        .foregroundStyle(.tint)
-                                }
-                            }
-                        }
-                        .swipeActions {
-                            Button("Delete", role: .destructive) {
-                                onDelete(conversation.id)
-                            }
-                        }
-                    }
+                Spacer()
+
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 14, weight: .bold))
+                        .frame(width: 34, height: 34)
+                        .contentShape(Circle())
                 }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .background(IOSTheme.elevatedBackground.opacity(0.85), in: Circle())
+                .accessibilityLabel("Close conversations")
             }
-            .navigationTitle("Chats")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(action: onClose) {
-                        Image(systemName: "xmark")
-                    }
-                    .accessibilityLabel("Close conversations")
+            .padding(.horizontal, 18)
+            .padding(.top, 22)
+            .padding(.bottom, 14)
+
+            Button(action: onNewChat) {
+                HStack(spacing: 10) {
+                    Image(systemName: "plus.bubble")
+                        .font(.system(size: 17, weight: .semibold))
+                    Text("New chat")
+                        .font(.callout.weight(.semibold))
+                    Spacer()
                 }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 14)
+                .frame(height: 48)
+                .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .shadow(color: Color.accentColor.opacity(0.22), radius: 12, x: 0, y: 6)
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 18)
+            .padding(.bottom, 18)
+
+            HStack {
+                Text("Recent")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+                Spacer()
+            }
+            .padding(.horizontal, 18)
+            .padding(.bottom, 8)
+
+            if conversations.isEmpty {
+                Spacer(minLength: 0)
+                VStack(spacing: 10) {
+                    Image(systemName: "bubble.left.and.text.bubble.right")
+                        .font(.system(size: 28, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    Text("No chats yet")
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Text("Start a conversation and it will appear here.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 24)
+                Spacer(minLength: 0)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 6) {
+                        ForEach(sortedConversations) { conversation in
+                            ConversationPickerRow(
+                                conversation: conversation,
+                                isSelected: selectedID == conversation.id,
+                                updatedText: relativeUpdatedText(for: conversation.updatedAt),
+                                onSelect: {
+                                    onSelect(conversation.id)
+                                }
+                            )
+                            .swipeActions {
+                                Button("Delete", role: .destructive) {
+                                    onDelete(conversation.id)
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 14)
+                }
+                .scrollIndicators(.hidden)
             }
         }
+        .background(IOSTheme.groupedBackground.opacity(0.72))
+    }
+
+    private var sortedConversations: [Conversation] {
+        conversations.sorted { $0.updatedAt > $1.updatedAt }
+    }
+
+    private var conversationCountText: String {
+        conversations.count == 1 ? "1 conversation" : "\(conversations.count) conversations"
+    }
+
+    private func relativeUpdatedText(for date: Date) -> String {
+        Self.relativeFormatter.localizedString(for: date, relativeTo: Date())
+    }
+
+    private static let relativeFormatter: RelativeDateTimeFormatter = {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter
+    }()
+}
+
+private struct ConversationPickerRow: View {
+    let conversation: Conversation
+    let isSelected: Bool
+    let updatedText: String
+    let onSelect: () -> Void
+
+    var body: some View {
+        Button(action: onSelect) {
+            HStack(spacing: 11) {
+                ZStack {
+                    Circle()
+                        .fill(isSelected ? Color.accentColor : Color.secondary.opacity(0.13))
+                    Image(systemName: isSelected ? "text.bubble.fill" : "text.bubble")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(isSelected ? .white : .secondary)
+                }
+                .frame(width: 34, height: 34)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Text(conversation.title)
+                            .font(.callout.weight(isSelected ? .semibold : .medium))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+
+                        if conversation.queuedUserMessageCount > 0 {
+                            Circle()
+                                .fill(.orange)
+                                .frame(width: 7, height: 7)
+                        }
+
+                        Spacer(minLength: 8)
+
+                        Text(updatedText)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+
+                    Text(conversation.queuedUserMessageCount > 0 ? "\(conversation.queuedUserMessageCount) queued" : conversation.idea)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                        .accessibilityHidden(true)
+                    }
+                }
+            }
+            .contentShape(Rectangle())
+        .buttonStyle(.plain)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 10)
+        .background(rowBackground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(isSelected ? Color.accentColor.opacity(0.22) : IOSTheme.hairline)
+        )
+    }
+
+    private var rowBackground: Color {
+        isSelected ? Color.accentColor.opacity(0.10) : IOSTheme.elevatedBackground.opacity(0.74)
     }
 }
 
@@ -859,6 +1153,34 @@ private struct IOSErrorBar: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
         .background(IOSTheme.secondaryBackground)
+    }
+}
+
+private struct IOSOfflineQueueBar: View {
+    let count: Int
+    let isConnected: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: isConnected ? "arrow.clockwise" : "wifi.slash")
+                .foregroundStyle(isConnected ? .orange : .secondary)
+            Text(message)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(IOSTheme.secondaryBackground)
+    }
+
+    private var message: String {
+        if count > 0 {
+            return isConnected
+                ? "Sending \(count) saved message\(count == 1 ? "" : "s")"
+                : "\(count) message\(count == 1 ? "" : "s") saved locally"
+        }
+        return "Offline. Messages will be saved locally."
     }
 }
 

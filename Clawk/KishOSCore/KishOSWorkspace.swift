@@ -32,25 +32,45 @@ final class KishOSWorkspace: ObservableObject {
         }
     }
 
-    func createConversation(firstMessage: String, now: Date = Date()) -> Conversation {
+    var queuedMessageCount: Int {
+        conversations.reduce(0) { count, conversation in
+            count + conversation.messages.filter { $0.sender == .user && $0.deliveryState == .queued }.count
+        }
+    }
+
+    func createConversation(firstMessage: String, now: Date = Date(), deliveryState: MessageDeliveryState = .sending) -> Conversation {
         var conversation = Conversation(firstMessage: firstMessage, now: now)
-        conversation.isRunning = true
+        conversation.messages[0].deliveryState = deliveryState
+        conversation.isRunning = deliveryState == .sending
+        if deliveryState == .queued {
+            conversation.events = ["saved locally", "will send when connected"]
+        }
         conversations.insert(conversation, at: 0)
         persist()
         return conversation
     }
 
-    func appendUserMessage(_ text: String, to id: UUID, now: Date = Date()) -> Conversation? {
+    func appendUserMessage(_ text: String, to id: UUID, now: Date = Date(), deliveryState: MessageDeliveryState = .sending) -> Conversation? {
         guard let index = conversations.firstIndex(where: { $0.id == id }) else { return nil }
-        conversations[index].messages.append(ChatMessage(sender: .user, text: text, createdAt: now, deliveryState: .sending))
-        conversations[index].events = ["sent to kish-agent", "continuing \(conversations[index].threadId)"]
-        conversations[index].isRunning = true
+        conversations[index].messages.append(ChatMessage(sender: .user, text: text, createdAt: now, deliveryState: deliveryState))
+        conversations[index].events = deliveryState == .queued
+            ? ["saved locally", "will send when connected"]
+            : ["sent to kish-agent", "continuing \(conversations[index].threadId)"]
+        conversations[index].isRunning = deliveryState == .sending
         conversations[index].lastError = nil
         conversations[index].approvals = []
         conversations[index].updatedAt = now
         let conversation = conversations[index]
         sortAndPersist()
         return conversation
+    }
+
+    func queueConversation(firstMessage: String, now: Date = Date()) -> Conversation {
+        createConversation(firstMessage: firstMessage, now: now, deliveryState: .queued)
+    }
+
+    func queueUserMessage(_ text: String, to id: UUID, now: Date = Date()) -> Conversation? {
+        appendUserMessage(text, to: id, now: now, deliveryState: .queued)
     }
 
     func prepareRetryLastFailedMessage(in id: UUID, now: Date = Date()) -> (conversation: Conversation, message: String)? {
@@ -67,6 +87,37 @@ final class KishOSWorkspace: ObservableObject {
         conversations[index].lastError = nil
         conversations[index].updatedAt = now
         let conversation = conversations[index]
+        sortAndPersist()
+        return (conversation, message)
+    }
+
+    func nextQueuedMessage() -> QueuedMessage? {
+        conversations
+            .flatMap { conversation in
+                conversation.messages
+                    .filter { $0.sender == .user && $0.deliveryState == .queued }
+                    .map { QueuedMessage(conversation: conversation, message: $0) }
+            }
+            .min { lhs, rhs in
+                lhs.message.createdAt < rhs.message.createdAt
+            }
+    }
+
+    func prepareQueuedMessageForSending(conversationID: UUID, messageID: UUID, now: Date = Date()) -> (conversation: Conversation, message: String)? {
+        guard let conversationIndex = conversations.firstIndex(where: { $0.id == conversationID }),
+              let messageIndex = conversations[conversationIndex].messages.firstIndex(where: { $0.id == messageID && $0.sender == .user && $0.deliveryState == .queued })
+        else {
+            return nil
+        }
+
+        let message = conversations[conversationIndex].messages[messageIndex].text
+        conversations[conversationIndex].messages[messageIndex].deliveryState = .sending
+        conversations[conversationIndex].events = ["sending queued message", "continuing \(conversations[conversationIndex].threadId)"]
+        conversations[conversationIndex].isRunning = true
+        conversations[conversationIndex].lastError = nil
+        conversations[conversationIndex].approvals = []
+        conversations[conversationIndex].updatedAt = now
+        let conversation = conversations[conversationIndex]
         sortAndPersist()
         return (conversation, message)
     }
@@ -115,6 +166,33 @@ final class KishOSWorkspace: ObservableObject {
             conversation.lastError = message
             conversation.updatedAt = now
         }
+    }
+
+    func requeueMessageAfterOfflineFailure(conversationID: UUID, messageID: UUID, now: Date = Date()) -> Bool {
+        guard let conversationIndex = conversations.firstIndex(where: { $0.id == conversationID }),
+              let messageIndex = conversations[conversationIndex].messages.firstIndex(where: { $0.id == messageID && $0.sender == .user })
+        else {
+            return false
+        }
+
+        let hasAgentProgress = conversations[conversationIndex].messages.contains { message in
+            guard message.sender == .agent, message.deliveryState == .sending else { return false }
+            let visibleText = message.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            let visibleEvents = message.activityEvents.filter { $0 != "waiting for reply" }
+            return !visibleText.isEmpty || !visibleEvents.isEmpty
+        }
+        guard !hasAgentProgress else { return false }
+
+        conversations[conversationIndex].messages[messageIndex].deliveryState = .queued
+        conversations[conversationIndex].messages.removeAll { message in
+            message.sender == .agent && message.deliveryState == .sending
+        }
+        conversations[conversationIndex].events = ["saved locally", "will send when connected"]
+        conversations[conversationIndex].isRunning = false
+        conversations[conversationIndex].lastError = nil
+        conversations[conversationIndex].updatedAt = now
+        sortAndPersist()
+        return true
     }
 
     func beginAgentResponse(in id: UUID, now: Date = Date()) {

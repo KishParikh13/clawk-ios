@@ -31,6 +31,7 @@ private struct MacRootView: View {
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var selection: SidebarSelection? = .newChat
     @State private var conversationToRename: Conversation?
+    @State private var isDrainingQueuedMessages = false
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -73,6 +74,9 @@ private struct MacRootView: View {
                 .task {
                     await startSharedConversationSyncLoop()
                 }
+                .task {
+                    await startQueuedMessageLoop()
+                }
         }
         .sheet(item: $conversationToRename) { conversation in
             RenameConversationSheet(conversation: conversation) { title in
@@ -92,6 +96,7 @@ private struct MacRootView: View {
                 messages: [],
                 isRunning: client.isSending,
                 lastError: nil,
+                queuedMessageCount: workspace.queuedMessageCount,
                 approvals: [],
                 onSend: { send($0, in: nil) },
                 onRetry: nil,
@@ -111,6 +116,7 @@ private struct MacRootView: View {
                     messages: conversation.messages,
                     isRunning: conversation.isRunning,
                     lastError: conversation.lastError,
+                    queuedMessageCount: conversation.queuedUserMessageCount,
                     approvals: conversation.approvals,
                     onSend: { send($0, in: conversation.id) },
                     onRetry: { retry(conversation.id) },
@@ -190,6 +196,11 @@ private struct MacRootView: View {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
+        if client.isDisconnected {
+            queue(trimmed, in: conversationId)
+            return
+        }
+
         let conversation: Conversation
         if let conversationId, let existing = workspace.appendUserMessage(trimmed, to: conversationId) {
             conversation = existing
@@ -198,18 +209,38 @@ private struct MacRootView: View {
             selection = .conversation(conversation.id)
         }
 
+        sendPreparedMessage(trimmed, in: conversation, messageID: conversation.messages.last?.id)
+    }
+
+    private func sendPreparedMessage(_ text: String, in conversation: Conversation, messageID: UUID?) {
         Task {
             do {
                 workspace.beginAgentResponse(in: conversation.id)
-                let result = try await client.sendStreaming(trimmed, threadId: conversation.threadId, conversationId: conversation.id) { event in
+                let result = try await client.sendStreaming(text, threadId: conversation.threadId, conversationId: conversation.id) { event in
                     handleStreamEvent(event, conversationId: conversation.id)
                 }
                 workspace.apply(result, to: conversation.id)
                 await syncSharedConversations()
             } catch {
+                if isOfflineError(error),
+                   let messageID,
+                   workspace.requeueMessageAfterOfflineFailure(conversationID: conversation.id, messageID: messageID) {
+                    return
+                }
                 workspace.applyFailure(error, to: conversation.id)
             }
         }
+    }
+
+    private func queue(_ text: String, in conversationId: UUID?) {
+        let conversation: Conversation
+        if let conversationId, let existing = workspace.queueUserMessage(text, to: conversationId) {
+            conversation = existing
+        } else {
+            conversation = workspace.queueConversation(firstMessage: text)
+            selection = .conversation(conversation.id)
+        }
+        selection = .conversation(conversation.id)
     }
 
     private func handleStreamEvent(_ event: AgentStreamEvent, conversationId: UUID) {
@@ -262,6 +293,57 @@ private struct MacRootView: View {
             try? await Task.sleep(for: .seconds(8))
         }
     }
+
+    private func startQueuedMessageLoop() async {
+        while !Task.isCancelled {
+            if client.canSendQueuedMessages {
+                await drainQueuedMessages()
+            }
+            try? await Task.sleep(for: .seconds(3))
+        }
+    }
+
+    private func drainQueuedMessages() async {
+        guard !isDrainingQueuedMessages else { return }
+        isDrainingQueuedMessages = true
+        defer { isDrainingQueuedMessages = false }
+
+        while client.canSendQueuedMessages, let queued = workspace.nextQueuedMessage() {
+            guard let prepared = workspace.prepareQueuedMessageForSending(
+                conversationID: queued.conversation.id,
+                messageID: queued.message.id
+            ) else {
+                continue
+            }
+
+            do {
+                workspace.beginAgentResponse(in: prepared.conversation.id)
+                let result = try await client.sendStreaming(
+                    prepared.message,
+                    threadId: prepared.conversation.threadId,
+                    conversationId: prepared.conversation.id
+                ) { event in
+                    handleStreamEvent(event, conversationId: prepared.conversation.id)
+                }
+                workspace.apply(result, to: prepared.conversation.id)
+                await syncSharedConversations()
+            } catch {
+                if isOfflineError(error),
+                   workspace.requeueMessageAfterOfflineFailure(conversationID: prepared.conversation.id, messageID: queued.message.id) {
+                    return
+                }
+                workspace.applyFailure(error, to: prepared.conversation.id)
+            }
+        }
+    }
+
+    private func isOfflineError(_ error: Error) -> Bool {
+        guard let agentError = error as? AgentClientError else { return false }
+        if case .network = agentError {
+            return true
+        }
+        return false
+    }
 }
 
 private struct ConversationRow: View {
@@ -280,9 +362,14 @@ private struct ConversationRow: View {
                         .controlSize(.small)
                         .scaleEffect(0.75)
                 }
+                if conversation.queuedUserMessageCount > 0 {
+                    Circle()
+                        .fill(.orange)
+                        .frame(width: 7, height: 7)
+                }
             }
 
-            Text(conversation.threadId)
+            Text(conversation.queuedUserMessageCount > 0 ? "\(conversation.queuedUserMessageCount) queued" : conversation.threadId)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
@@ -304,6 +391,7 @@ private struct ChatView: View {
     let messages: [ChatMessage]
     let isRunning: Bool
     let lastError: String?
+    let queuedMessageCount: Int
     let approvals: [ApprovalRequest]
     let onSend: (String) -> Void
     let onRetry: (() -> Void)?
@@ -364,6 +452,14 @@ private struct ChatView: View {
                 ErrorRetryBar(message: lastError, onRetry: onRetry)
             }
 
+            if queuedMessageCount > 0 {
+                OfflineQueueBar(count: queuedMessageCount, isConnected: client.canSendQueuedMessages)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else if client.isDisconnected {
+                OfflineQueueBar(count: 0, isConnected: false)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
             if let pendingQuestion = approvals.first {
                 QuestionComposer(
                     approval: pendingQuestion,
@@ -391,6 +487,7 @@ private struct ChatView: View {
         .background(KishOSTheme.chatBackground)
         .animation(.easeInOut(duration: 0.2), value: approvals.first?.id)
         .animation(.easeInOut(duration: 0.2), value: client.isSending || isRunning)
+        .animation(.easeInOut(duration: 0.2), value: queuedMessageCount)
     }
 
     private func sendDraft() {
@@ -477,6 +574,34 @@ private struct ErrorRetryBar: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
         .background(KishOSTheme.panelBackground)
+    }
+}
+
+private struct OfflineQueueBar: View {
+    let count: Int
+    let isConnected: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: isConnected ? "arrow.clockwise" : "wifi.slash")
+                .foregroundStyle(isConnected ? .orange : .secondary)
+            Text(message)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(KishOSTheme.panelBackground)
+    }
+
+    private var message: String {
+        if count > 0 {
+            return isConnected
+                ? "Sending \(count) saved message\(count == 1 ? "" : "s")"
+                : "\(count) message\(count == 1 ? "" : "s") saved locally"
+        }
+        return "Offline. Messages will be saved locally."
     }
 }
 
@@ -584,6 +709,13 @@ private struct ChatBubble: View {
                                 .padding(4)
                         }
                     }
+
+                if let deliveryText {
+                    Label(deliveryText, systemImage: deliveryIcon)
+                        .font(.caption2)
+                        .foregroundStyle(deliveryTint)
+                        .labelStyle(.titleAndIcon)
+                }
             }
             .frame(maxWidth: message.sender == .user ? 540 : .infinity, alignment: message.sender == .user ? .trailing : .leading)
 
@@ -599,6 +731,44 @@ private struct ChatBubble: View {
             return .accentColor
         case .agent:
             return .clear
+        }
+    }
+
+    private var deliveryText: String? {
+        guard message.sender == .user else { return nil }
+        switch message.deliveryState {
+        case .queued:
+            return "Saved locally"
+        case .sending:
+            return "Sending"
+        case .failed:
+            return "Failed"
+        case .sent:
+            return nil
+        }
+    }
+
+    private var deliveryIcon: String {
+        switch message.deliveryState {
+        case .queued:
+            return "clock"
+        case .sending:
+            return "arrow.up"
+        case .failed:
+            return "exclamationmark.circle"
+        case .sent:
+            return "checkmark"
+        }
+    }
+
+    private var deliveryTint: Color {
+        switch message.deliveryState {
+        case .queued, .sending:
+            return .secondary
+        case .failed:
+            return .red
+        case .sent:
+            return .secondary
         }
     }
 }

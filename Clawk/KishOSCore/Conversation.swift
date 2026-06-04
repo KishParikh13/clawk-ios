@@ -72,6 +72,10 @@ struct Conversation: Identifiable, Codable, Equatable {
         if trimmed.count <= 42 { return trimmed }
         return String(trimmed.prefix(41)) + "..."
     }
+
+    var queuedUserMessageCount: Int {
+        messages.filter { $0.sender == .user && $0.deliveryState == .queued }.count
+    }
 }
 
 struct ChatMessage: Identifiable, Codable, Equatable {
@@ -124,9 +128,15 @@ struct ChatMessage: Identifiable, Codable, Equatable {
 }
 
 enum MessageDeliveryState: String, Codable {
+    case queued
     case sending
     case sent
     case failed
+}
+
+struct QueuedMessage: Equatable {
+    let conversation: Conversation
+    let message: ChatMessage
 }
 
 struct ChatResult: Equatable {

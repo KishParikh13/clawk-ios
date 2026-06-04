@@ -79,6 +79,73 @@ final class ConversationStoreTests: XCTestCase {
         XCTAssertNil(retry?.conversation.lastError)
     }
 
+    func testQueueConversationSavesMessageLocallyWithoutRunning() {
+        let store = MemoryConversationStore()
+        let workspace = KishOSWorkspace(store: store)
+
+        let conversation = workspace.queueConversation(firstMessage: "offline")
+
+        XCTAssertEqual(conversation.messages.first?.deliveryState, .queued)
+        XCTAssertFalse(conversation.isRunning)
+        XCTAssertEqual(workspace.queuedMessageCount, 1)
+        XCTAssertEqual(store.savedConversations.first?.messages.first?.deliveryState, .queued)
+    }
+
+    func testNextQueuedMessageReturnsOldestAndPrepareMarksSending() {
+        let store = MemoryConversationStore()
+        let workspace = KishOSWorkspace(store: store)
+        let newer = workspace.queueConversation(firstMessage: "newer", now: Date(timeIntervalSince1970: 200))
+        let older = workspace.queueConversation(firstMessage: "older", now: Date(timeIntervalSince1970: 100))
+
+        let queued = workspace.nextQueuedMessage()
+
+        XCTAssertEqual(queued?.conversation.id, older.id)
+        XCTAssertEqual(queued?.message.text, "older")
+
+        let prepared = workspace.prepareQueuedMessageForSending(
+            conversationID: older.id,
+            messageID: queued!.message.id,
+            now: Date(timeIntervalSince1970: 300)
+        )
+
+        XCTAssertEqual(prepared?.message, "older")
+        XCTAssertEqual(workspace.conversation(id: older.id)?.messages.first?.deliveryState, .sending)
+        XCTAssertTrue(workspace.conversation(id: older.id)?.isRunning == true)
+        XCTAssertEqual(workspace.conversation(id: newer.id)?.messages.first?.deliveryState, .queued)
+    }
+
+    func testOfflineFailureRequeuesMessageAndRemovesEmptyAgentPlaceholder() {
+        let store = MemoryConversationStore()
+        let workspace = KishOSWorkspace(store: store)
+        let conversation = workspace.createConversation(firstMessage: "send")
+        let messageID = conversation.messages[0].id
+
+        workspace.beginAgentResponse(in: conversation.id)
+        let requeued = workspace.requeueMessageAfterOfflineFailure(conversationID: conversation.id, messageID: messageID)
+
+        XCTAssertTrue(requeued)
+        let updated = workspace.conversation(id: conversation.id)
+        XCTAssertEqual(updated?.messages.count, 1)
+        XCTAssertEqual(updated?.messages.first?.deliveryState, .queued)
+        XCTAssertFalse(updated?.isRunning == true)
+        XCTAssertNil(updated?.lastError)
+    }
+
+    func testOfflineFailureDoesNotRequeueAfterAgentProgress() {
+        let store = MemoryConversationStore()
+        let workspace = KishOSWorkspace(store: store)
+        let conversation = workspace.createConversation(firstMessage: "send")
+        let messageID = conversation.messages[0].id
+
+        workspace.beginAgentResponse(in: conversation.id)
+        workspace.appendStreamingText("partial", to: conversation.id)
+
+        let requeued = workspace.requeueMessageAfterOfflineFailure(conversationID: conversation.id, messageID: messageID)
+
+        XCTAssertFalse(requeued)
+        XCTAssertEqual(workspace.conversation(id: conversation.id)?.messages.first?.deliveryState, .sending)
+    }
+
     func testRenameAndDeletePersist() {
         let store = MemoryConversationStore()
         let workspace = KishOSWorkspace(store: store)
