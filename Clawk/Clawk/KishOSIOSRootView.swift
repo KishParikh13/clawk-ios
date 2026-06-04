@@ -55,6 +55,7 @@ struct KishOSIOSRootView: View {
                         audio: audio,
                         onSend: send,
                         onStop: stopSelectedConversation,
+                        onStartCall: startLiveCall,
                         onPickProject: { showingProjectPicker = true },
                         onRetry: retrySelectedConversation,
                         onQuestionAnswer: answerQuestion,
@@ -79,17 +80,10 @@ struct KishOSIOSRootView: View {
                         }
 
                         ToolbarItem(placement: .topBarTrailing) {
-                            HStack(spacing: 14) {
-                                Button(action: startLiveCall) {
-                                    Image(systemName: "phone.fill")
-                                }
-                                .accessibilityLabel("Start call")
-
-                                Button(action: startNewChat) {
-                                    Image(systemName: "square.and.pencil")
-                                }
-                                .accessibilityLabel("New chat")
+                            Button(action: startNewChat) {
+                                Image(systemName: "square.and.pencil")
                             }
+                            .accessibilityLabel("New chat")
                         }
                     }
                     .toolbar(showingConversations ? .hidden : .visible, for: .navigationBar)
@@ -593,6 +587,7 @@ private struct ChatScreen: View {
     @ObservedObject var audio: AudioRouteMonitor
     let onSend: (String, [ChatAttachment]) -> Void
     let onStop: () -> Void
+    let onStartCall: () -> Void
     let onPickProject: () -> Void
     let onRetry: (() -> Void)?
     let onQuestionAnswer: (ApprovalRequest, String) -> Void
@@ -677,6 +672,7 @@ private struct ChatScreen: View {
                     voice: voice,
                     onSend: sendDraft,
                     onStop: onStop,
+                    onStartCall: onStartCall,
                     onPickProject: onPickProject
                 )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -975,6 +971,7 @@ private struct IOSComposer: View {
     @ObservedObject var voice: VoiceController
     let onSend: () -> Void
     let onStop: () -> Void
+    let onStartCall: () -> Void
     let onPickProject: () -> Void
 
     @State private var showingTextCapture = false
@@ -1082,6 +1079,20 @@ private struct IOSComposer: View {
                     }
                     .frame(maxWidth: .infinity, minHeight: 46, alignment: .leading)
 
+                    if showsCallButton {
+                        Button(action: onStartCall) {
+                            Image(systemName: "phone.fill")
+                                .font(.system(size: 15, weight: .bold))
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(Color(uiColor: .label))
+                        .frame(width: 40, height: 40)
+                        .background(IOSTheme.elevatedBackground, in: Circle())
+                        .overlay(Circle().stroke(IOSTheme.hairline))
+                        .disabled(isDisabled || isSending)
+                        .accessibilityLabel("Start call")
+                    }
+
                     Button(action: trailingAction) {
                         if hasUploadingAttachment && !isWorking {
                             ProgressView()
@@ -1148,6 +1159,10 @@ private struct IOSComposer: View {
 
     private var hasBlockedAttachment: Bool {
         attachments.contains { $0.needsUpload && $0.uploadState != .uploading && $0.uploadState != .ready }
+    }
+
+    private var showsCallButton: Bool {
+        !voice.isRecording && !isWorking && !hasSendableContent && !isDisabled && !isSending
     }
 
     private var blockedAttachmentText: String {

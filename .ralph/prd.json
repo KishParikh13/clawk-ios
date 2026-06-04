@@ -32,8 +32,8 @@
         "Verification command passes"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Moved the iOS live-call entry from the toolbar into the empty composer next to the mic button. It hides when text, attachments, dictation, or an active run makes send/stop the primary action. Verified with .ralph/verify.sh."
     },
     {
       "id": "US-003",
