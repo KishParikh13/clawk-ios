@@ -38,6 +38,28 @@ final class AgentClientTests: XCTestCase {
         XCTAssertNotNil(response.updatedAt)
     }
 
+    func testToolInventoryCompactSummaryUsesRealCapabilityState() {
+        let inventory = ToolInventory(
+            commands: [
+                ToolCapability(name: "/status", status: "Available", detail: nil),
+                ToolCapability(name: "/deploy", status: "Needs setup", detail: "Missing token")
+            ],
+            engines: [
+                ToolCapability(name: "claude", status: "Ready", detail: "opus")
+            ],
+            recentTools: [
+                RecentToolCapability(name: "Read", count: 3, lastSeen: nil)
+            ],
+            updatedAt: nil
+        )
+
+        XCTAssertEqual(inventory.availableCommands.map(\.name), ["/status"])
+        XCTAssertEqual(inventory.availableEngines.map(\.name), ["claude"])
+        XCTAssertEqual(inventory.unavailableCapabilities.map(\.name), ["/deploy"])
+        XCTAssertEqual(inventory.compactSummary, "1 tools · 1 engines · 1 recent · 1 unavailable")
+        XCTAssertEqual(ToolInventory.empty.compactSummary, "Unavailable")
+    }
+
     func testRefreshHealthSuccessSetsReadyAndFetchesTools() async throws {
         let client = makeClient { request in
             switch request.url?.path {

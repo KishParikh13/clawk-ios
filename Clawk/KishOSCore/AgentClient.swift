@@ -674,6 +674,48 @@ struct ToolInventory: Decodable, Equatable {
     let engines: [ToolCapability]
     let recentTools: [RecentToolCapability]
     let updatedAt: Date?
+
+    var availableCommands: [ToolCapability] {
+        commands.filter(\.isAvailable)
+    }
+
+    var unavailableCommands: [ToolCapability] {
+        commands.filter { !$0.isAvailable }
+    }
+
+    var availableEngines: [ToolCapability] {
+        engines.filter(\.isAvailable)
+    }
+
+    var unavailableEngines: [ToolCapability] {
+        engines.filter { !$0.isAvailable }
+    }
+
+    var unavailableCapabilities: [ToolCapability] {
+        unavailableEngines + unavailableCommands
+    }
+
+    var hasAnyCapabilities: Bool {
+        !commands.isEmpty || !engines.isEmpty || !recentTools.isEmpty
+    }
+
+    var compactSummary: String {
+        guard hasAnyCapabilities else { return "Unavailable" }
+        var parts: [String] = []
+        if !availableCommands.isEmpty {
+            parts.append("\(availableCommands.count) tools")
+        }
+        if !availableEngines.isEmpty {
+            parts.append("\(availableEngines.count) engines")
+        }
+        if !recentTools.isEmpty {
+            parts.append("\(recentTools.count) recent")
+        }
+        if !unavailableCapabilities.isEmpty {
+            parts.append("\(unavailableCapabilities.count) unavailable")
+        }
+        return parts.isEmpty ? "Unavailable" : parts.joined(separator: " · ")
+    }
 }
 
 struct ToolCapability: Decodable, Equatable, Identifiable {
@@ -681,6 +723,12 @@ struct ToolCapability: Decodable, Equatable, Identifiable {
     let name: String
     let status: String
     let detail: String?
+
+    var isAvailable: Bool {
+        status.localizedCaseInsensitiveContains("available")
+            || status.localizedCaseInsensitiveContains("ready")
+            || status.localizedCaseInsensitiveContains("online")
+    }
 }
 
 struct RecentToolCapability: Decodable, Equatable, Identifiable {

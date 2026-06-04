@@ -220,6 +220,22 @@
       "priority": 14,
       "passes": true,
       "notes": "Added iOS local status notifications for background needs-answer, failed, and unread done session outcomes. Selected conversations are now marked read only while the scene is active, notification scheduling is suppressed while active, notification permission is requested contextually when work starts instead of at launch, and per-conversation state signatures prevent duplicate notifications from sync loops. Verified with .ralph/verify.sh."
+    },
+    {
+      "id": "US-015",
+      "title": "Show compact capability truth",
+      "description": "Expose the agent's current tool/engine capability state in a compact, real-data-backed iOS surface without adding clutter to the main chat UI.",
+      "acceptanceCriteria": [
+        "iOS conversation panel includes a collapsed capability summary backed by client.toolInventory",
+        "Summary distinguishes available tools, engines, recent usage, and unavailable/degraded items from real backend state",
+        "Expanded details stay compact and avoid a raw full MCP dump",
+        "Unavailable inventory clearly shows as unavailable instead of fabricating capability state",
+        "Mac capability/tool inventory remains functional",
+        "Verification command passes"
+      ],
+      "priority": 15,
+      "passes": true,
+      "notes": "Added shared ToolInventory summary helpers and a compact collapsed iOS capability disclosure in the conversation panel. It summarizes real /tools state across available tools, engines, recent use, and unavailable items, keeps expanded details short, and includes a focused unit test for the summary behavior. Verified with .ralph/verify.sh."
     }
   ]
 }

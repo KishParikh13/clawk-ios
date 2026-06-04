@@ -2441,6 +2441,8 @@ private struct IOSConnectionPanel: View {
     let onReconnect: () -> Void
     let onReset: () -> Void
 
+    @State private var capabilitiesExpanded = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
@@ -2526,10 +2528,32 @@ private struct IOSConnectionPanel: View {
 
                 Spacer(minLength: 0)
             }
+
+            DisclosureGroup(isExpanded: $capabilitiesExpanded) {
+                IOSCapabilityDetails(inventory: client.toolInventory, inventoryStatus: client.toolInventoryStatus)
+                    .padding(.top, 4)
+            } label: {
+                HStack(spacing: 8) {
+                    Text("Capabilities")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Spacer(minLength: 8)
+                    Text(capabilitySummary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            .font(.caption)
+            .tint(.secondary)
         }
         .padding(10)
         .background(IOSTheme.elevatedBackground.opacity(0.74), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(IOSTheme.hairline))
+    }
+
+    private var capabilitySummary: String {
+        client.toolInventoryStatus == "Ready" ? client.toolInventory.compactSummary : client.toolInventoryStatus
     }
 
     private var wakeTint: Color {
@@ -2538,6 +2562,99 @@ private struct IOSConnectionPanel: View {
         }
         return wake.isEnabled ? .orange : .secondary
     }
+}
+
+private struct IOSCapabilityDetails: View {
+    let inventory: ToolInventory
+    let inventoryStatus: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if inventoryStatus != "Ready" || !inventory.hasAnyCapabilities {
+                capabilityLine(title: "Tools", detail: inventoryStatus, available: false)
+            } else {
+                IOSCapabilityGroup(
+                    title: "Engines",
+                    lines: inventory.availableEngines.prefix(3).map {
+                        IOSCapabilityLine(title: $0.name, detail: $0.detail ?? $0.status, available: true)
+                    }
+                )
+                IOSCapabilityGroup(
+                    title: "Tools",
+                    lines: inventory.availableCommands.prefix(5).map {
+                        IOSCapabilityLine(title: $0.name, detail: $0.detail ?? $0.status, available: true)
+                    }
+                )
+                IOSCapabilityGroup(
+                    title: "Recent",
+                    lines: inventory.recentTools.prefix(5).map {
+                        IOSCapabilityLine(title: $0.name, detail: "\($0.count)", available: true)
+                    }
+                )
+                IOSCapabilityGroup(
+                    title: "Needs setup",
+                    lines: inventory.unavailableCapabilities.prefix(4).map {
+                        IOSCapabilityLine(title: $0.name, detail: $0.detail ?? $0.status, available: false)
+                    }
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func capabilityLine(title: String, detail: String, available: Bool) -> some View {
+        HStack(spacing: 7) {
+            Circle()
+                .fill(available ? Color.green : Color.secondary)
+                .frame(width: 6, height: 6)
+            Text(title)
+                .font(.caption)
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            Text(detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+    }
+}
+
+private struct IOSCapabilityGroup: View {
+    let title: String
+    let lines: [IOSCapabilityLine]
+
+    var body: some View {
+        if !lines.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+                ForEach(lines) { line in
+                    HStack(spacing: 7) {
+                        Circle()
+                            .fill(line.available ? Color.green : Color.secondary)
+                            .frame(width: 6, height: 6)
+                        Text(line.title)
+                            .font(.caption)
+                            .lineLimit(1)
+                        Spacer(minLength: 8)
+                        Text(line.detail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct IOSCapabilityLine: Identifiable {
+    var id: String { "\(title)-\(detail)-\(available)" }
+    let title: String
+    let detail: String
+    let available: Bool
 }
 
 private struct DecisionPickerRow: View {
