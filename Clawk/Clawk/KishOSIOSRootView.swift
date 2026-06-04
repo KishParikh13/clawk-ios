@@ -22,6 +22,8 @@ private struct LiveCallSession: Identifiable {
 }
 
 struct KishOSIOSRootView: View {
+    @Environment(\.scenePhase) private var scenePhase
+
     @StateObject private var client = KishAgentClient()
     @StateObject private var workspace = KishOSWorkspace()
     @StateObject private var voice = VoiceController()
@@ -112,11 +114,15 @@ struct KishOSIOSRootView: View {
                     }
                     .onChange(of: workspace.conversations) {
                         markSelectedConversationRead()
-                        refreshLiveActivitySummary()
+                        refreshStatusSurfaces()
                     }
                     .onChange(of: selectedConversationID) {
                         markSelectedConversationRead()
-                        refreshLiveActivitySummary()
+                        refreshStatusSurfaces()
+                    }
+                    .onChange(of: scenePhase) {
+                        markSelectedConversationRead()
+                        refreshStatusSurfaces()
                     }
                     .onChange(of: voice.isRecording) { _, isRecording in
                         audio.refresh(isRecording: isRecording)
@@ -124,6 +130,7 @@ struct KishOSIOSRootView: View {
                     }
                     .onChange(of: currentIsRunning) {
                         refreshWakeSuppression()
+                        requestNotificationsForActiveWorkIfNeeded()
                     }
                     .onChange(of: liveCallSession?.id) {
                         refreshWakeSuppression()
@@ -265,6 +272,13 @@ struct KishOSIOSRootView: View {
         wake.updateSuppression(voice.isRecording || currentIsRunning || liveCallSession != nil)
     }
 
+    private func requestNotificationsForActiveWorkIfNeeded() {
+        guard currentIsRunning, scenePhase == .active else { return }
+        Task {
+            await KishOSStatusNotificationController.shared.requestAuthorizationIfNeeded()
+        }
+    }
+
     private func refreshLiveActivitySummary() {
         KishOSLiveActivityController.shared.updateSummary(
             conversations: workspace.conversations,
@@ -272,7 +286,16 @@ struct KishOSIOSRootView: View {
         )
     }
 
+    private func refreshStatusSurfaces() {
+        refreshLiveActivitySummary()
+        KishOSStatusNotificationController.shared.update(
+            conversations: workspace.conversations,
+            isSceneActive: scenePhase == .active
+        )
+    }
+
     private func markSelectedConversationRead() {
+        guard scenePhase == .active else { return }
         guard let selectedConversation else { return }
         workspace.markConversationRead(selectedConversation.id, at: selectedConversation.updatedAt)
     }

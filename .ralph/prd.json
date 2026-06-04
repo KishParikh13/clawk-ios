@@ -203,6 +203,23 @@
       "priority": 13,
       "passes": true,
       "notes": "Camera and photo selections now open a minimal iOS snapshot review sheet before appending/uploading. Attach reuses the existing upload path, Ask attaches and inserts a concise editable image prompt without auto-sending, Retake/Choose reopens the picker, and Cancel/Retake discard the pending cached payload. Verified with .ralph/verify.sh."
+    },
+    {
+      "id": "US-014",
+      "title": "Notify background session outcomes",
+      "description": "Add minimal iOS local notifications for background sessions that need an answer, fail, or finish unread, while preserving accurate read state.",
+      "acceptanceCriteria": [
+        "Selected conversations are marked read only while the app scene is active",
+        "Background updates can leave selected conversations unread for Live Activity and notifications",
+        "iOS schedules one local notification per conversation outcome for needs-answer, failed, and unread done states",
+        "Notifications use compact user-facing titles and conversation context, not backend jargon",
+        "Notifications are not scheduled while the app scene is active",
+        "Duplicate notifications for the same conversation state/update are suppressed",
+        "Verification command passes"
+      ],
+      "priority": 14,
+      "passes": true,
+      "notes": "Added iOS local status notifications for background needs-answer, failed, and unread done session outcomes. Selected conversations are now marked read only while the scene is active, notification scheduling is suppressed while active, notification permission is requested contextually when work starts instead of at launch, and per-conversation state signatures prevent duplicate notifications from sync loops. Verified with .ralph/verify.sh."
     }
   ]
 }

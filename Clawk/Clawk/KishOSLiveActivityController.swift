@@ -1,6 +1,7 @@
 #if os(iOS) && canImport(ActivityKit)
 import ActivityKit
 import Foundation
+import UserNotifications
 
 @MainActor
 final class KishOSLiveActivityController {
@@ -203,6 +204,137 @@ final class KishOSLiveActivityController {
     private static let maxRunningTitles = 3
     private static let maxSessionTitles = 4
     private static let maxReviewTitles = 3
+}
+
+@MainActor
+final class KishOSStatusNotificationController {
+    static let shared = KishOSStatusNotificationController()
+
+    private let center = UNUserNotificationCenter.current()
+    private let defaultsKey = "KishOSStatusNotificationSignatures"
+    private var signatures: [String: String]
+    private var authorizationTask: Task<Bool, Never>?
+
+    private init() {
+        signatures = UserDefaults.standard.dictionary(forKey: defaultsKey) as? [String: String] ?? [:]
+    }
+
+    func requestAuthorizationIfNeeded() async {
+        _ = await hasAuthorization()
+    }
+
+    func update(conversations: [Conversation], isSceneActive: Bool) {
+        guard !isSceneActive else { return }
+        let candidates = conversations.compactMap(Self.notificationCandidate(for:))
+        guard !candidates.isEmpty else { return }
+
+        Task {
+            guard await hasAuthorization() else { return }
+            for candidate in candidates {
+                schedule(candidate)
+            }
+        }
+    }
+
+    private func hasAuthorization() async -> Bool {
+        if let authorizationTask {
+            return await authorizationTask.value
+        }
+
+        let task = Task<Bool, Never> {
+            let settings = await center.notificationSettings()
+            switch settings.authorizationStatus {
+            case .authorized, .provisional, .ephemeral:
+                return true
+            case .denied:
+                return false
+            case .notDetermined:
+                do {
+                    return try await center.requestAuthorization(options: [.alert, .sound, .badge])
+                } catch {
+                    return false
+                }
+            @unknown default:
+                return false
+            }
+        }
+        authorizationTask = task
+        let result = await task.value
+        authorizationTask = nil
+        return result
+    }
+
+    private func schedule(_ candidate: StatusNotificationCandidate) {
+        let key = candidate.conversationID.uuidString.lowercased()
+        guard signatures[key] != candidate.signature else { return }
+        signatures[key] = candidate.signature
+        UserDefaults.standard.set(signatures, forKey: defaultsKey)
+
+        let content = UNMutableNotificationContent()
+        content.title = candidate.title
+        content.body = candidate.body
+        content.sound = .default
+        content.threadIdentifier = key
+        content.userInfo = ["conversationID": key]
+
+        let request = UNNotificationRequest(
+            identifier: "kishos.status.\(key).\(candidate.kind)",
+            content: content,
+            trigger: nil
+        )
+        center.add(request)
+    }
+
+    private static func notificationCandidate(for conversation: Conversation) -> StatusNotificationCandidate? {
+        if let approval = conversation.approvals.first {
+            let question = approval.questions.first?.question.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let summary = approval.summary.trimmingCharacters(in: .whitespacesAndNewlines)
+            let detail = question.isEmpty ? summary : question
+            return StatusNotificationCandidate(
+                conversationID: conversation.id,
+                kind: "needs-answer",
+                signature: "needs-answer:\(approval.id):\(conversation.updatedAt.timeIntervalSince1970)",
+                title: "KishOS needs an answer",
+                body: Self.body(title: conversation.title, detail: detail)
+            )
+        }
+
+        if let lastError = conversation.lastError?.trimmingCharacters(in: .whitespacesAndNewlines), !lastError.isEmpty {
+            return StatusNotificationCandidate(
+                conversationID: conversation.id,
+                kind: "failed",
+                signature: "failed:\(conversation.updatedAt.timeIntervalSince1970):\(lastError)",
+                title: "KishOS stopped",
+                body: Self.body(title: conversation.title, detail: lastError)
+            )
+        }
+
+        if conversation.runState == .done && conversation.isUnread {
+            return StatusNotificationCandidate(
+                conversationID: conversation.id,
+                kind: "done",
+                signature: "done:\(conversation.updatedAt.timeIntervalSince1970)",
+                title: "KishOS finished",
+                body: conversation.title
+            )
+        }
+
+        return nil
+    }
+
+    private static func body(title: String, detail: String) -> String {
+        let cleanDetail = detail.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanDetail.isEmpty else { return title }
+        return "\(title): \(cleanDetail)"
+    }
+}
+
+private struct StatusNotificationCandidate {
+    let conversationID: UUID
+    let kind: String
+    let signature: String
+    let title: String
+    let body: String
 }
 
 private extension Conversation {
