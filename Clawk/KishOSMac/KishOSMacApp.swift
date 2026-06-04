@@ -1,6 +1,7 @@
 import Foundation
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 private enum KishOSTheme {
     static let chatBackground = Color(nsColor: .textBackgroundColor)
@@ -593,6 +594,7 @@ private struct ChatView: View {
                 ChatComposer(
                     draft: $draft,
                     attachments: $pendingAttachments,
+                    client: client,
                     isSending: client.isSending,
                     isDisabled: client.isSending || isRunning,
                     voice: voice,
@@ -1295,22 +1297,47 @@ private struct QuestionComposer: View {
 private struct ChatComposer: View {
     @Binding var draft: String
     @Binding var attachments: [ChatAttachment]
+    @ObservedObject var client: KishAgentClient
     let isSending: Bool
     let isDisabled: Bool
     @ObservedObject var voice: VoiceController
     let runState: ConversationRunState?
     let onSend: () -> Void
 
+    @State private var attachmentError: String?
+    @State private var isDropTarget = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if !attachments.isEmpty {
-                HStack(spacing: 6) {
-                    ForEach(attachments) { attachment in
-                        ContextChip(attachment: attachment) {
-                            attachments.removeAll { $0.id == attachment.id }
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(attachments) { attachment in
+                            ContextChip(
+                                attachment: attachment,
+                                onRemove: {
+                                    AttachmentPayloadCache.shared.removePayload(for: attachment)
+                                    attachments.removeAll { $0.id == attachment.id }
+                                },
+                                onRetry: attachment.uploadState == .failed ? {
+                                    retryUpload(attachment.id)
+                                } : nil
+                            )
                         }
                     }
                 }
+            }
+
+            if let attachmentError {
+                Text(attachmentError)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            } else if let blockedAttachmentText {
+                Text(blockedAttachmentText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
 
             HStack(spacing: 10) {
@@ -1322,13 +1349,13 @@ private struct ChatComposer: View {
                 .help(voice.isRecording ? "Stop dictation" : "Dictate")
                 .disabled(isDisabled)
 
-                Button(action: attachClipboardText) {
+                Button(action: chooseFiles) {
                     Image(systemName: "paperclip")
                 }
                 .buttonStyle(.borderless)
                 .foregroundStyle(.secondary)
-                .help("Attach clipboard text")
-                .disabled(isDisabled || clipboardText().isEmpty)
+                .help("Attach files")
+                .disabled(isDisabled)
 
                 VStack(alignment: .leading, spacing: 2) {
                     TextField(voice.isRecording ? "Listening" : "Ask KishOS", text: $draft)
@@ -1358,20 +1385,21 @@ private struct ChatComposer: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(isDisabled || isSending || !hasSendableContent)
+                .disabled(isDisabled || isSending || hasUploadingAttachment || hasBlockedAttachment || !hasSendableContent)
             }
         }
         .opacity(isDisabled ? 0.62 : 1)
         .padding(10)
-        .background(KishOSTheme.inputBackground, in: RoundedRectangle(cornerRadius: 16))
+        .background(isDropTarget ? Color.accentColor.opacity(0.08) : KishOSTheme.inputBackground, in: RoundedRectangle(cornerRadius: 16))
         .overlay(
             RoundedRectangle(cornerRadius: 16)
-                .stroke(KishOSTheme.hairline)
+                .stroke(isDropTarget ? Color.accentColor.opacity(0.55) : KishOSTheme.hairline)
         )
         .shadow(color: Color.black.opacity(0.10), radius: 18, y: 8)
         .padding(.horizontal, 24)
         .padding(.top, 12)
         .padding(.bottom, 10)
+        .onDrop(of: [UTType.fileURL.identifier], isTargeted: $isDropTarget, perform: handleDrop)
     }
 
     private func toggleDictation() {
@@ -1386,6 +1414,19 @@ private struct ChatComposer: View {
         !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || attachments.contains { $0.isReadyForSend }
     }
 
+    private var hasUploadingAttachment: Bool {
+        attachments.contains { $0.uploadState == .uploading }
+    }
+
+    private var hasBlockedAttachment: Bool {
+        attachments.contains { $0.needsUpload && $0.uploadState != .uploading && $0.uploadState != .ready }
+    }
+
+    private var blockedAttachmentText: String? {
+        attachments.first(where: { $0.needsUpload && $0.uploadState != .uploading && $0.uploadState != .ready })?.uploadError
+            ?? (hasBlockedAttachment ? "Attachment needs upload." : nil)
+    }
+
     private func appendTranscript(_ transcript: String) {
         let clean = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !clean.isEmpty else { return }
@@ -1393,34 +1434,223 @@ private struct ChatComposer: View {
         draft = existing.isEmpty ? clean : "\(existing) \(clean)"
     }
 
-    private func attachClipboardText() {
-        let clean = clipboardText()
-        guard !clean.isEmpty else { return }
-        attachments = [ChatAttachment.textContext(clean)]
+    private func chooseFiles() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = true
+        panel.resolvesAliases = true
+        panel.begin { response in
+            guard response == .OK else { return }
+            handleFileURLs(panel.urls)
+        }
     }
 
-    private func clipboardText() -> String {
-        NSPasteboard.general.string(forType: .string)?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
+        let fileProviders = providers.filter { $0.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) }
+        guard !fileProviders.isEmpty else { return false }
+
+        for provider in fileProviders {
+            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, error in
+                if let error {
+                    DispatchQueue.main.async {
+                        attachmentError = error.localizedDescription
+                    }
+                    return
+                }
+
+                let url: URL?
+                if let data = item as? Data {
+                    url = URL(dataRepresentation: data, relativeTo: nil)
+                } else {
+                    url = item as? URL
+                }
+
+                guard let url else { return }
+                DispatchQueue.main.async {
+                    handleFileURLs([url])
+                }
+            }
+        }
+
+        return true
+    }
+
+    private func handleFileURLs(_ urls: [URL]) {
+        attachmentError = nil
+        for url in urls {
+            do {
+                var attachment = try MacAttachmentFactory.attachment(from: url)
+                if attachment.needsUpload {
+                    attachment.uploadState = .uploading
+                }
+                attachments.append(attachment)
+                if attachment.needsUpload {
+                    uploadAttachment(attachment.id)
+                }
+            } catch {
+                attachmentError = error.localizedDescription
+            }
+        }
+    }
+
+    private func retryUpload(_ attachmentId: UUID) {
+        updateAttachment(attachmentId) { attachment in
+            attachment.uploadState = .uploading
+            attachment.uploadError = nil
+        }
+        uploadAttachment(attachmentId)
+    }
+
+    private func uploadAttachment(_ attachmentId: UUID) {
+        guard !client.isDisconnected else {
+            updateAttachment(attachmentId) { attachment in
+                attachment.uploadState = .failed
+                attachment.uploadError = "Reconnect to upload."
+            }
+            return
+        }
+
+        Task {
+            guard let attachment = attachments.first(where: { $0.id == attachmentId }) else { return }
+            do {
+                let payload = try AttachmentPayloadCache.shared.payload(for: attachment)
+                let uploaded = try await client.uploadAttachment(payload)
+                let shouldKeepLocalPreview = attachment.kind == .image || uploaded.kind == ChatAttachment.Kind.image.rawValue
+                if !shouldKeepLocalPreview {
+                    AttachmentPayloadCache.shared.removePayload(for: attachment)
+                }
+                updateAttachment(attachmentId) { current in
+                    current.title = uploaded.filename
+                    current.mimeType = uploaded.mimeType ?? current.mimeType
+                    current.byteCount = uploaded.byteCount ?? current.byteCount
+                    current.uploadId = uploaded.id
+                    if !shouldKeepLocalPreview {
+                        current.localFilename = nil
+                    }
+                    current.uploadState = .ready
+                    current.uploadError = nil
+                    if uploaded.kind == ChatAttachment.Kind.image.rawValue {
+                        current.kind = .image
+                    }
+                }
+            } catch {
+                updateAttachment(attachmentId) { current in
+                    current.uploadState = .failed
+                    current.uploadError = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    private func updateAttachment(_ id: UUID, transform: (inout ChatAttachment) -> Void) {
+        guard let index = attachments.firstIndex(where: { $0.id == id }) else { return }
+        transform(&attachments[index])
+    }
+}
+
+private enum MacAttachmentFactory {
+    static func attachment(from url: URL) throws -> ChatAttachment {
+        let didAccess = url.startAccessingSecurityScopedResource()
+        defer {
+            if didAccess {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        let values = try url.resourceValues(forKeys: [.isRegularFileKey])
+        guard values.isRegularFile == true else {
+            throw MacAttachmentError.notAFile
+        }
+
+        let title = url.lastPathComponent.isEmpty ? "File" : url.lastPathComponent
+        let data = try Data(contentsOf: url, options: [.mappedIfSafe])
+        let id = UUID()
+        let mimeType = mimeType(for: url)
+        let localFilename = try AttachmentPayloadCache.shared.store(data: data, attachmentId: id, filename: title)
+        let previewText = String(data: Data(data.prefix(200_000)), encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return ChatAttachment(
+            id: id,
+            kind: kind(for: mimeType),
+            title: title,
+            text: previewText?.isEmpty == false ? previewText : nil,
+            mimeType: mimeType,
+            byteCount: data.count,
+            localFilename: localFilename,
+            uploadState: .local
+        )
+    }
+
+    private static func mimeType(for url: URL) -> String {
+        if let type = UTType(filenameExtension: url.pathExtension),
+           let mimeType = type.preferredMIMEType {
+            return mimeType
+        }
+        return "application/octet-stream"
+    }
+
+    private static func kind(for mimeType: String) -> ChatAttachment.Kind {
+        mimeType.lowercased().hasPrefix("image/") ? .image : .file
+    }
+}
+
+private enum MacAttachmentError: LocalizedError {
+    case notAFile
+
+    var errorDescription: String? {
+        switch self {
+        case .notAFile:
+            return "Select a file."
+        }
     }
 }
 
 private struct ContextChip: View {
     let attachment: ChatAttachment
     var onRemove: (() -> Void)? = nil
+    var onRetry: (() -> Void)? = nil
 
     var body: some View {
+        if attachment.kind == .image, let previewImage {
+            imagePreview(previewImage)
+        } else {
+            fallbackChip
+        }
+    }
+
+    private var fallbackChip: some View {
         HStack(spacing: 6) {
-            Image(systemName: "doc.text")
+            Image(systemName: iconName)
                 .font(.caption)
             Text(attachment.title)
                 .lineLimit(1)
+            if let stateText {
+                Text(stateText)
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(stateTint)
+            }
+            if attachment.uploadState == .uploading {
+                ProgressView()
+                    .controlSize(.small)
+                    .frame(width: 12, height: 12)
+            }
+            if let onRetry {
+                Button(action: onRetry) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.caption2.weight(.semibold))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Retry \(attachment.title)")
+            }
             if let onRemove {
                 Button(action: onRemove) {
                     Image(systemName: "xmark")
                         .font(.caption2.weight(.semibold))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Remove \(attachment.title)")
             }
         }
         .font(.caption)
@@ -1428,6 +1658,126 @@ private struct ContextChip: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
         .background(KishOSTheme.pillBackground, in: Capsule())
+        .overlay(Capsule().stroke(strokeTint))
+    }
+
+    private func imagePreview(_ image: NSImage) -> some View {
+        ZStack(alignment: .topTrailing) {
+            Image(nsImage: image)
+                .resizable()
+                .scaledToFill()
+                .frame(width: previewWidth, height: previewHeight)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(strokeTint, lineWidth: attachment.uploadState == .failed ? 1.2 : 0.8)
+                )
+                .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+            if let onRemove {
+                Button(action: onRemove) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 22, height: 22)
+                        .background(.black.opacity(0.62), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .padding(5)
+                .accessibilityLabel("Remove \(attachment.title)")
+            }
+
+            if attachment.uploadState == .uploading {
+                previewStatusOverlay {
+                    ProgressView()
+                        .tint(.white)
+                        .controlSize(.small)
+                    Text("Uploading")
+                        .font(.caption2.weight(.semibold))
+                }
+            } else if attachment.uploadState == .failed {
+                previewStatusOverlay {
+                    if let onRetry {
+                        Button(action: onRetry) {
+                            Label("Retry", systemImage: "arrow.clockwise")
+                                .font(.caption2.weight(.bold))
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.white)
+                        .accessibilityLabel("Retry \(attachment.title)")
+                    } else {
+                        Text("Failed")
+                            .font(.caption2.weight(.bold))
+                    }
+                }
+            }
+        }
+        .frame(width: previewWidth, height: previewHeight)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(attachment.title)
+        .accessibilityValue(stateText ?? "Ready")
+    }
+
+    private func previewStatusOverlay<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        VStack {
+            Spacer()
+            HStack(spacing: 5) {
+                content()
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(.black.opacity(0.62), in: Capsule())
+            .padding(6)
+        }
+        .frame(width: previewWidth, height: previewHeight)
+    }
+
+    private var previewImage: NSImage? {
+        guard let url = AttachmentPayloadCache.shared.cachedFileURL(for: attachment) else { return nil }
+        return NSImage(contentsOf: url)
+    }
+
+    private var previewWidth: CGFloat {
+        onRemove == nil ? 220 : 118
+    }
+
+    private var previewHeight: CGFloat {
+        onRemove == nil ? 150 : 88
+    }
+
+    private var iconName: String {
+        switch attachment.kind {
+        case .text:
+            return "text.alignleft"
+        case .image:
+            return "photo"
+        case .file:
+            return "doc"
+        case .url:
+            return "link"
+        }
+    }
+
+    private var stateText: String? {
+        switch attachment.uploadState {
+        case .uploading:
+            return "Uploading"
+        case .failed:
+            return "Failed"
+        case .local:
+            return attachment.needsUpload ? "Waiting" : nil
+        case .ready:
+            return nil
+        }
+    }
+
+    private var stateTint: Color {
+        attachment.uploadState == .failed ? .red : .secondary
+    }
+
+    private var strokeTint: Color {
+        attachment.uploadState == .failed ? .red.opacity(0.55) : KishOSTheme.hairline
     }
 }
 
