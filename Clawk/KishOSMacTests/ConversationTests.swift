@@ -21,4 +21,60 @@ final class ConversationTests: XCTestCase {
         XCTAssertEqual(conversation.threadId, "mac-11111111-2222-3333-4444-555555555555")
         XCTAssertEqual(conversation.messages.first?.text, "hello")
     }
+
+    func testAgentStatusUsesPendingQuestion() {
+        var conversation = Conversation(firstMessage: "book a flight")
+        conversation.approvals = [
+            ApprovalRequest(
+                id: "approval-1",
+                threadId: conversation.threadId,
+                questions: [
+                    ApprovalQuestion(
+                        header: "Question 1",
+                        question: "Which flight should I book?",
+                        multiSelect: false,
+                        options: []
+                    )
+                ],
+                createdAt: nil,
+                expiresAt: nil,
+                summary: "Choose a flight"
+            )
+        ]
+
+        XCTAssertEqual(conversation.agentStatusSummary?.tone, .needsAnswer)
+        XCTAssertEqual(conversation.agentStatusSummary?.title, "Needs answer")
+        XCTAssertEqual(conversation.agentStatusSummary?.detail, "Which flight should I book?")
+    }
+
+    func testAgentStatusShowsQueuedMessages() {
+        var conversation = Conversation(firstMessage: "check this later")
+        conversation.messages[0].deliveryState = .queued
+
+        XCTAssertEqual(conversation.agentStatusSummary?.tone, .queued)
+        XCTAssertEqual(conversation.agentStatusSummary?.title, "Saved locally")
+        XCTAssertEqual(conversation.agentStatusSummary?.detail, "1 message will send when connected.")
+    }
+
+    func testAgentStatusFiltersDuplicateActivity() {
+        var conversation = Conversation(firstMessage: "summarize the repo")
+        conversation.isRunning = true
+        conversation.messages.append(
+            ChatMessage(
+                sender: .agent,
+                text: "I found the main app structure.",
+                deliveryState: .sending,
+                activityEvents: [
+                    "waiting for reply",
+                    "tool: Reading project files",
+                    "summarize the repo",
+                    "I found the main app structure."
+                ]
+            )
+        )
+
+        XCTAssertEqual(conversation.agentStatusSummary?.tone, .working)
+        XCTAssertEqual(conversation.agentStatusSummary?.title, "Using tools")
+        XCTAssertEqual(conversation.agentStatusSummary?.detail, "Reading project files")
+    }
 }

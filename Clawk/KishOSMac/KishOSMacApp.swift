@@ -114,6 +114,7 @@ private struct MacRootView: View {
                 isRunning: client.isSending,
                 lastError: nil,
                 runState: nil,
+                agentStatus: nil,
                 queuedMessageCount: workspace.queuedMessageCount,
                 approvals: [],
                 onSend: { send($0, attachments: $1, in: nil) },
@@ -136,6 +137,7 @@ private struct MacRootView: View {
                     isRunning: conversation.isRunning,
                     lastError: conversation.lastError,
                     runState: conversation.runState,
+                    agentStatus: conversation.agentStatusSummary,
                     queuedMessageCount: conversation.queuedUserMessageCount,
                     approvals: conversation.approvals,
                     onSend: { send($0, attachments: $1, in: conversation.id) },
@@ -455,6 +457,7 @@ private struct ChatView: View {
     let isRunning: Bool
     let lastError: String?
     let runState: ConversationRunState?
+    let agentStatus: AgentStatusSummary?
     let queuedMessageCount: Int
     let approvals: [ApprovalRequest]
     let onSend: (String, [ChatAttachment]) -> Void
@@ -515,6 +518,11 @@ private struct ChatView: View {
                 }
             }
 
+            if let agentStatus {
+                AgentStatusStrip(summary: agentStatus)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
             if let lastError {
                 ErrorRetryBar(message: lastError, onRetry: onRetry)
             }
@@ -557,6 +565,7 @@ private struct ChatView: View {
         .animation(.easeInOut(duration: 0.2), value: approvals.first?.id)
         .animation(.easeInOut(duration: 0.2), value: client.isSending || isRunning)
         .animation(.easeInOut(duration: 0.2), value: queuedMessageCount)
+        .animation(.easeInOut(duration: 0.2), value: agentStatus?.detail)
     }
 
     private func sendDraft() {
@@ -627,6 +636,44 @@ private struct ChatHeader: View {
         let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanSubtitle = subtitle.trimmingCharacters(in: .whitespacesAndNewlines)
         return !cleanSubtitle.isEmpty && cleanSubtitle != cleanTitle
+    }
+}
+
+private struct AgentStatusStrip: View {
+    let summary: AgentStatusSummary
+
+    var body: some View {
+        HStack(spacing: 9) {
+            Circle()
+                .fill(tint)
+                .frame(width: 7, height: 7)
+            Text(summary.title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.primary)
+            Text(summary.detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(KishOSTheme.panelBackground)
+    }
+
+    private var tint: Color {
+        switch summary.tone {
+        case .running:
+            return .orange
+        case .working:
+            return .blue
+        case .needsAnswer:
+            return .purple
+        case .queued:
+            return .secondary
+        case .failed:
+            return .red
+        }
     }
 }
 

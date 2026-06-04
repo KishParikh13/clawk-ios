@@ -98,6 +98,134 @@ struct Conversation: Identifiable, Codable, Equatable {
         }
         return .done
     }
+
+    var agentStatusSummary: AgentStatusSummary? {
+        if let approval = approvals.first {
+            let question = approval.questions.first?.question.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let summary = approval.summary.trimmingCharacters(in: .whitespacesAndNewlines)
+            return AgentStatusSummary(
+                tone: .needsAnswer,
+                title: "Needs answer",
+                detail: question.isEmpty ? (summary.isEmpty ? "Question pending" : summary) : question
+            )
+        }
+
+        let queuedCount = queuedUserMessageCount
+        if queuedCount > 0 {
+            return AgentStatusSummary(
+                tone: .queued,
+                title: "Saved locally",
+                detail: "\(queuedCount) message\(queuedCount == 1 ? "" : "s") will send when connected."
+            )
+        }
+
+        if let lastError, !lastError.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return AgentStatusSummary(tone: .failed, title: "Stopped", detail: lastError)
+        }
+
+        guard isRunning else { return nil }
+
+        let runningAgentMessage = messages.last { $0.sender == .agent && $0.deliveryState == .sending }
+        let latestUserText = messages.last { $0.sender == .user }?.text ?? ""
+        let latestActivity = runningAgentMessage.flatMap {
+            visibleActivityEvents(for: $0, previousUserText: latestUserText, isRunning: true).last
+        }
+
+        return AgentStatusSummary(
+            tone: runState == .runningTools ? .working : .running,
+            title: runState == .runningTools ? "Using tools" : "Working",
+            detail: latestActivity ?? "Waiting for reply"
+        )
+    }
+
+    func visibleActivityEvents(for message: ChatMessage, previousUserText: String, isRunning: Bool) -> [String] {
+        message.activityEvents.compactMap { event in
+            let normalized = Self.normalizedActivityEvent(event)
+            let normalizedMessage = Self.normalizedActivityEvent(message.text)
+            let normalizedUser = Self.normalizedActivityEvent(previousUserText)
+            guard !normalized.isEmpty else { return nil }
+            guard !Self.isDuplicate(normalized, of: normalizedMessage) else { return nil }
+            guard !Self.isDuplicate(normalized, of: normalizedUser) else { return nil }
+            guard !Self.hiddenActivityEvents.contains(normalized) else { return nil }
+            guard !normalized.contains("askuserquestion") else { return nil }
+            if !isRunning && normalized == "waiting for reply" {
+                return nil
+            }
+            let display = Self.displayActivityEvent(event)
+            return display.isEmpty ? nil : display
+        }
+    }
+
+    static func displayActivityEvent(_ text: String) -> String {
+        var output = text.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        var changed = true
+        while changed {
+            changed = false
+            let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed != output {
+                output = trimmed
+                changed = true
+            }
+
+            let textualPrefixes = ["thinking:", "reasoning:", "tool:"]
+            for prefix in textualPrefixes where output.range(of: prefix, options: [.caseInsensitive, .anchored]) != nil {
+                output.removeFirst(prefix.count)
+                changed = true
+            }
+
+            while let first = output.unicodeScalars.first,
+                  !CharacterSet.alphanumerics.contains(first) {
+                let second = output.dropFirst().unicodeScalars.first
+                if (first == "*" || first == "-" || first == "`"),
+                   let second,
+                   CharacterSet.alphanumerics.contains(second) {
+                    break
+                }
+                output.removeFirst()
+                changed = true
+            }
+        }
+
+        return output.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func normalizedActivityEvent(_ text: String) -> String {
+        displayActivityEvent(text)
+            .lowercased()
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+    }
+
+    private static func isDuplicate(_ event: String, of text: String) -> Bool {
+        guard !event.isEmpty, !text.isEmpty else { return false }
+        let trimmedEvent = event.trimmingCharacters(in: CharacterSet(charactersIn: "…."))
+        return event == text || text.hasPrefix(trimmedEvent) || event.hasPrefix(text)
+    }
+
+    private static var hiddenActivityEvents: Set<String> {
+        [
+            "approval needed",
+            "approval answered",
+            "waiting for approval",
+            "question asked",
+            "question answered",
+            "waiting for answer"
+        ]
+    }
+}
+
+struct AgentStatusSummary: Equatable {
+    enum Tone: Equatable {
+        case running
+        case working
+        case needsAnswer
+        case queued
+        case failed
+    }
+
+    let tone: Tone
+    let title: String
+    let detail: String
 }
 
 struct ChatMessage: Identifiable, Codable, Equatable {

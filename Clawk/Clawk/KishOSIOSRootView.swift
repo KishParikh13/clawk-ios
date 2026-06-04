@@ -39,6 +39,7 @@ struct KishOSIOSRootView: View {
                         conversation: selectedConversation,
                         isSending: currentIsRunning,
                         runState: selectedConversation?.runState,
+                        agentStatus: selectedConversation?.agentStatusSummary,
                         queuedMessageCount: selectedConversation?.queuedUserMessageCount ?? workspace.queuedMessageCount,
                         approvals: selectedConversation?.approvals ?? [],
                         voice: voice,
@@ -410,6 +411,7 @@ private struct ChatScreen: View {
     let conversation: Conversation?
     let isSending: Bool
     let runState: ConversationRunState?
+    let agentStatus: AgentStatusSummary?
     let queuedMessageCount: Int
     let approvals: [ApprovalRequest]
     @ObservedObject var voice: VoiceController
@@ -456,6 +458,11 @@ private struct ChatScreen: View {
                 }
             }
 
+            if let agentStatus {
+                IOSAgentStatusStrip(summary: agentStatus)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
             if let lastError = conversation?.lastError {
                 IOSErrorBar(message: lastError, onRetry: onRetry)
             }
@@ -498,6 +505,7 @@ private struct ChatScreen: View {
         .animation(.easeInOut(duration: 0.2), value: approvals.first?.id)
         .animation(.easeInOut(duration: 0.2), value: client.isSending || isSending)
         .animation(.easeInOut(duration: 0.2), value: queuedMessageCount)
+        .animation(.easeInOut(duration: 0.2), value: agentStatus?.detail)
     }
 
     private func sendDraft() {
@@ -1498,6 +1506,44 @@ private struct ConversationPickerRow: View {
             return conversation.runState.label
         }
         return conversation.idea
+    }
+}
+
+private struct IOSAgentStatusStrip: View {
+    let summary: AgentStatusSummary
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(tint)
+                .frame(width: 7, height: 7)
+            Text(summary.title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.primary)
+            Text(summary.detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(IOSTheme.secondaryBackground)
+    }
+
+    private var tint: Color {
+        switch summary.tone {
+        case .running:
+            return .orange
+        case .working:
+            return .blue
+        case .needsAnswer:
+            return .purple
+        case .queued:
+            return .secondary
+        case .failed:
+            return .red
+        }
     }
 }
 
