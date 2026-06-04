@@ -6,6 +6,7 @@ final class KishOSWorkspace: ObservableObject {
     @Published private(set) var storeError: String?
 
     private let store: ConversationStoring
+    private var deletedConversationIDs: Set<UUID>
 
     init(store: ConversationStoring = JSONConversationStore()) {
         self.store = store
@@ -14,6 +15,12 @@ final class KishOSWorkspace: ObservableObject {
             self.storeError = nil
         } catch {
             self.conversations = []
+            self.storeError = error.localizedDescription
+        }
+        do {
+            self.deletedConversationIDs = try store.loadDeletedConversationIDs()
+        } catch {
+            self.deletedConversationIDs = []
             self.storeError = error.localizedDescription
         }
     }
@@ -184,7 +191,9 @@ final class KishOSWorkspace: ObservableObject {
 
     func deleteConversation(_ id: UUID) {
         conversations.removeAll { $0.id == id }
+        deletedConversationIDs.insert(id)
         persist()
+        persistDeletedConversationIDs()
     }
 
     func conversation(id: UUID) -> Conversation? {
@@ -195,6 +204,7 @@ final class KishOSWorkspace: ObservableObject {
         guard !remote.isEmpty else { return }
         var byId = Dictionary(uniqueKeysWithValues: conversations.map { ($0.id, $0) })
         for remoteConversation in remote {
+            guard !deletedConversationIDs.contains(remoteConversation.id) else { continue }
             if let localConversation = byId[remoteConversation.id],
                localConversation.updatedAt >= remoteConversation.updatedAt {
                 continue
@@ -220,6 +230,14 @@ final class KishOSWorkspace: ObservableObject {
         do {
             try store.save(conversations)
             storeError = nil
+        } catch {
+            storeError = error.localizedDescription
+        }
+    }
+
+    private func persistDeletedConversationIDs() {
+        do {
+            try store.saveDeletedConversationIDs(deletedConversationIDs)
         } catch {
             storeError = error.localizedDescription
         }

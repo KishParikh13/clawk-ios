@@ -18,6 +18,17 @@ final class ConversationStoreTests: XCTestCase {
         XCTAssertEqual(loaded[0].messages.first?.text, "remember this")
     }
 
+    func testJSONStoreSavesAndLoadsDeletedConversationIDs() throws {
+        let fileURL = temporaryFileURL()
+        let store = JSONConversationStore(fileURL: fileURL)
+        let id = UUID(uuidString: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")!
+
+        try store.saveDeletedConversationIDs([id])
+
+        let loaded = try JSONConversationStore(fileURL: fileURL).loadDeletedConversationIDs()
+        XCTAssertEqual(loaded, [id])
+    }
+
     func testWorkspaceFollowUpKeepsSameThreadId() {
         let store = MemoryConversationStore()
         let workspace = KishOSWorkspace(store: store)
@@ -69,6 +80,7 @@ final class ConversationStoreTests: XCTestCase {
         workspace.deleteConversation(conversation.id)
 
         XCTAssertTrue(store.savedConversations.isEmpty)
+        XCTAssertEqual(store.savedDeletedConversationIDs, [conversation.id])
     }
 
     func testRemoteMergeKeepsNewerLocalConversation() {
@@ -136,6 +148,24 @@ final class ConversationStoreTests: XCTestCase {
         XCTAssertEqual(store.savedConversations.map(\.title), ["new", "old"])
     }
 
+    func testRemoteMergeDoesNotResurrectLocallyDeletedConversation() {
+        let store = MemoryConversationStore()
+        let workspace = KishOSWorkspace(store: store)
+        let id = UUID(uuidString: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")!
+        let older = Date(timeIntervalSince1970: 100)
+        let newer = Date(timeIntervalSince1970: 200)
+        var remote = Conversation(id: id, firstMessage: "remote", now: older)
+        remote.updatedAt = newer
+
+        workspace.mergeRemoteConversations([remote])
+        workspace.deleteConversation(id)
+        workspace.mergeRemoteConversations([remote])
+
+        XCTAssertNil(workspace.conversation(id: id))
+        XCTAssertTrue(store.savedConversations.isEmpty)
+        XCTAssertEqual(store.savedDeletedConversationIDs, [id])
+    }
+
     func testApprovalAnswerAcceptedClearsPendingApproval() {
         let store = MemoryConversationStore()
         let workspace = KishOSWorkspace(store: store)
@@ -193,6 +223,7 @@ final class ConversationStoreTests: XCTestCase {
 
 private final class MemoryConversationStore: ConversationStoring {
     var savedConversations: [Conversation] = []
+    var savedDeletedConversationIDs: Set<UUID> = []
 
     func load() throws -> [Conversation] {
         savedConversations
@@ -200,5 +231,13 @@ private final class MemoryConversationStore: ConversationStoring {
 
     func save(_ conversations: [Conversation]) throws {
         savedConversations = conversations
+    }
+
+    func loadDeletedConversationIDs() throws -> Set<UUID> {
+        savedDeletedConversationIDs
+    }
+
+    func saveDeletedConversationIDs(_ ids: Set<UUID>) throws {
+        savedDeletedConversationIDs = ids
     }
 }
