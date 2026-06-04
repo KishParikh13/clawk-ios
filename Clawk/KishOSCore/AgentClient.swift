@@ -36,6 +36,7 @@ final class KishAgentClient: ObservableObject {
 
     func refreshHealth() async {
         if isSending { return }
+        markChecking()
 
         var request = URLRequest(url: baseURL.appendingPathComponent("health"))
         request.timeoutInterval = 8
@@ -43,7 +44,7 @@ final class KishAgentClient: ObservableObject {
         do {
             let (data, response) = try await session.data(for: request)
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
-            let health = try JSONDecoder().decode(HealthResponse.self, from: data)
+            let health = try Self.decoder.decode(HealthResponse.self, from: data)
 
             if statusCode == 200 && health.ok {
                 miniStatus = "Online"
@@ -53,11 +54,15 @@ final class KishAgentClient: ObservableObject {
                 status = "Ready"
                 detail = "Connected to kish-agent"
                 await refreshToolInventory()
+            } else if statusCode == 200 {
+                markAgentUnavailable("kish-agent is not ready")
             } else {
-                markOffline("Health check failed")
+                markBridgeError("kish-agent returned HTTP \(statusCode)")
             }
+        } catch let error as URLError {
+            markNetworkError(error)
         } catch {
-            markOffline("Cannot reach Mac mini")
+            markBridgeError("Unexpected health response")
         }
     }
 
@@ -95,12 +100,11 @@ final class KishAgentClient: ObservableObject {
             chatStatus = "Error"
             let message = decoded.error ?? "Agent returned HTTP \(statusCode)"
             detail = message
+            markChatRequestFailure(message)
             throw AgentClientError.requestFailed(message)
         } catch let error as URLError {
-            status = "Error"
-            chatStatus = "Error"
+            markNetworkError(error)
             let mapped = AgentClientError.network(error)
-            detail = mapped.localizedDescription
             throw mapped
         } catch {
             status = "Error"
@@ -131,6 +135,7 @@ final class KishAgentClient: ObservableObject {
             let (bytes, response) = try await session.bytes(for: request)
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
             guard statusCode == 200 else {
+                markChatRequestFailure("Agent returned HTTP \(statusCode)")
                 throw AgentClientError.requestFailed("Agent returned HTTP \(statusCode)")
             }
 
@@ -169,10 +174,8 @@ final class KishAgentClient: ObservableObject {
             detail = "Reply received"
             return final
         } catch let error as URLError {
-            status = "Error"
-            chatStatus = "Error"
+            markNetworkError(error)
             let mapped = AgentClientError.network(error)
-            detail = mapped.localizedDescription
             throw mapped
         } catch {
             status = "Error"
@@ -254,6 +257,51 @@ final class KishAgentClient: ObservableObject {
         chatStatus = "Offline"
         toolInventoryStatus = "Offline"
         status = "Offline"
+        detail = message
+    }
+
+    private func markChecking() {
+        miniStatus = "Checking"
+        httpStatus = "Checking"
+        agentStatus = "Checking"
+        if chatStatus != "Sending" && chatStatus != "Question" {
+            chatStatus = "Checking"
+        }
+        status = "Checking"
+        detail = "Checking kish-agent"
+    }
+
+    private func markNetworkError(_ error: URLError) {
+        let mapped = AgentClientError.network(error)
+        markOffline(mapped.localizedDescription)
+    }
+
+    private func markBridgeError(_ message: String) {
+        miniStatus = "Online"
+        httpStatus = "Error"
+        agentStatus = "Offline"
+        chatStatus = "Offline"
+        toolInventoryStatus = "Unavailable"
+        status = "Error"
+        detail = message
+    }
+
+    private func markAgentUnavailable(_ message: String) {
+        miniStatus = "Online"
+        httpStatus = "Online"
+        agentStatus = "Offline"
+        chatStatus = "Offline"
+        toolInventoryStatus = "Unavailable"
+        status = "Offline"
+        detail = message
+    }
+
+    private func markChatRequestFailure(_ message: String) {
+        miniStatus = "Online"
+        httpStatus = "Online"
+        agentStatus = "Online"
+        chatStatus = "Error"
+        status = "Error"
         detail = message
     }
 
