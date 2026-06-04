@@ -2273,9 +2273,17 @@ private struct SettingsView: View {
 
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
-                        Text("Audio")
-                            .font(.headline)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Audio")
+                                .font(.headline)
+                            Text(audio.glassesSummary)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                         Spacer()
+                        Button(audio.prefersHandsFreeRoute ? "Use System" : "Prefer External") {
+                            audio.setPrefersHandsFreeRoute(!audio.prefersHandsFreeRoute)
+                        }
                         Button("Refresh") {
                             audio.refresh(isRecording: voice.isRecording)
                         }
@@ -2284,6 +2292,41 @@ private struct SettingsView: View {
                         StatusRow(title: "Input", value: audio.inputName, tint: audio.statusLabel == "Unavailable" ? .red : .green)
                         StatusRow(title: "Output", value: audio.outputName, tint: audio.statusLabel == "Unavailable" ? .red : .green)
                         StatusRow(title: "Route", value: audio.statusLabel, tint: audioTint)
+                        StatusRow(title: "Mode", value: audio.routeModeLabel, tint: audio.prefersHandsFreeRoute ? .green : .secondary)
+                        StatusRow(title: "Health", value: audio.routeHealthLabel, tint: audioHealthTint)
+                    }
+
+                    if !audio.activationDetail.isEmpty {
+                        Text(audio.activationDetail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+
+                    Divider()
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Routes")
+                            .font(.headline)
+                        if audio.availableRoutes.isEmpty {
+                            Text("No external audio routes exposed by the system.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            ForEach(audio.availableRoutes) { route in
+                                AudioRouteCandidateRow(route: route)
+                            }
+                        }
+                    }
+
+                    Divider()
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Glasses")
+                            .font(.headline)
+                        ForEach(audio.capabilityLines) { line in
+                            AudioCapabilityRow(line: line)
+                        }
                     }
                 }
                 .padding(12)
@@ -2315,9 +2358,22 @@ private struct SettingsView: View {
 
     private var audioTint: Color {
         switch audio.statusLabel {
-        case "Glasses", "Bluetooth", "System":
+        case "Glasses", "Bluetooth", "System", "Built-in", "Headset":
             return .green
         case "Listening":
+            return .orange
+        case "Unavailable":
+            return .red
+        default:
+            return .secondary
+        }
+    }
+
+    private var audioHealthTint: Color {
+        switch audio.routeHealthLabel {
+        case "Active", "Ready":
+            return .green
+        case "Switching", "Waiting":
             return .orange
         case "Unavailable":
             return .red
@@ -2332,6 +2388,63 @@ private struct SettingsView: View {
         Task {
             await client.reconnect()
         }
+    }
+}
+
+private struct AudioRouteCandidateRow: View {
+    let route: AudioRouteCandidate
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(route.isActive ? .green : (route.isPreferredCandidate ? .orange : .secondary))
+                .frame(width: 7, height: 7)
+            Text(route.name)
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            Text(routeLabel)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .font(.caption)
+    }
+
+    private var routeLabel: String {
+        var parts = [route.kind.rawValue]
+        if route.isInput {
+            parts.append("Input")
+        }
+        if route.isOutput {
+            parts.append("Output")
+        }
+        if route.isActive {
+            parts.append("Active")
+        }
+        return parts.joined(separator: " · ")
+    }
+}
+
+private struct AudioCapabilityRow: View {
+    let line: AudioCapabilityLine
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(line.isReady ? .green : .secondary)
+                .frame(width: 7, height: 7)
+            Text(line.title)
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            Text(line.state)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .font(.caption)
+        Text(line.detail)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .padding(.leading, 15)
+            .lineLimit(2)
     }
 }
 
@@ -2448,7 +2561,7 @@ private struct MiniStatusChip: View {
 
     private var tint: Color {
         switch value {
-        case "Online", "Ready", "On", "System", "Bluetooth", "Glasses":
+        case "Online", "Ready", "On", "System", "Built-in", "Bluetooth", "Glasses", "Headset":
             return .green
         case "Sending", "Checking", "Listening", "Question":
             return .orange

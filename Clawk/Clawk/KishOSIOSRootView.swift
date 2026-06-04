@@ -709,6 +709,7 @@ private struct ChatScreen: View {
                     runState: runState,
                     allowsReferences: conversation != nil,
                     voice: voice,
+                    audio: audio,
                     onSend: sendDraft,
                     onStop: onStop,
                     onStartCall: onStartCall
@@ -1024,6 +1025,7 @@ private struct IOSComposer: View {
     let runState: ConversationRunState?
     let allowsReferences: Bool
     @ObservedObject var voice: VoiceController
+    @ObservedObject var audio: AudioRouteMonitor
     let onSend: () -> Void
     let onStop: () -> Void
     let onStartCall: () -> Void
@@ -1461,6 +1463,7 @@ private struct IOSComposer: View {
 
     private func startDictation() {
         Task {
+            await audio.activatePreferredHandsFreeRoute()
             await voice.startRecording()
         }
     }
@@ -1866,7 +1869,7 @@ private struct StatusChip: View {
 
     private var tint: Color {
         switch value {
-        case "Online", "Ready", "On", "System", "Bluetooth", "Glasses":
+        case "Online", "Ready", "On", "System", "Built-in", "Bluetooth", "Glasses", "Headset":
             return .green
         case "Sending", "Checking", "Listening", "Question":
             return .orange
@@ -2442,6 +2445,7 @@ private struct IOSConnectionPanel: View {
     let onReset: () -> Void
 
     @State private var capabilitiesExpanded = false
+    @State private var showingAudioSettings = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -2527,6 +2531,17 @@ private struct IOSConnectionPanel: View {
                     .lineLimit(1)
 
                 Spacer(minLength: 0)
+
+                Button {
+                    showingAudioSettings = true
+                } label: {
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.caption.weight(.semibold))
+                        .frame(width: 30, height: 30)
+                        .background(IOSTheme.secondaryBackground, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Audio settings")
             }
 
             DisclosureGroup(isExpanded: $capabilitiesExpanded) {
@@ -2550,6 +2565,16 @@ private struct IOSConnectionPanel: View {
         .padding(10)
         .background(IOSTheme.elevatedBackground.opacity(0.74), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(IOSTheme.hairline))
+        .sheet(isPresented: $showingAudioSettings) {
+            IOSAudioSettingsSheet(
+                audio: audio,
+                wake: wake,
+                onRefresh: {
+                    audio.refresh()
+                }
+            )
+            .presentationDetents([.medium, .large])
+        }
     }
 
     private var capabilitySummary: String {
@@ -2561,6 +2586,258 @@ private struct IOSConnectionPanel: View {
             return .green
         }
         return wake.isEnabled ? .orange : .secondary
+    }
+}
+
+private struct IOSAudioSettingsSheet: View {
+    @ObservedObject var audio: AudioRouteMonitor
+    @ObservedObject var wake: WakePhraseController
+    let onRefresh: () -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(audio.glassesSummary)
+                            .font(.title3.weight(.semibold))
+                            .lineLimit(2)
+                        HStack(spacing: 8) {
+                            IOSSettingsStatusPill(title: "Route", value: audio.statusLabel, tint: routeTint)
+                            IOSSettingsStatusPill(title: "Health", value: audio.routeHealthLabel, tint: healthTint)
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Audio")
+                            .font(.headline)
+                        IOSAudioSettingRow(title: "Input", value: audio.inputName, tint: .green)
+                        IOSAudioSettingRow(title: "Output", value: audio.outputName, tint: .green)
+                        IOSAudioSettingRow(title: "Mode", value: audio.routeModeLabel, tint: audio.prefersHandsFreeRoute ? .green : .secondary)
+                        if !audio.activationDetail.isEmpty {
+                            Text(audio.activationDetail)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        HStack(spacing: 8) {
+                            Button {
+                                audio.setPrefersHandsFreeRoute(!audio.prefersHandsFreeRoute)
+                            } label: {
+                                Text(audio.prefersHandsFreeRoute ? "Use System" : "Prefer External")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(Color(uiColor: .label))
+
+                            Button(action: onRefresh) {
+                                Image(systemName: "arrow.clockwise")
+                                    .frame(width: 42)
+                            }
+                            .buttonStyle(.bordered)
+                            .accessibilityLabel("Refresh audio routes")
+                        }
+                    }
+                    .settingsCard()
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Routes")
+                            .font(.headline)
+                        if audio.availableRoutes.isEmpty {
+                            Text("No external routes exposed by iOS.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            ForEach(audio.availableRoutes) { route in
+                                IOSAudioRouteRow(route: route)
+                            }
+                        }
+                    }
+                    .settingsCard()
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Hands-free")
+                            .font(.headline)
+                        Toggle(isOn: Binding(
+                            get: { wake.isEnabled },
+                            set: { wake.setEnabled($0) }
+                        )) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Wake phrase")
+                                Text(wake.statusLabel)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        IOSAudioSettingRow(title: "Wake detections", value: "\(wake.detectionCount)", tint: wake.isListening ? .green : .secondary)
+                    }
+                    .settingsCard()
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Capabilities")
+                            .font(.headline)
+                        ForEach(audio.capabilityLines) { line in
+                            IOSAudioCapabilityRow(line: line)
+                        }
+                    }
+                    .settingsCard()
+                }
+                .padding(16)
+            }
+            .background(IOSTheme.groupedBackground)
+            .navigationTitle("Audio")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+            .onAppear(perform: onRefresh)
+        }
+    }
+
+    private var routeTint: Color {
+        switch audio.statusLabel {
+        case "Glasses", "Bluetooth", "Headset", "System", "Built-in":
+            return .green
+        case "Listening":
+            return .orange
+        case "Unavailable":
+            return .red
+        default:
+            return .secondary
+        }
+    }
+
+    private var healthTint: Color {
+        switch audio.routeHealthLabel {
+        case "Active", "Ready":
+            return .green
+        case "Switching", "Waiting":
+            return .orange
+        case "Unavailable":
+            return .red
+        default:
+            return .secondary
+        }
+    }
+}
+
+private struct IOSSettingsStatusPill: View {
+    let title: String
+    let value: String
+    let tint: Color
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(tint)
+                .frame(width: 7, height: 7)
+            Text(title)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .foregroundStyle(.primary)
+        }
+        .font(.caption.weight(.medium))
+        .padding(.horizontal, 10)
+        .frame(height: 30)
+        .background(IOSTheme.secondaryBackground, in: Capsule())
+    }
+}
+
+private struct IOSAudioSettingRow: View {
+    let title: String
+    let value: String
+    let tint: Color
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(tint)
+                .frame(width: 7, height: 7)
+            Text(title)
+            Spacer(minLength: 8)
+            Text(value)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .font(.caption)
+    }
+}
+
+private struct IOSAudioRouteRow: View {
+    let route: AudioRouteCandidate
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(route.isActive ? .green : (route.isPreferredCandidate ? .orange : .secondary))
+                .frame(width: 7, height: 7)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(route.name)
+                    .font(.caption.weight(.medium))
+                    .lineLimit(1)
+                Text(route.portType)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            Text(routeLabel)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+    }
+
+    private var routeLabel: String {
+        var parts = [route.kind.rawValue]
+        if route.isInput {
+            parts.append("In")
+        }
+        if route.isOutput {
+            parts.append("Out")
+        }
+        if route.isActive {
+            parts.append("Active")
+        }
+        return parts.joined(separator: " · ")
+    }
+}
+
+private struct IOSAudioCapabilityRow: View {
+    let line: AudioCapabilityLine
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(line.isReady ? .green : .secondary)
+                    .frame(width: 7, height: 7)
+                Text(line.title)
+                    .font(.caption.weight(.medium))
+                Spacer(minLength: 8)
+                Text(line.state)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Text(line.detail)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .padding(.leading, 15)
+        }
+    }
+}
+
+private extension View {
+    func settingsCard() -> some View {
+        self
+            .padding(12)
+            .background(IOSTheme.elevatedBackground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(IOSTheme.hairline))
     }
 }
 

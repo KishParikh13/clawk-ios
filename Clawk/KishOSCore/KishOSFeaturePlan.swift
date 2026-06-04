@@ -336,11 +336,11 @@ enum KishOSFeature: String, CaseIterable, Identifiable, Codable {
         case .audioRouteAwareness:
             return "Detect Bluetooth, AirPods, and glasses-like audio routes."
         case .audioRoutePicker:
-            return "Prefer headset/glasses routes when available, then fall back cleanly to the iPhone route."
+            return "Prefer headset/glasses routes when available, show route health, then fall back cleanly to system audio."
         case .spokenReplies:
             return "Use call-only spoken output, with stop/barge-in and no surprise read-aloud in normal chat."
         case .glassesWalkMode:
-            return "Use glasses or headset audio as a walkie-talkie interface to KishOS."
+            return "Use glasses or headset audio as a walkie-talkie interface to KishOS, built on live call mode."
         case .liveRunTimeline:
             return "Show the current task, latest step, elapsed time, and blocked state."
         case .interruptSteering:
@@ -478,11 +478,11 @@ enum KishOSFactoryPlan {
              .fileFolderReferences,
              .explicitSnapshot,
              .audioRouteAwareness,
+             .audioRoutePicker,
              .liveCallMode,
              .liveCallHardening,
              .liveActivitySummary,
              .wakePhrase,
-             .audioRoutePicker,
              .spokenReplies,
              .snapshotReview,
              .statusNotifications,
@@ -493,8 +493,9 @@ enum KishOSFactoryPlan {
             state = .deferred
         case .sessionRecovery:
             state = .inProgress
-        case .glassesWalkMode,
-             .liveRunTimeline,
+        case .glassesWalkMode:
+            state = .inProgress
+        case .liveRunTimeline,
              .interruptSteering,
              .dailyBrief,
              .memoryPins,

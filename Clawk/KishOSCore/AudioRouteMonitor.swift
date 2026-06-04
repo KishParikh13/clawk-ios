@@ -1,6 +1,34 @@
 import AVFoundation
 import Foundation
 
+enum AudioRouteKind: String, Codable {
+    case system = "System"
+    case builtIn = "Built-in"
+    case bluetooth = "Bluetooth"
+    case glasses = "Glasses"
+    case headset = "Headset"
+    case unknown = "Unknown"
+}
+
+struct AudioRouteCandidate: Identifiable, Equatable, Codable {
+    var id: String { "\(name)-\(portType)-\(isInput)-\(isOutput)" }
+    let name: String
+    let portType: String
+    let kind: AudioRouteKind
+    let isInput: Bool
+    let isOutput: Bool
+    let isActive: Bool
+    let isPreferredCandidate: Bool
+}
+
+struct AudioCapabilityLine: Identifiable, Equatable {
+    var id: String { "\(title)-\(state)-\(detail)" }
+    let title: String
+    let state: String
+    let detail: String
+    let isReady: Bool
+}
+
 @MainActor
 final class AudioRouteMonitor: ObservableObject {
     @Published private(set) var inputName = "System"
@@ -8,6 +36,9 @@ final class AudioRouteMonitor: ObservableObject {
     @Published private(set) var status = "System"
     @Published private(set) var activationDetail = ""
     @Published private(set) var availableInputNames: [String] = []
+    @Published private(set) var availableRoutes: [AudioRouteCandidate] = []
+    @Published private(set) var activeRouteKind: AudioRouteKind = .system
+    @Published private(set) var preferredRouteName: String?
     @Published var prefersHandsFreeRoute = false
 
     private var isStarted = false
@@ -25,6 +56,83 @@ final class AudioRouteMonitor: ObservableObject {
 
     var routeDetail: String {
         inputName == outputName ? inputName : "\(inputName) -> \(outputName)"
+    }
+
+    var routeModeLabel: String {
+        prefersHandsFreeRoute ? "Prefer external" : "System default"
+    }
+
+    var hasExternalRouteAvailable: Bool {
+        availableRoutes.contains { $0.isPreferredCandidate }
+    }
+
+    var isPreferredRouteActive: Bool {
+        activeRouteKind == .glasses || activeRouteKind == .bluetooth || activeRouteKind == .headset
+    }
+
+    var routeHealthLabel: String {
+        if status == "Unavailable" {
+            return "Unavailable"
+        }
+        if prefersHandsFreeRoute {
+            if isPreferredRouteActive {
+                return "Active"
+            }
+            return hasExternalRouteAvailable ? "Switching" : "Waiting"
+        }
+        return "Ready"
+    }
+
+    var glassesSummary: String {
+        switch activeRouteKind {
+        case .glasses:
+            return "Glasses active"
+        case .bluetooth, .headset:
+            return "\(activeRouteKind.rawValue) active"
+        default:
+            return hasExternalRouteAvailable ? "External available" : "System audio"
+        }
+    }
+
+    var capabilityLines: [AudioCapabilityLine] {
+        [
+            AudioCapabilityLine(
+                title: "Audio route",
+                state: isPreferredRouteActive ? "Ready" : (hasExternalRouteAvailable ? "Available" : "System"),
+                detail: routeDetail,
+                isReady: status != "Unavailable"
+            ),
+            AudioCapabilityLine(
+                title: "Dictation",
+                state: "Ready",
+                detail: "Transcript fills the composer before send.",
+                isReady: true
+            ),
+            AudioCapabilityLine(
+                title: "Wake phrase",
+                state: "Available",
+                detail: "Local Speech wake phrase on iPhone.",
+                isReady: true
+            ),
+            AudioCapabilityLine(
+                title: "Snapshot ask",
+                state: "Ready",
+                detail: "Uses iPhone camera/photo upload path.",
+                isReady: true
+            ),
+            AudioCapabilityLine(
+                title: "Meta camera",
+                state: "Planned",
+                detail: "Requires DAT registration and camera permission.",
+                isReady: false
+            ),
+            AudioCapabilityLine(
+                title: "Ray-Ban Display",
+                state: "Planned",
+                detail: "DAT display capability, separate from audio V1.",
+                isReady: false
+            )
+        ]
     }
 
     func start() {
@@ -49,18 +157,46 @@ final class AudioRouteMonitor: ObservableObject {
         #if os(iOS)
         let session = AVAudioSession.sharedInstance()
         let route = session.currentRoute
-        availableInputNames = session.availableInputs?.map(\.portName) ?? []
+        let availableInputs = session.availableInputs ?? []
+        availableInputNames = availableInputs.map(\.portName)
         inputName = route.inputs.first?.portName ?? "iPhone"
         outputName = route.outputs.first?.portName ?? "iPhone"
-        status = isRecording ? "Listening" : routeStatus(for: route)
+        activeRouteKind = routeKind(for: route)
+        status = isRecording ? "Listening" : activeRouteKind.rawValue
+        preferredRouteName = preferredInput(from: availableInputs)?.portName
+        availableRoutes = routeCandidates(availableInputs: availableInputs, route: route)
         #elseif os(macOS)
+        let inputs = AVCaptureDevice.DiscoverySession(
+            deviceTypes: [.microphone, .external],
+            mediaType: .audio,
+            position: .unspecified
+        ).devices
         inputName = AVCaptureDevice.default(for: .audio)?.localizedName ?? "System"
         outputName = "System"
+        activeRouteKind = .system
         status = isRecording ? "Listening" : "System"
+        availableInputNames = inputs.map(\.localizedName)
+        preferredRouteName = availableInputNames.first(where: Self.isGlassesLikeName) ?? availableInputNames.first(where: Self.isExternalLikeName)
+        availableRoutes = inputs.map { device in
+            let kind = Self.kind(forName: device.localizedName, fallback: .system)
+            return AudioRouteCandidate(
+                name: device.localizedName,
+                portType: "macOS input",
+                kind: kind,
+                isInput: true,
+                isOutput: false,
+                isActive: device.localizedName == inputName,
+                isPreferredCandidate: kind == .glasses || kind == .bluetooth || kind == .headset || Self.isExternalLikeName(device.localizedName)
+            )
+        }
         #else
         inputName = "System"
         outputName = "System"
         status = isRecording ? "Listening" : "System"
+        activeRouteKind = .system
+        availableInputNames = []
+        preferredRouteName = nil
+        availableRoutes = []
         #endif
     }
 
@@ -115,13 +251,7 @@ final class AudioRouteMonitor: ObservableObject {
     }
 
     private func isGlassesLike(_ input: AVAudioSessionPortDescription) -> Bool {
-        let name = input.portName.lowercased()
-        return name.contains("rb meta")
-            || name.contains("ray-ban")
-            || name.contains("ray ban")
-            || name.contains("rayban")
-            || name.contains("meta")
-            || name.contains("glasses")
+        Self.isGlassesLikeName(input.portName)
     }
 
     private func isHandsFreeCapable(_ input: AVAudioSessionPortDescription) -> Bool {
@@ -153,7 +283,7 @@ final class AudioRouteMonitor: ObservableObject {
         return ports.contains { Self.handsFreePortTypes.contains($0) }
     }
 
-    private func routeStatus(for route: AVAudioSessionRouteDescription) -> String {
+    private func routeKind(for route: AVAudioSessionRouteDescription) -> AudioRouteKind {
         let ports = route.inputs.map(\.portType) + route.outputs.map(\.portType)
         let names = (route.inputs.map(\.portName) + route.outputs.map(\.portName)).joined(separator: " ").lowercased()
 
@@ -163,18 +293,82 @@ final class AudioRouteMonitor: ObservableObject {
             || names.contains("rayban")
             || names.contains("meta")
             || names.contains("glasses") {
-            return "Glasses"
+            return .glasses
         }
         if ports.contains(.bluetoothHFP) || ports.contains(.bluetoothA2DP) || ports.contains(.bluetoothLE) {
-            return "Bluetooth"
+            return .bluetooth
         }
         if ports.contains(.headsetMic) || ports.contains(.headphones) {
-            return "Headset"
+            return .headset
         }
         if route.inputs.isEmpty && route.outputs.isEmpty {
-            return "Unavailable"
+            return .unknown
         }
-        return "System"
+        if ports.contains(.builtInMic) || ports.contains(.builtInReceiver) || ports.contains(.builtInSpeaker) {
+            return .builtIn
+        }
+        return .system
+    }
+
+    private func routeCandidates(availableInputs: [AVAudioSessionPortDescription], route: AVAudioSessionRouteDescription) -> [AudioRouteCandidate] {
+        let activeInputs = Set(route.inputs.map { "\($0.portType.rawValue)-\($0.portName)" })
+        let activeOutputs = Set(route.outputs.map { "\($0.portType.rawValue)-\($0.portName)" })
+        var candidates: [AudioRouteCandidate] = availableInputs.map { input in
+            let key = "\(input.portType.rawValue)-\(input.portName)"
+            let kind = Self.kind(forName: input.portName, portType: input.portType)
+            return AudioRouteCandidate(
+                name: input.portName,
+                portType: input.portType.rawValue,
+                kind: kind,
+                isInput: true,
+                isOutput: false,
+                isActive: activeInputs.contains(key),
+                isPreferredCandidate: kind == .glasses || Self.handsFreePortTypes.contains(input.portType)
+            )
+        }
+
+        for output in route.outputs {
+            let key = "\(output.portType.rawValue)-\(output.portName)"
+            let kind = Self.kind(forName: output.portName, portType: output.portType)
+            let candidate = AudioRouteCandidate(
+                name: output.portName,
+                portType: output.portType.rawValue,
+                kind: kind,
+                isInput: false,
+                isOutput: true,
+                isActive: activeOutputs.contains(key),
+                isPreferredCandidate: kind == .glasses || Self.handsFreePortTypes.contains(output.portType)
+            )
+            if !candidates.contains(where: { $0.name == candidate.name && $0.portType == candidate.portType && $0.isOutput == candidate.isOutput }) {
+                candidates.append(candidate)
+            }
+        }
+
+        return candidates.sorted { lhs, rhs in
+            if lhs.isPreferredCandidate != rhs.isPreferredCandidate {
+                return lhs.isPreferredCandidate && !rhs.isPreferredCandidate
+            }
+            if lhs.isActive != rhs.isActive {
+                return lhs.isActive && !rhs.isActive
+            }
+            return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+        }
+    }
+
+    private static func kind(forName name: String, portType: AVAudioSession.Port) -> AudioRouteKind {
+        if isGlassesLikeName(name) {
+            return .glasses
+        }
+        if portType == .bluetoothHFP || portType == .bluetoothA2DP || portType == .bluetoothLE {
+            return .bluetooth
+        }
+        if portType == .headsetMic || portType == .headphones {
+            return .headset
+        }
+        if portType == .builtInMic || portType == .builtInReceiver || portType == .builtInSpeaker {
+            return .builtIn
+        }
+        return .unknown
     }
 
     private static let handsFreePortTypes: Set<AVAudioSession.Port> = [
@@ -185,4 +379,34 @@ final class AudioRouteMonitor: ObservableObject {
         .headphones
     ]
     #endif
+
+    private static func isGlassesLikeName(_ name: String) -> Bool {
+        let normalized = name.lowercased()
+        return normalized.contains("rb meta")
+            || normalized.contains("ray-ban")
+            || normalized.contains("ray ban")
+            || normalized.contains("rayban")
+            || normalized.contains("meta")
+            || normalized.contains("glasses")
+    }
+
+    private static func isExternalLikeName(_ name: String) -> Bool {
+        let normalized = name.lowercased()
+        return isGlassesLikeName(name)
+            || normalized.contains("airpods")
+            || normalized.contains("beats")
+            || normalized.contains("bluetooth")
+            || normalized.contains("headset")
+            || normalized.contains("headphones")
+    }
+
+    private static func kind(forName name: String, fallback: AudioRouteKind) -> AudioRouteKind {
+        if isGlassesLikeName(name) {
+            return .glasses
+        }
+        if isExternalLikeName(name) {
+            return .bluetooth
+        }
+        return fallback
+    }
 }
