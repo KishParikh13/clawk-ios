@@ -143,6 +143,233 @@ final class AgentClientTests: XCTestCase {
         XCTAssertEqual(client.detail, "agent crashed")
     }
 
+    func testStreamingHappyPathDecodesStatusToolApprovalAndFinal() async throws {
+        var capturedBody: Data?
+        var receivedEvents: [AgentStreamEvent] = []
+        let conversationId = UUID(uuidString: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")!
+        let client = makeClient { request in
+            XCTAssertEqual(request.url?.path, "/chat-stream")
+            XCTAssertEqual(request.httpMethod, "POST")
+            capturedBody = requestBodyData(from: request)
+            return ndjsonResponse(
+                #"{"type":"status","status":"queued","threadId":"thread-1","engine":"claude"}"#,
+                #"{"type":"activity","text":"reading files"}"#,
+                #"{"type":"tool","tool":{"name":"Bash","input":{"cmd":"pwd"}}}"#,
+                #"{"type":"approval","approval":{"id":"approval-1","threadId":"thread-1","questions":[{"header":"Direction","question":"Which path?","multiSelect":false,"options":[{"label":"Fast","description":"Prototype now"}]}],"createdAt":1760000000,"expiresAt":1760000300,"summary":"Choose direction"}}"#,
+                #"{"type":"status","status":"waiting_approval","threadId":"thread-1","engine":"claude"}"#,
+                #"{"type":"approval_result","approvalId":"approval-1","answer":"Fast","timedOut":false}"#,
+                #"{"type":"text","text":"hello "}"#,
+                #"{"type":"final","ok":true,"threadId":"thread-1","engine":"claude","text":"hello world","elapsedMs":42,"events":["reading files"],"approvals":[]}"#
+            )
+        }
+
+        let result = try await client.sendStreaming("hello", threadId: "thread-1", conversationId: conversationId) { event in
+            receivedEvents.append(event)
+        }
+        let body = try XCTUnwrap(capturedBody)
+        let request = try JSONDecoder().decode(TestChatRequest.self, from: body)
+
+        XCTAssertEqual(request.threadId, "thread-1")
+        XCTAssertEqual(request.message, "hello")
+        XCTAssertEqual(request.conversationId, conversationId)
+        XCTAssertEqual(receivedEvents.map(\.type), ["status", "activity", "tool", "approval", "status", "approval_result", "text", "final"])
+        XCTAssertEqual(receivedEvents.first(where: { $0.type == "tool" })?.tool?.name, "Bash")
+        XCTAssertEqual(receivedEvents.first(where: { $0.type == "approval" })?.approval?.questions.first?.question, "Which path?")
+        XCTAssertEqual(result.text, "hello world")
+        XCTAssertEqual(result.engine, "claude")
+        XCTAssertEqual(result.elapsedMs, 42)
+        XCTAssertEqual(result.events, ["reading files"])
+        XCTAssertEqual(client.status, "Ready")
+        XCTAssertEqual(client.chatStatus, "Ready")
+        XCTAssertFalse(client.isSending)
+    }
+
+    func testStreamingMissingFinalThrowsRecoverableError() async {
+        let client = makeClient { _ in
+            ndjsonResponse(
+                #"{"type":"status","status":"running","threadId":"thread-1","engine":"claude"}"#,
+                #"{"type":"text","text":"partial"}"#
+            )
+        }
+
+        do {
+            _ = try await client.sendStreaming("hello", threadId: "thread-1") { _ in }
+            XCTFail("Expected stream without final event to throw")
+        } catch {
+            XCTAssertEqual(error.localizedDescription, "Agent stream ended without a final response")
+        }
+
+        XCTAssertEqual(client.status, "Error")
+        XCTAssertEqual(client.chatStatus, "Error")
+        XCTAssertEqual(client.detail, "Agent stream ended without a final response")
+        XCTAssertFalse(client.isSending)
+    }
+
+    func testStreamingMalformedLineMarksChatError() async {
+        let client = makeClient { _ in
+            ndjsonResponse(
+                #"{"type":"status","status":"running","threadId":"thread-1","engine":"claude"}"#,
+                #"not-json"#
+            )
+        }
+
+        do {
+            _ = try await client.sendStreaming("hello", threadId: "thread-1") { _ in }
+            XCTFail("Expected malformed stream event to throw")
+        } catch {
+            XCTAssertTrue(error.localizedDescription.contains("data") || error.localizedDescription.contains("JSON"))
+        }
+
+        XCTAssertEqual(client.status, "Error")
+        XCTAssertEqual(client.chatStatus, "Error")
+        XCTAssertFalse(client.isSending)
+    }
+
+    func testStreamingNon200MarksChatRequestFailure() async {
+        let client = makeClient { _ in
+            jsonResponse(#"{ "ok": false, "error": "unauthorized" }"#, statusCode: 401)
+        }
+
+        do {
+            _ = try await client.sendStreaming("hello", threadId: "thread-1") { _ in }
+            XCTFail("Expected non-200 stream response to throw")
+        } catch {
+            XCTAssertEqual(error.localizedDescription, "Agent returned HTTP 401")
+        }
+
+        XCTAssertEqual(client.miniStatus, "Online")
+        XCTAssertEqual(client.httpStatus, "Online")
+        XCTAssertEqual(client.agentStatus, "Online")
+        XCTAssertEqual(client.chatStatus, "Error")
+        XCTAssertEqual(client.detail, "Agent returned HTTP 401")
+    }
+
+    func testAnswerApprovalPostsPayloadAndDecodesSuccess() async throws {
+        var capturedBody: Data?
+        let client = makeClient { request in
+            XCTAssertEqual(request.url?.path, "/approve")
+            XCTAssertEqual(request.httpMethod, "POST")
+            capturedBody = requestBodyData(from: request)
+            return jsonResponse(#"{ "ok": true }"#)
+        }
+
+        try await client.answerApproval("approval-1", approved: false, answer: "No")
+        let body = try XCTUnwrap(capturedBody)
+        let request = try JSONDecoder().decode(TestApprovalAnswerRequest.self, from: body)
+
+        XCTAssertEqual(request.approvalId, "approval-1")
+        XCTAssertFalse(request.approved)
+        XCTAssertEqual(request.answer, "No")
+    }
+
+    func testAnswerApprovalFailureThrows() async {
+        let client = makeClient { _ in
+            jsonResponse(#"{ "ok": false, "error": "approval not found" }"#, statusCode: 404)
+        }
+
+        do {
+            try await client.answerApproval("missing", approved: true, answer: "Yes")
+            XCTFail("Expected approval failure to throw")
+        } catch {
+            XCTAssertEqual(error.localizedDescription, "approval not found")
+        }
+    }
+
+    func testFetchConversationsDecodesSharedHistory() async throws {
+        let client = makeClient { request in
+            XCTAssertEqual(request.url?.path, "/conversations")
+            return jsonResponse(
+                """
+                {
+                  "ok": true,
+                  "conversations": [
+                    {
+                      "id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+                      "threadId": "mac-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+                      "title": "Hello",
+                      "idea": "Hello",
+                      "messages": [
+                        {
+                          "id": "11111111-2222-3333-4444-555555555555",
+                          "sender": "user",
+                          "text": "Hello",
+                          "createdAt": "2026-06-04T05:20:00.000Z",
+                          "deliveryState": "sent",
+                          "activityEvents": []
+                        },
+                        {
+                          "id": "66666666-7777-8888-9999-000000000000",
+                          "sender": "agent",
+                          "text": "Hi",
+                          "createdAt": "2026-06-04T05:20:01.000Z",
+                          "deliveryState": "sent",
+                          "activityEvents": ["reply received"]
+                        }
+                      ],
+                      "events": ["reply received"],
+                      "engine": "claude",
+                      "elapsedMs": 100,
+                      "isRunning": false,
+                      "updatedAt": "2026-06-04T05:20:01.000Z",
+                      "lastError": null,
+                      "approvals": []
+                    }
+                  ]
+                }
+                """
+            )
+        }
+
+        let conversations = try await client.fetchConversations()
+
+        XCTAssertEqual(conversations.count, 1)
+        XCTAssertEqual(conversations[0].id.uuidString.lowercased(), "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+        XCTAssertEqual(conversations[0].threadId, "mac-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+        XCTAssertEqual(conversations[0].messages.map(\.text), ["Hello", "Hi"])
+        XCTAssertEqual(conversations[0].events, ["reply received"])
+        XCTAssertEqual(conversations[0].elapsedMs, 100)
+    }
+
+    func testDeleteConversationUsesLowercasePathAndThrowsOnFailure() async {
+        let id = UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")!
+        let client = makeClient { request in
+            XCTAssertEqual(request.url?.path, "/conversations/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+            XCTAssertEqual(request.httpMethod, "DELETE")
+            return jsonResponse(#"{ "ok": false, "error": "conversation not found" }"#, statusCode: 404)
+        }
+
+        do {
+            try await client.deleteConversation(id)
+            XCTFail("Expected delete failure to throw")
+        } catch {
+            XCTAssertEqual(error.localizedDescription, "conversation not found")
+        }
+    }
+
+    func testFetchToolInventoryRequestsToolsEndpoint() async throws {
+        let client = makeClient { request in
+            XCTAssertEqual(request.url?.path, "/tools")
+            return jsonResponse(
+                """
+                {
+                  "ok": true,
+                  "commands": [{ "name": "/status", "status": "Available" }],
+                  "engines": [{ "name": "codex", "status": "Available", "detail": "workspace-write" }],
+                  "recentTools": [{ "name": "Read", "count": 2, "lastSeen": "2026-06-04T05:20:00.000Z" }],
+                  "updatedAt": "2026-06-04T05:21:00.000Z"
+                }
+                """
+            )
+        }
+
+        let inventory = try await client.fetchToolInventory()
+
+        XCTAssertEqual(inventory.commands.first?.name, "/status")
+        XCTAssertEqual(inventory.engines.first?.name, "codex")
+        XCTAssertEqual(inventory.recentTools.first?.count, 2)
+        XCTAssertNotNil(inventory.updatedAt)
+    }
+
     private func makeClient(handler: @escaping (URLRequest) throws -> (HTTPURLResponse, Data)) -> KishAgentClient {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [MockURLProtocol.self]
@@ -155,6 +382,13 @@ final class AgentClientTests: XCTestCase {
 private struct TestChatRequest: Decodable {
     let threadId: String
     let message: String
+    let conversationId: UUID?
+}
+
+private struct TestApprovalAnswerRequest: Decodable {
+    let approvalId: String
+    let approved: Bool
+    let answer: String?
 }
 
 private func jsonResponse(_ json: String, statusCode: Int = 200) -> (HTTPURLResponse, Data) {
@@ -166,6 +400,18 @@ private func jsonResponse(_ json: String, statusCode: Int = 200) -> (HTTPURLResp
             headerFields: ["Content-Type": "application/json"]
         )!,
         Data(json.utf8)
+    )
+}
+
+private func ndjsonResponse(_ lines: String..., statusCode: Int = 200) -> (HTTPURLResponse, Data) {
+    (
+        HTTPURLResponse(
+            url: URL(string: "http://kish-agent.test")!,
+            statusCode: statusCode,
+            httpVersion: nil,
+            headerFields: ["Content-Type": "application/x-ndjson"]
+        )!,
+        Data((lines.joined(separator: "\n") + "\n").utf8)
     )
 }
 
