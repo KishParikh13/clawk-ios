@@ -65,6 +65,21 @@
       "priority": 4,
       "passes": true,
       "notes": "Added first-class file/folder references with composer @ buttons, removable chips, visible @ tokens, persisted message metadata, queued/retry support, structured request references, and prompt-rendered context for backend compatibility. Verified with .ralph/verify.sh."
+    },
+    {
+      "id": "US-005",
+      "title": "Make image picking upload-first",
+      "description": "Make camera and photo selection create image attachments directly without depending on OCR/text extraction.",
+      "acceptanceCriteria": [
+        "Camera and photo picker code creates image attachments even when no text is present",
+        "No user-facing No text found error remains in the image upload path",
+        "Composer error state uses attachment-oriented naming",
+        "Attachment and reference context still render correctly for the agent",
+        "Verification command passes"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": "Renamed the camera/photo picker path to attachment-first semantics, removed Vision/OCR and No text found failure behavior from image picking, and added a core test proving image context does not require extracted text. Verified with .ralph/verify.sh."
     }
   ]
 }

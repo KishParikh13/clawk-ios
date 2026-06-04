@@ -126,6 +126,29 @@ final class ConversationTests: XCTestCase {
         XCTAssertNil(attachment.localFilename)
     }
 
+    func testImageAttachmentContextDoesNotRequireExtractedText() {
+        let attachment = ChatAttachment(
+            kind: .image,
+            title: "Photo.jpg",
+            mimeType: "image/jpeg",
+            byteCount: 1024,
+            uploadId: "att_photo",
+            uploadState: .ready
+        )
+
+        let message = messageTextForAgent("what is this?", attachments: [attachment])
+
+        XCTAssertEqual(
+            message,
+            """
+            [Context 1: Photo.jpg]
+
+            User message:
+            what is this?
+            """
+        )
+    }
+
     func testAgentStatusUsesPendingQuestion() {
         var conversation = Conversation(firstMessage: "book a flight")
         conversation.approvals = [

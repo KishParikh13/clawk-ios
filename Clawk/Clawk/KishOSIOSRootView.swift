@@ -1002,11 +1002,11 @@ private struct IOSComposer: View {
     let onStop: () -> Void
     let onStartCall: () -> Void
 
-    @State private var showingTextCapture = false
+    @State private var showingCameraPicker = false
     @State private var showingPhotoPicker = false
     @State private var showingFilePicker = false
     @State private var showingReferencePicker = false
-    @State private var scanError: String?
+    @State private var attachmentError: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -1044,8 +1044,8 @@ private struct IOSComposer: View {
                 }
             }
 
-            if let scanError {
-                Text(scanError)
+            if let attachmentError {
+                Text(attachmentError)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -1068,15 +1068,15 @@ private struct IOSComposer: View {
                 } else {
                     Menu {
                         Button("Camera", systemImage: "camera") {
-                            scanError = nil
-                            showingTextCapture = true
+                            attachmentError = nil
+                            showingCameraPicker = true
                         }
                         Button("Choose a photo", systemImage: "photo") {
-                            scanError = nil
+                            attachmentError = nil
                             showingPhotoPicker = true
                         }
                         Button("Select a file", systemImage: "doc") {
-                            scanError = nil
+                            attachmentError = nil
                             showingFilePicker = true
                         }
                     } label: {
@@ -1167,16 +1167,16 @@ private struct IOSComposer: View {
         .padding(.horizontal, 12)
         .padding(.top, 8)
         .padding(.bottom, 8)
-        .sheet(isPresented: $showingTextCapture) {
-            CameraTextCaptureView(sourceType: .camera, onResult: { result in
+        .sheet(isPresented: $showingCameraPicker) {
+            CameraAttachmentPickerView(sourceType: .camera, onResult: { result in
                 handleAttachmentSelection(result)
-                showingTextCapture = false
+                showingCameraPicker = false
             }, onCancel: {
-                showingTextCapture = false
+                showingCameraPicker = false
             })
         }
         .sheet(isPresented: $showingPhotoPicker) {
-            CameraTextCaptureView(sourceType: .photoLibrary, onResult: { result in
+            CameraAttachmentPickerView(sourceType: .photoLibrary, onResult: { result in
                 handleAttachmentSelection(result)
                 showingPhotoPicker = false
             }, onCancel: {
@@ -1291,7 +1291,7 @@ private struct IOSComposer: View {
     private func handleAttachmentSelection(_ result: Result<ChatAttachment, Error>) {
         switch result {
         case .success(let attachment):
-            scanError = nil
+            attachmentError = nil
             var pending = attachment
             if pending.needsUpload {
                 pending.uploadState = .uploading
@@ -1301,19 +1301,19 @@ private struct IOSComposer: View {
                 uploadAttachment(pending.id)
             }
         case .failure(let error):
-            scanError = error.localizedDescription
+            attachmentError = error.localizedDescription
         }
     }
 
     private func handleReferenceSelection(_ result: Result<ChatReference, Error>) {
         switch result {
         case .success(let reference):
-            scanError = nil
+            attachmentError = nil
             guard !references.contains(where: { $0.path == reference.path }) else { return }
             references.append(reference)
             appendReferenceToken(reference)
         case .failure(let error):
-            scanError = error.localizedDescription
+            attachmentError = error.localizedDescription
         }
     }
 
