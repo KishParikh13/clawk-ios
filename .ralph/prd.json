@@ -186,6 +186,23 @@
       "priority": 12,
       "passes": true,
       "notes": "LiveCallSession now carries the pending project for new-chat calls, LiveCallController creates/queues first call turns with that project name/path, streaming sends conversation.projectPath, and the pending project clears once the call creates a conversation. Existing-thread calls continue the locked conversation project. Verified with .ralph/verify.sh."
+    },
+    {
+      "id": "US-013",
+      "title": "Review snapshots before attaching",
+      "description": "Add a minimal iOS review step for camera/photo snapshots before appending and uploading them as chat attachments.",
+      "acceptanceCriteria": [
+        "Camera and photo selections open a snapshot review surface before becoming composer attachments",
+        "Review can attach the image without auto-sending",
+        "Review can insert a concise image question into the composer without auto-sending",
+        "Review can retake or choose another image without leaving stale cached attachment payloads",
+        "Canceling review discards the pending local payload",
+        "Existing upload and attachment preview behavior remains unchanged after accepting",
+        "Verification command passes"
+      ],
+      "priority": 13,
+      "passes": true,
+      "notes": "Camera and photo selections now open a minimal iOS snapshot review sheet before appending/uploading. Attach reuses the existing upload path, Ask attaches and inserts a concise editable image prompt without auto-sending, Retake/Choose reopens the picker, and Cancel/Retake discard the pending cached payload. Verified with .ralph/verify.sh."
     }
   ]
 }

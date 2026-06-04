@@ -1009,6 +1009,7 @@ private struct IOSComposer: View {
     @State private var showingPhotoPicker = false
     @State private var showingFilePicker = false
     @State private var showingReferencePicker = false
+    @State private var pendingSnapshotReview: SnapshotReviewItem?
     @State private var attachmentError: String?
 
     var body: some View {
@@ -1172,7 +1173,7 @@ private struct IOSComposer: View {
         .padding(.bottom, 8)
         .sheet(isPresented: $showingCameraPicker) {
             CameraAttachmentPickerView(sourceType: .camera, onResult: { result in
-                handleAttachmentSelection(result)
+                handleSnapshotSelection(result, sourceType: .camera)
                 showingCameraPicker = false
             }, onCancel: {
                 showingCameraPicker = false
@@ -1180,7 +1181,7 @@ private struct IOSComposer: View {
         }
         .sheet(isPresented: $showingPhotoPicker) {
             CameraAttachmentPickerView(sourceType: .photoLibrary, onResult: { result in
-                handleAttachmentSelection(result)
+                handleSnapshotSelection(result, sourceType: .photoLibrary)
                 showingPhotoPicker = false
             }, onCancel: {
                 showingPhotoPicker = false
@@ -1201,6 +1202,24 @@ private struct IOSComposer: View {
             }, onCancel: {
                 showingReferencePicker = false
             })
+        }
+        .sheet(item: $pendingSnapshotReview) { item in
+            IOSSnapshotReviewView(
+                item: item,
+                onAttach: {
+                    acceptSnapshotReview(item, prompt: nil)
+                },
+                onAsk: {
+                    acceptSnapshotReview(item, prompt: "What should I know about this image?")
+                },
+                onRetake: {
+                    retakeSnapshotReview(item)
+                },
+                onCancel: {
+                    discardSnapshotReview(item)
+                }
+            )
+            .presentationDetents([.large])
         }
     }
 
@@ -1289,6 +1308,41 @@ private struct IOSComposer: View {
         } else {
             startDictation()
         }
+    }
+
+    private func handleSnapshotSelection(_ result: Result<ChatAttachment, Error>, sourceType: UIImagePickerController.SourceType) {
+        switch result {
+        case .success(let attachment):
+            attachmentError = nil
+            pendingSnapshotReview = SnapshotReviewItem(attachment: attachment, sourceType: sourceType)
+        case .failure(let error):
+            attachmentError = error.localizedDescription
+        }
+    }
+
+    private func acceptSnapshotReview(_ item: SnapshotReviewItem, prompt: String?) {
+        pendingSnapshotReview = nil
+        if let prompt {
+            appendText(prompt)
+        }
+        handleAttachmentSelection(.success(item.attachment))
+    }
+
+    private func retakeSnapshotReview(_ item: SnapshotReviewItem) {
+        pendingSnapshotReview = nil
+        AttachmentPayloadCache.shared.removePayload(for: item.attachment)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            if item.sourceType == .camera {
+                showingCameraPicker = true
+            } else {
+                showingPhotoPicker = true
+            }
+        }
+    }
+
+    private func discardSnapshotReview(_ item: SnapshotReviewItem) {
+        pendingSnapshotReview = nil
+        AttachmentPayloadCache.shared.removePayload(for: item.attachment)
     }
 
     private func handleAttachmentSelection(_ result: Result<ChatAttachment, Error>) {
@@ -1401,14 +1455,94 @@ private struct IOSComposer: View {
     private func appendTranscript(_ transcript: String) {
         let clean = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !clean.isEmpty else { return }
-        let existing = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        draft = existing.isEmpty ? clean : "\(existing) \(clean)"
+        appendText(clean)
     }
 
     private func appendReferenceToken(_ reference: ChatReference) {
         let token = reference.promptToken
+        appendText(token)
+    }
+
+    private func appendText(_ text: String) {
         let existing = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        draft = existing.isEmpty ? token : "\(existing) \(token)"
+        draft = existing.isEmpty ? text : "\(existing) \(text)"
+    }
+}
+
+private struct SnapshotReviewItem: Identifiable {
+    let id = UUID()
+    let attachment: ChatAttachment
+    let sourceType: UIImagePickerController.SourceType
+}
+
+private struct IOSSnapshotReviewView: View {
+    let item: SnapshotReviewItem
+    let onAttach: () -> Void
+    let onAsk: () -> Void
+    let onRetake: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 14) {
+                Group {
+                    if let previewImage {
+                        Image(uiImage: previewImage)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    } else {
+                        VStack(spacing: 8) {
+                            Image(systemName: "photo")
+                                .font(.system(size: 34, weight: .semibold))
+                            Text("Image unavailable")
+                                .font(.headline)
+                        }
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(IOSTheme.secondaryBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+
+                HStack(spacing: 10) {
+                    Button(retakeTitle, action: onRetake)
+                        .buttonStyle(.bordered)
+                        .controlSize(.large)
+
+                    Button("Ask", action: onAsk)
+                        .buttonStyle(.bordered)
+                        .controlSize(.large)
+
+                    Button("Attach", action: onAttach)
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                        .tint(Color(uiColor: .label))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
+            }
+            .background(IOSTheme.background)
+            .navigationTitle("Snapshot")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel", action: onCancel)
+                }
+            }
+        }
+    }
+
+    private var previewImage: UIImage? {
+        guard let url = AttachmentPayloadCache.shared.cachedFileURL(for: item.attachment) else { return nil }
+        return UIImage(contentsOfFile: url.path)
+    }
+
+    private var retakeTitle: String {
+        item.sourceType == .camera ? "Retake" : "Choose"
     }
 }
 
