@@ -24,9 +24,21 @@ final class VoiceController: ObservableObject {
 
     func startRecording() async {
         guard !isRecording else { return }
+        guard recognizer?.isAvailable == true else {
+            status = "Speech unavailable"
+            return
+        }
+
         let authorized = await requestAuthorization()
         guard authorized else {
             status = "Mic blocked"
+            return
+        }
+
+        do {
+            try configureAudioSession()
+        } catch {
+            status = "Audio error"
             return
         }
 
@@ -36,6 +48,7 @@ final class VoiceController: ObservableObject {
 
         let recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
         recognitionRequest.shouldReportPartialResults = true
+        recognitionRequest.taskHint = .dictation
         request = recognitionRequest
 
         let input = audioEngine.inputNode
@@ -51,6 +64,7 @@ final class VoiceController: ObservableObject {
             isRecording = true
             status = "Listening"
         } catch {
+            deactivateAudioSession()
             status = "Mic error"
             return
         }
@@ -80,6 +94,7 @@ final class VoiceController: ObservableObject {
         recognitionTask = nil
         isRecording = false
         status = "Ready"
+        deactivateAudioSession()
 
         let clean = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         transcript = ""
@@ -94,5 +109,19 @@ final class VoiceController: ObservableObject {
                 }
             }
         }
+    }
+
+    private func configureAudioSession() throws {
+        #if os(iOS)
+        let session = AVAudioSession.sharedInstance()
+        try session.setCategory(.playAndRecord, mode: .measurement, options: [.allowBluetoothHFP, .duckOthers])
+        try session.setActive(true, options: .notifyOthersOnDeactivation)
+        #endif
+    }
+
+    private func deactivateAudioSession() {
+        #if os(iOS)
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        #endif
     }
 }
