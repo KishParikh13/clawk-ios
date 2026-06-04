@@ -5,6 +5,8 @@ protocol ConversationStoring {
     func save(_ conversations: [Conversation]) throws
     func loadDeletedConversationIDs() throws -> Set<UUID>
     func saveDeletedConversationIDs(_ ids: Set<UUID>) throws
+    func loadRemoteConversationIDs() throws -> Set<UUID>
+    func saveRemoteConversationIDs(_ ids: Set<UUID>) throws
 }
 
 extension ConversationStoring {
@@ -13,17 +15,25 @@ extension ConversationStoring {
     }
 
     func saveDeletedConversationIDs(_ ids: Set<UUID>) throws {}
+
+    func loadRemoteConversationIDs() throws -> Set<UUID> {
+        []
+    }
+
+    func saveRemoteConversationIDs(_ ids: Set<UUID>) throws {}
 }
 
 struct JSONConversationStore: ConversationStoring {
     let fileURL: URL
     let deletedConversationIDsURL: URL
+    let remoteConversationIDsURL: URL
     var encoder = JSONEncoder()
     var decoder = JSONDecoder()
 
-    init(fileURL: URL = Self.defaultFileURL(), deletedConversationIDsURL: URL? = nil) {
+    init(fileURL: URL = Self.defaultFileURL(), deletedConversationIDsURL: URL? = nil, remoteConversationIDsURL: URL? = nil) {
         self.fileURL = fileURL
         self.deletedConversationIDsURL = deletedConversationIDsURL ?? Self.defaultDeletedConversationIDsURL(for: fileURL)
+        self.remoteConversationIDsURL = remoteConversationIDsURL ?? Self.defaultRemoteConversationIDsURL(for: fileURL)
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
         decoder.dateDecodingStrategy = .iso8601
@@ -63,6 +73,23 @@ struct JSONConversationStore: ConversationStoring {
         try data.write(to: deletedConversationIDsURL, options: [.atomic])
     }
 
+    func loadRemoteConversationIDs() throws -> Set<UUID> {
+        guard FileManager.default.fileExists(atPath: remoteConversationIDsURL.path) else {
+            return []
+        }
+
+        let data = try Data(contentsOf: remoteConversationIDsURL)
+        return Set(try decoder.decode([UUID].self, from: data))
+    }
+
+    func saveRemoteConversationIDs(_ ids: Set<UUID>) throws {
+        let directory = remoteConversationIDsURL.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let sortedIDs = ids.sorted { $0.uuidString < $1.uuidString }
+        let data = try encoder.encode(sortedIDs)
+        try data.write(to: remoteConversationIDsURL, options: [.atomic])
+    }
+
     static func defaultFileURL() -> URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.temporaryDirectory
@@ -75,5 +102,11 @@ struct JSONConversationStore: ConversationStoring {
         fileURL
             .deletingLastPathComponent()
             .appendingPathComponent("deleted-conversations.json")
+    }
+
+    private static func defaultRemoteConversationIDsURL(for fileURL: URL) -> URL {
+        fileURL
+            .deletingLastPathComponent()
+            .appendingPathComponent("remote-conversations.json")
     }
 }

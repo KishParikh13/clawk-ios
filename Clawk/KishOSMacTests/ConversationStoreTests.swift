@@ -29,6 +29,17 @@ final class ConversationStoreTests: XCTestCase {
         XCTAssertEqual(loaded, [id])
     }
 
+    func testJSONStoreSavesAndLoadsRemoteConversationIDs() throws {
+        let fileURL = temporaryFileURL()
+        let store = JSONConversationStore(fileURL: fileURL)
+        let id = UUID(uuidString: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")!
+
+        try store.saveRemoteConversationIDs([id])
+
+        let loaded = try JSONConversationStore(fileURL: fileURL).loadRemoteConversationIDs()
+        XCTAssertEqual(loaded, [id])
+    }
+
     func testWorkspaceFollowUpKeepsSameThreadId() {
         let store = MemoryConversationStore()
         let workspace = KishOSWorkspace(store: store)
@@ -142,7 +153,7 @@ final class ConversationStoreTests: XCTestCase {
         newConversation.updatedAt = newer
 
         workspace.mergeRemoteConversations([oldConversation])
-        workspace.mergeRemoteConversations([newConversation])
+        workspace.mergeRemoteConversations([oldConversation, newConversation])
 
         XCTAssertEqual(workspace.conversations.map(\.title), ["new", "old"])
         XCTAssertEqual(store.savedConversations.map(\.title), ["new", "old"])
@@ -164,6 +175,33 @@ final class ConversationStoreTests: XCTestCase {
         XCTAssertNil(workspace.conversation(id: id))
         XCTAssertTrue(store.savedConversations.isEmpty)
         XCTAssertEqual(store.savedDeletedConversationIDs, [id])
+    }
+
+    func testRemoteMergeRemovesPreviouslySeenConversationMissingFromRemote() {
+        let store = MemoryConversationStore()
+        let workspace = KishOSWorkspace(store: store)
+        let id = UUID(uuidString: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")!
+        let remote = Conversation(id: id, firstMessage: "remote")
+
+        workspace.mergeRemoteConversations([remote])
+        workspace.mergeRemoteConversations([])
+
+        XCTAssertNil(workspace.conversation(id: id))
+        XCTAssertTrue(store.savedConversations.isEmpty)
+        XCTAssertEqual(store.savedDeletedConversationIDs, [id])
+        XCTAssertTrue(store.savedRemoteConversationIDs.isEmpty)
+    }
+
+    func testRemoteMergeEmptyResponsePreservesLocalOnlyConversation() {
+        let store = MemoryConversationStore()
+        let workspace = KishOSWorkspace(store: store)
+        let local = workspace.createConversation(firstMessage: "local draft")
+
+        workspace.mergeRemoteConversations([])
+
+        XCTAssertEqual(workspace.conversation(id: local.id)?.title, "local draft")
+        XCTAssertEqual(store.savedConversations.first?.id, local.id)
+        XCTAssertTrue(store.savedDeletedConversationIDs.isEmpty)
     }
 
     func testApprovalAnswerAcceptedClearsPendingApproval() {
@@ -239,6 +277,7 @@ final class ConversationStoreTests: XCTestCase {
 private final class MemoryConversationStore: ConversationStoring {
     var savedConversations: [Conversation] = []
     var savedDeletedConversationIDs: Set<UUID> = []
+    var savedRemoteConversationIDs: Set<UUID> = []
 
     func load() throws -> [Conversation] {
         savedConversations
@@ -254,5 +293,13 @@ private final class MemoryConversationStore: ConversationStoring {
 
     func saveDeletedConversationIDs(_ ids: Set<UUID>) throws {
         savedDeletedConversationIDs = ids
+    }
+
+    func loadRemoteConversationIDs() throws -> Set<UUID> {
+        savedRemoteConversationIDs
+    }
+
+    func saveRemoteConversationIDs(_ ids: Set<UUID>) throws {
+        savedRemoteConversationIDs = ids
     }
 }

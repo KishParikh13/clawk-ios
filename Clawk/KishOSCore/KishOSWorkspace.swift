@@ -7,6 +7,7 @@ final class KishOSWorkspace: ObservableObject {
 
     private let store: ConversationStoring
     private var deletedConversationIDs: Set<UUID>
+    private var remoteConversationIDs: Set<UUID>
 
     init(store: ConversationStoring = JSONConversationStore()) {
         self.store = store
@@ -21,6 +22,12 @@ final class KishOSWorkspace: ObservableObject {
             self.deletedConversationIDs = try store.loadDeletedConversationIDs()
         } catch {
             self.deletedConversationIDs = []
+            self.storeError = error.localizedDescription
+        }
+        do {
+            self.remoteConversationIDs = try store.loadRemoteConversationIDs()
+        } catch {
+            self.remoteConversationIDs = []
             self.storeError = error.localizedDescription
         }
     }
@@ -210,8 +217,14 @@ final class KishOSWorkspace: ObservableObject {
     }
 
     func mergeRemoteConversations(_ remote: [Conversation]) {
-        guard !remote.isEmpty else { return }
+        let remoteIDs = Set(remote.map(\.id))
         var byId = Dictionary(uniqueKeysWithValues: conversations.map { ($0.id, $0) })
+
+        for missingRemoteID in remoteConversationIDs.subtracting(remoteIDs) {
+            byId.removeValue(forKey: missingRemoteID)
+            deletedConversationIDs.insert(missingRemoteID)
+        }
+
         for remoteConversation in remote {
             guard !deletedConversationIDs.contains(remoteConversation.id) else { continue }
             if let localConversation = byId[remoteConversation.id],
@@ -220,8 +233,12 @@ final class KishOSWorkspace: ObservableObject {
             }
             byId[remoteConversation.id] = remoteConversation
         }
+
+        remoteConversationIDs = remoteConversationIDs.union(remoteIDs).subtracting(deletedConversationIDs)
         conversations = byId.values.sorted { $0.updatedAt > $1.updatedAt }
         persist()
+        persistDeletedConversationIDs()
+        persistRemoteConversationIDs()
     }
 
     private func updateConversation(_ id: UUID, mutate: (inout Conversation) -> Void) {
@@ -247,6 +264,14 @@ final class KishOSWorkspace: ObservableObject {
     private func persistDeletedConversationIDs() {
         do {
             try store.saveDeletedConversationIDs(deletedConversationIDs)
+        } catch {
+            storeError = error.localizedDescription
+        }
+    }
+
+    private func persistRemoteConversationIDs() {
+        do {
+            try store.saveRemoteConversationIDs(remoteConversationIDs)
         } catch {
             storeError = error.localizedDescription
         }
