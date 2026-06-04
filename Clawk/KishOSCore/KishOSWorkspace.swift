@@ -50,12 +50,14 @@ final class KishOSWorkspace: ObservableObject {
         now: Date = Date(),
         deliveryState: MessageDeliveryState = .sending,
         attachments: [ChatAttachment] = [],
+        references: [ChatReference] = [],
         projectPath: String? = nil,
         projectName: String? = nil
     ) -> Conversation {
         var conversation = Conversation(firstMessage: firstMessage, now: now, projectPath: projectPath, projectName: projectName)
         conversation.messages[0].deliveryState = deliveryState
         conversation.messages[0].attachments = attachments
+        conversation.messages[0].references = references
         conversation.isRunning = deliveryState == .sending
         if deliveryState == .queued {
             conversation.events = ["saved locally", "will send when connected"]
@@ -70,10 +72,11 @@ final class KishOSWorkspace: ObservableObject {
         to id: UUID,
         now: Date = Date(),
         deliveryState: MessageDeliveryState = .sending,
-        attachments: [ChatAttachment] = []
+        attachments: [ChatAttachment] = [],
+        references: [ChatReference] = []
     ) -> Conversation? {
         guard let index = conversations.firstIndex(where: { $0.id == id }) else { return nil }
-        conversations[index].messages.append(ChatMessage(sender: .user, text: text, createdAt: now, deliveryState: deliveryState, attachments: attachments))
+        conversations[index].messages.append(ChatMessage(sender: .user, text: text, createdAt: now, deliveryState: deliveryState, attachments: attachments, references: references))
         conversations[index].events = deliveryState == .queued
             ? ["saved locally", "will send when connected"]
             : ["sent to kish-agent", "continuing \(conversations[index].threadId)"]
@@ -90,6 +93,7 @@ final class KishOSWorkspace: ObservableObject {
         firstMessage: String,
         now: Date = Date(),
         attachments: [ChatAttachment] = [],
+        references: [ChatReference] = [],
         projectPath: String? = nil,
         projectName: String? = nil
     ) -> Conversation {
@@ -98,13 +102,14 @@ final class KishOSWorkspace: ObservableObject {
             now: now,
             deliveryState: .queued,
             attachments: attachments,
+            references: references,
             projectPath: projectPath,
             projectName: projectName
         )
     }
 
-    func queueUserMessage(_ text: String, to id: UUID, now: Date = Date(), attachments: [ChatAttachment] = []) -> Conversation? {
-        appendUserMessage(text, to: id, now: now, deliveryState: .queued, attachments: attachments)
+    func queueUserMessage(_ text: String, to id: UUID, now: Date = Date(), attachments: [ChatAttachment] = [], references: [ChatReference] = []) -> Conversation? {
+        appendUserMessage(text, to: id, now: now, deliveryState: .queued, attachments: attachments, references: references)
     }
 
     func prepareRetryLastFailedMessage(in id: UUID, now: Date = Date()) -> PreparedAgentMessage? {
@@ -115,8 +120,9 @@ final class KishOSWorkspace: ObservableObject {
         }
 
         let userMessage = conversations[index].messages[messageIndex]
-        let message = messageTextForAgent(userMessage.text, attachments: userMessage.attachments)
+        let message = messageTextForAgent(userMessage.text, attachments: userMessage.attachments, references: userMessage.references)
         let attachments = chatRequestAttachments(for: userMessage.attachments)
+        let references = chatRequestReferences(for: userMessage.references)
         conversations[index].messages[messageIndex].deliveryState = .sending
         conversations[index].events = ["retrying request", "continuing \(conversations[index].threadId)"]
         conversations[index].isRunning = true
@@ -124,7 +130,7 @@ final class KishOSWorkspace: ObservableObject {
         conversations[index].updatedAt = now
         let conversation = conversations[index]
         sortAndPersist()
-        return PreparedAgentMessage(conversation: conversation, message: message, attachments: attachments)
+        return PreparedAgentMessage(conversation: conversation, message: message, attachments: attachments, references: references)
     }
 
     func nextQueuedMessage() -> QueuedMessage? {
@@ -147,8 +153,9 @@ final class KishOSWorkspace: ObservableObject {
         }
 
         let userMessage = conversations[conversationIndex].messages[messageIndex]
-        let message = messageTextForAgent(userMessage.text, attachments: userMessage.attachments)
+        let message = messageTextForAgent(userMessage.text, attachments: userMessage.attachments, references: userMessage.references)
         let attachments = chatRequestAttachments(for: userMessage.attachments)
+        let references = chatRequestReferences(for: userMessage.references)
         conversations[conversationIndex].messages[messageIndex].deliveryState = .sending
         conversations[conversationIndex].events = ["sending queued message", "continuing \(conversations[conversationIndex].threadId)"]
         conversations[conversationIndex].isRunning = true
@@ -157,7 +164,7 @@ final class KishOSWorkspace: ObservableObject {
         conversations[conversationIndex].updatedAt = now
         let conversation = conversations[conversationIndex]
         sortAndPersist()
-        return PreparedAgentMessage(conversation: conversation, message: message, attachments: attachments)
+        return PreparedAgentMessage(conversation: conversation, message: message, attachments: attachments, references: references)
     }
 
     func apply(_ result: ChatResult, to id: UUID, now: Date = Date()) {

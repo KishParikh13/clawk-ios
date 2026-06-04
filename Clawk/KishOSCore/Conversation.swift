@@ -306,6 +306,7 @@ struct ChatMessage: Identifiable, Codable, Equatable {
     var deliveryState: MessageDeliveryState
     var activityEvents: [String]
     var attachments: [ChatAttachment]
+    var references: [ChatReference]
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -315,6 +316,7 @@ struct ChatMessage: Identifiable, Codable, Equatable {
         case deliveryState
         case activityEvents
         case attachments
+        case references
     }
 
     init(
@@ -324,7 +326,8 @@ struct ChatMessage: Identifiable, Codable, Equatable {
         createdAt: Date = Date(),
         deliveryState: MessageDeliveryState = .sent,
         activityEvents: [String] = [],
-        attachments: [ChatAttachment] = []
+        attachments: [ChatAttachment] = [],
+        references: [ChatReference] = []
     ) {
         self.id = id
         self.sender = sender
@@ -333,6 +336,7 @@ struct ChatMessage: Identifiable, Codable, Equatable {
         self.deliveryState = deliveryState
         self.activityEvents = activityEvents
         self.attachments = attachments
+        self.references = references
     }
 
     init(from decoder: Decoder) throws {
@@ -344,6 +348,32 @@ struct ChatMessage: Identifiable, Codable, Equatable {
         deliveryState = try container.decode(MessageDeliveryState.self, forKey: .deliveryState)
         activityEvents = try container.decodeIfPresent([String].self, forKey: .activityEvents) ?? []
         attachments = try container.decodeIfPresent([ChatAttachment].self, forKey: .attachments) ?? []
+        references = try container.decodeIfPresent([ChatReference].self, forKey: .references) ?? []
+    }
+}
+
+struct ChatReference: Identifiable, Codable, Equatable {
+    enum Kind: String, Codable {
+        case file
+        case folder
+    }
+
+    var id: UUID
+    var kind: Kind
+    var title: String
+    var path: String
+    var createdAt: Date
+
+    init(id: UUID = UUID(), kind: Kind, title: String, path: String, createdAt: Date = Date()) {
+        self.id = id
+        self.kind = kind
+        self.title = title
+        self.path = path
+        self.createdAt = createdAt
+    }
+
+    var promptToken: String {
+        "@\(title)"
     }
 }
 
@@ -500,10 +530,21 @@ struct PreparedAgentMessage: Equatable {
     let conversation: Conversation
     let message: String
     let attachments: [ChatRequestAttachment]
+    let references: [ChatRequestReference]
 }
 
 func defaultAttachmentPrompt(for attachments: [ChatAttachment]) -> String {
     attachments.isEmpty ? "" : "Look at the attached file(s) and respond."
+}
+
+func defaultContextPrompt(attachments: [ChatAttachment], references: [ChatReference]) -> String {
+    if !attachments.isEmpty && !references.isEmpty {
+        return "Look at the attached and referenced file(s) and respond."
+    }
+    if !references.isEmpty {
+        return "Look at the referenced file(s) and respond."
+    }
+    return defaultAttachmentPrompt(for: attachments)
 }
 
 func chatRequestAttachments(for attachments: [ChatAttachment]) -> [ChatRequestAttachment] {
@@ -518,29 +559,52 @@ func chatRequestAttachments(for attachments: [ChatAttachment]) -> [ChatRequestAt
     }
 }
 
-func messageTextForAgent(_ text: String, attachments: [ChatAttachment]) -> String {
-    let cleanText = text.trimmingCharacters(in: .whitespacesAndNewlines)
-    let userText = cleanText.isEmpty ? defaultAttachmentPrompt(for: attachments) : cleanText
-    guard !attachments.isEmpty else { return cleanText }
+func chatRequestReferences(for references: [ChatReference]) -> [ChatRequestReference] {
+    references.map { reference in
+        ChatRequestReference(
+            path: reference.path,
+            title: reference.title,
+            kind: reference.kind.rawValue
+        )
+    }
+}
 
-    let renderedAttachments = attachments.enumerated().compactMap { index, attachment -> String? in
+func messageTextForAgent(_ text: String, attachments: [ChatAttachment], references: [ChatReference] = []) -> String {
+    let cleanText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    let userText = cleanText.isEmpty ? defaultContextPrompt(attachments: attachments, references: references) : cleanText
+    guard !attachments.isEmpty || !references.isEmpty else { return cleanText }
+
+    var contextIndex = 0
+    let renderedAttachments = attachments.compactMap { attachment -> String? in
+        contextIndex += 1
         switch attachment.kind {
         case .text:
             guard let text = attachment.text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else {
                 return nil
             }
             return """
-            [Context \(index + 1): \(attachment.title)]
+            [Context \(contextIndex): \(attachment.title)]
             \(text)
-            [/Context \(index + 1)]
+            [/Context \(contextIndex)]
             """
         case .image, .file, .url:
-            return "[Context \(index + 1): \(attachment.title)]"
+            return "[Context \(contextIndex): \(attachment.title)]"
         }
     }
 
-    guard !renderedAttachments.isEmpty else { return userText }
-    return "\(renderedAttachments.joined(separator: "\n\n"))\n\nUser message:\n\(userText)"
+    let renderedReferences = references.map { reference in
+        contextIndex += 1
+        let kindLabel = reference.kind == .folder ? "Folder reference" : "File reference"
+        return """
+        [Context \(contextIndex): \(kindLabel) \(reference.promptToken)]
+        Path: \(reference.path)
+        [/Context \(contextIndex)]
+        """
+    }
+
+    let renderedContexts = renderedAttachments + renderedReferences
+    guard !renderedContexts.isEmpty else { return userText }
+    return "\(renderedContexts.joined(separator: "\n\n"))\n\nUser message:\n\(userText)"
 }
 
 struct ChatResult: Equatable {

@@ -63,8 +63,8 @@
         "Verification command passes"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added first-class file/folder references with composer @ buttons, removable chips, visible @ tokens, persisted message metadata, queued/retry support, structured request references, and prompt-rendered context for backend compatibility. Verified with .ralph/verify.sh."
     }
   ]
 }

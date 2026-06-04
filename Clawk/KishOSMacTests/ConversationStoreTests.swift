@@ -205,6 +205,35 @@ final class ConversationStoreTests: XCTestCase {
         )
     }
 
+    func testQueuedMessagePreservesReferencesAndPreparesContextPayload() {
+        let store = MemoryConversationStore()
+        let workspace = KishOSWorkspace(store: store)
+        let reference = ChatReference(kind: .folder, title: "kish-agent", path: "/Users/kishparikh/Code/kish-agent")
+        let conversation = workspace.queueConversation(firstMessage: "check this", references: [reference])
+        let messageID = conversation.messages[0].id
+
+        let prepared = workspace.prepareQueuedMessageForSending(
+            conversationID: conversation.id,
+            messageID: messageID
+        )
+
+        XCTAssertEqual(workspace.conversation(id: conversation.id)?.messages.first?.references, [reference])
+        XCTAssertEqual(prepared?.references, [
+            ChatRequestReference(path: "/Users/kishparikh/Code/kish-agent", title: "kish-agent", kind: "folder")
+        ])
+        XCTAssertEqual(
+            prepared?.message,
+            """
+            [Context 1: Folder reference @kish-agent]
+            Path: /Users/kishparikh/Code/kish-agent
+            [/Context 1]
+
+            User message:
+            check this
+            """
+        )
+    }
+
     func testOfflineFailureRequeuesMessageAndRemovesEmptyAgentPlaceholder() {
         let store = MemoryConversationStore()
         let workspace = KishOSWorkspace(store: store)

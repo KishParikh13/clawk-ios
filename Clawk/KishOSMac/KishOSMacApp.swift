@@ -150,8 +150,9 @@ private struct MacRootView: View {
                 approvals: [],
                 projectName: activeProjectName,
                 projectBranch: activeProjectBranch,
+                projectPath: activeProjectPath,
                 projectLocked: activeProjectIsLocked,
-                onSend: { send($0, attachments: $1, in: nil) },
+                onSend: { send($0, attachments: $1, references: $2, in: nil) },
                 onStop: stopSelectedConversation,
                 onPickProject: { showingProjectPicker = true },
                 onRetry: nil,
@@ -180,8 +181,9 @@ private struct MacRootView: View {
                     approvals: conversation.approvals,
                     projectName: activeProjectName,
                     projectBranch: activeProjectBranch,
+                    projectPath: activeProjectPath,
                     projectLocked: activeProjectIsLocked,
-                    onSend: { send($0, attachments: $1, in: conversation.id) },
+                    onSend: { send($0, attachments: $1, references: $2, in: conversation.id) },
                     onStop: { stop(conversation) },
                     onPickProject: { showingProjectPicker = true },
                     onRetry: { retry(conversation.id) },
@@ -221,6 +223,10 @@ private struct MacRootView: View {
         selectedConversation?.branch ?? pendingProject?.branch
     }
 
+    private var activeProjectPath: String? {
+        selectedConversation?.projectPath ?? pendingProject?.path
+    }
+
     private var activeProjectIsLocked: Bool {
         selectedConversation != nil
     }
@@ -243,6 +249,7 @@ private struct MacRootView: View {
         sendPreparedMessage(
             retry.message,
             attachments: retry.attachments,
+            references: retry.references,
             in: retry.conversation,
             messageID: nil
         )
@@ -287,24 +294,26 @@ private struct MacRootView: View {
         NSPasteboard.general.setString(text, forType: .string)
     }
 
-    private func send(_ text: String, attachments: [ChatAttachment], in conversationId: UUID?) {
+    private func send(_ text: String, attachments: [ChatAttachment], references: [ChatReference], in conversationId: UUID?) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let outgoingText = trimmed.isEmpty ? defaultAttachmentPrompt(for: attachments) : trimmed
-        guard !outgoingText.isEmpty, attachments.allSatisfy(\.isReadyForSend) else { return }
+        let outgoingText = trimmed.isEmpty ? defaultContextPrompt(attachments: attachments, references: references) : trimmed
+        guard (!outgoingText.isEmpty || !references.isEmpty), attachments.allSatisfy(\.isReadyForSend) else { return }
         let requestAttachments = chatRequestAttachments(for: attachments)
+        let requestReferences = chatRequestReferences(for: references)
 
         if client.isDisconnected {
-            queue(outgoingText, attachments: attachments, in: conversationId)
+            queue(outgoingText, attachments: attachments, references: references, in: conversationId)
             return
         }
 
         let conversation: Conversation
-        if let conversationId, let existing = workspace.appendUserMessage(outgoingText, to: conversationId, attachments: attachments) {
+        if let conversationId, let existing = workspace.appendUserMessage(outgoingText, to: conversationId, attachments: attachments, references: references) {
             conversation = existing
         } else {
             conversation = workspace.createConversation(
                 firstMessage: outgoingText,
                 attachments: attachments,
+                references: references,
                 projectPath: pendingProject?.path,
                 projectName: pendingProject?.name
             )
@@ -313,14 +322,15 @@ private struct MacRootView: View {
         }
 
         sendPreparedMessage(
-            messageTextForAgent(outgoingText, attachments: attachments),
+            messageTextForAgent(outgoingText, attachments: attachments, references: references),
             attachments: requestAttachments,
+            references: requestReferences,
             in: conversation,
             messageID: conversation.messages.last?.id
         )
     }
 
-    private func sendPreparedMessage(_ text: String, attachments: [ChatRequestAttachment], in conversation: Conversation, messageID: UUID?) {
+    private func sendPreparedMessage(_ text: String, attachments: [ChatRequestAttachment], references: [ChatRequestReference], in conversation: Conversation, messageID: UUID?) {
         let conversationID = conversation.id
         activeSendTasks[conversationID]?.cancel()
         let task = Task {
@@ -334,6 +344,7 @@ private struct MacRootView: View {
                     threadId: conversation.threadId,
                     conversationId: conversationID,
                     attachments: attachments,
+                    references: references,
                     projectPath: conversation.projectPath
                 ) { event in
                     handleStreamEvent(event, conversationId: conversationID)
@@ -373,14 +384,15 @@ private struct MacRootView: View {
         }
     }
 
-    private func queue(_ text: String, attachments: [ChatAttachment], in conversationId: UUID?) {
+    private func queue(_ text: String, attachments: [ChatAttachment], references: [ChatReference], in conversationId: UUID?) {
         let conversation: Conversation
-        if let conversationId, let existing = workspace.queueUserMessage(text, to: conversationId, attachments: attachments) {
+        if let conversationId, let existing = workspace.queueUserMessage(text, to: conversationId, attachments: attachments, references: references) {
             conversation = existing
         } else {
             conversation = workspace.queueConversation(
                 firstMessage: text,
                 attachments: attachments,
+                references: references,
                 projectPath: pendingProject?.path,
                 projectName: pendingProject?.name
             )
@@ -470,6 +482,7 @@ private struct MacRootView: View {
                     threadId: prepared.conversation.threadId,
                     conversationId: prepared.conversation.id,
                     attachments: prepared.attachments,
+                    references: prepared.references,
                     projectPath: prepared.conversation.projectPath
                 ) { event in
                     handleStreamEvent(event, conversationId: prepared.conversation.id)
@@ -606,8 +619,9 @@ private struct ChatView: View {
     let approvals: [ApprovalRequest]
     let projectName: String
     let projectBranch: String?
+    let projectPath: String?
     let projectLocked: Bool
-    let onSend: (String, [ChatAttachment]) -> Void
+    let onSend: (String, [ChatAttachment], [ChatReference]) -> Void
     let onStop: () -> Void
     let onPickProject: () -> Void
     let onRetry: (() -> Void)?
@@ -623,6 +637,7 @@ private struct ChatView: View {
 
     @State private var draft = ""
     @State private var pendingAttachments: [ChatAttachment] = []
+    @State private var pendingReferences: [ChatReference] = []
 
     var body: some View {
         VStack(spacing: 0) {
@@ -709,11 +724,13 @@ private struct ChatView: View {
                 ChatComposer(
                     draft: $draft,
                     attachments: $pendingAttachments,
+                    references: $pendingReferences,
                     client: client,
                     isSending: client.isSending,
                     isDisabled: client.isSending || isRunning,
                     voice: voice,
                     runState: runState,
+                    projectPath: projectPath,
                     onSend: sendDraft,
                     onStop: onStop
                 )
@@ -731,7 +748,7 @@ private struct ChatView: View {
 
     private func sendDraft() {
         let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard (hasDraft || hasSendableAttachment),
+        guard (hasDraft || hasSendableAttachment || hasReference),
               pendingAttachments.allSatisfy(\.isReadyForSend),
               !client.isSending,
               !isRunning,
@@ -740,9 +757,11 @@ private struct ChatView: View {
             return
         }
         let attachments = pendingAttachments
+        let references = pendingReferences
         draft = ""
         pendingAttachments = []
-        onSend(trimmed, attachments)
+        pendingReferences = []
+        onSend(trimmed, attachments, references)
     }
 
     private var hasDraft: Bool {
@@ -751,6 +770,10 @@ private struct ChatView: View {
 
     private var hasSendableAttachment: Bool {
         pendingAttachments.contains { $0.isReadyForSend }
+    }
+
+    private var hasReference: Bool {
+        !pendingReferences.isEmpty
     }
 
     private var projectLabel: String {
@@ -1034,6 +1057,14 @@ private struct ChatBubble: View {
                     HStack(spacing: 6) {
                         ForEach(message.attachments) { attachment in
                             ContextChip(attachment: attachment)
+                        }
+                    }
+                }
+
+                if !message.references.isEmpty {
+                    HStack(spacing: 6) {
+                        ForEach(message.references) { reference in
+                            ReferenceChip(reference: reference)
                         }
                     }
                 }
@@ -1422,11 +1453,13 @@ private struct QuestionComposer: View {
 private struct ChatComposer: View {
     @Binding var draft: String
     @Binding var attachments: [ChatAttachment]
+    @Binding var references: [ChatReference]
     @ObservedObject var client: KishAgentClient
     let isSending: Bool
     let isDisabled: Bool
     @ObservedObject var voice: VoiceController
     let runState: ConversationRunState?
+    let projectPath: String?
     let onSend: () -> Void
     let onStop: () -> Void
 
@@ -1448,6 +1481,21 @@ private struct ChatComposer: View {
                                 onRetry: attachment.uploadState == .failed ? {
                                     retryUpload(attachment.id)
                                 } : nil
+                            )
+                        }
+                    }
+                }
+            }
+
+            if !references.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(references) { reference in
+                            ReferenceChip(
+                                reference: reference,
+                                onRemove: {
+                                    removeReference(reference)
+                                }
                             )
                         }
                     }
@@ -1481,6 +1529,14 @@ private struct ChatComposer: View {
                 .buttonStyle(.borderless)
                 .foregroundStyle(.secondary)
                 .help("Attach files")
+                .disabled(isDisabled)
+
+                Button(action: chooseReference) {
+                    Image(systemName: "at")
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.secondary)
+                .help("Reference file or folder")
                 .disabled(isDisabled)
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -1534,7 +1590,7 @@ private struct ChatComposer: View {
     }
 
     private var hasSendableContent: Bool {
-        !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || attachments.contains { $0.isReadyForSend }
+        !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !references.isEmpty || attachments.contains { $0.isReadyForSend }
     }
 
     private var hasUploadingAttachment: Bool {
@@ -1576,6 +1632,12 @@ private struct ChatComposer: View {
         draft = existing.isEmpty ? clean : "\(existing) \(clean)"
     }
 
+    private func appendReferenceToken(_ reference: ChatReference) {
+        let token = reference.promptToken
+        let existing = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        draft = existing.isEmpty ? token : "\(existing) \(token)"
+    }
+
     private func chooseFiles() {
         let panel = NSOpenPanel()
         panel.canChooseFiles = true
@@ -1586,6 +1648,41 @@ private struct ChatComposer: View {
             guard response == .OK else { return }
             handleFileURLs(panel.urls)
         }
+    }
+
+    private func chooseReference() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.resolvesAliases = true
+        if let projectPath, !projectPath.isEmpty {
+            panel.directoryURL = URL(fileURLWithPath: projectPath, isDirectory: true)
+        }
+        panel.begin { response in
+            guard response == .OK, let url = panel.urls.first else { return }
+            handleReferenceURL(url)
+        }
+    }
+
+    private func handleReferenceURL(_ url: URL) {
+        attachmentError = nil
+        do {
+            let reference = try MacReferenceFactory.reference(from: url)
+            guard !references.contains(where: { $0.path == reference.path }) else { return }
+            references.append(reference)
+            appendReferenceToken(reference)
+        } catch {
+            attachmentError = error.localizedDescription
+        }
+    }
+
+    private func removeReference(_ reference: ChatReference) {
+        references.removeAll { $0.id == reference.id }
+        draft = draft
+            .replacingOccurrences(of: reference.promptToken, with: "")
+            .replacingOccurrences(of: "  ", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func handleDrop(_ providers: [NSItemProvider]) -> Bool {
@@ -1772,6 +1869,22 @@ private enum MacAttachmentFactory {
     }
 }
 
+private enum MacReferenceFactory {
+    static func reference(from url: URL) throws -> ChatReference {
+        let values = try url.resourceValues(forKeys: [.isDirectoryKey, .isRegularFileKey])
+        guard values.isDirectory == true || values.isRegularFile == true else {
+            throw MacAttachmentError.notAFile
+        }
+
+        let title = url.lastPathComponent.isEmpty ? "Reference" : url.lastPathComponent
+        return ChatReference(
+            kind: values.isDirectory == true ? .folder : .file,
+            title: title,
+            path: url.path
+        )
+    }
+}
+
 private enum MacAttachmentError: LocalizedError {
     case notAFile
 
@@ -1954,6 +2067,34 @@ private struct ContextChip: View {
 
     private var strokeTint: Color {
         attachment.uploadState == .failed ? .red.opacity(0.55) : KishOSTheme.hairline
+    }
+}
+
+private struct ReferenceChip: View {
+    let reference: ChatReference
+    var onRemove: (() -> Void)? = nil
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: reference.kind == .folder ? "folder" : "doc.text")
+                .font(.caption)
+            Text(reference.promptToken)
+                .lineLimit(1)
+            if let onRemove {
+                Button(action: onRemove) {
+                    Image(systemName: "xmark")
+                        .font(.caption2.weight(.semibold))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Remove \(reference.title)")
+            }
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(KishOSTheme.pillBackground, in: Capsule())
+        .overlay(Capsule().stroke(KishOSTheme.hairline))
     }
 }
 

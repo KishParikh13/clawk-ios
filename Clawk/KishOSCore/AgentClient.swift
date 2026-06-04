@@ -118,6 +118,7 @@ final class KishAgentClient: ObservableObject {
         _ message: String,
         threadId: String,
         attachments: [ChatRequestAttachment] = [],
+        references: [ChatRequestReference] = [],
         projectPath: String? = nil
     ) async throws -> ChatResult {
         isSending = true
@@ -130,7 +131,7 @@ final class KishAgentClient: ObservableObject {
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.timeoutInterval = 180
-            request.httpBody = try JSONEncoder().encode(ChatRequest(threadId: threadId, message: message, conversationId: nil, attachments: attachments, projectPath: projectPath))
+            request.httpBody = try JSONEncoder().encode(ChatRequest(threadId: threadId, message: message, conversationId: nil, attachments: attachments, references: references, projectPath: projectPath))
 
             let (data, response) = try await session.data(for: request)
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
@@ -172,6 +173,7 @@ final class KishAgentClient: ObservableObject {
         threadId: String,
         conversationId: UUID? = nil,
         attachments: [ChatRequestAttachment] = [],
+        references: [ChatRequestReference] = [],
         projectPath: String? = nil,
         onEvent: @escaping (AgentStreamEvent) async -> Void
     ) async throws -> ChatResult {
@@ -185,7 +187,7 @@ final class KishAgentClient: ObservableObject {
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.timeoutInterval = 180
-            request.httpBody = try JSONEncoder().encode(ChatRequest(threadId: threadId, message: message, conversationId: conversationId, attachments: attachments, projectPath: projectPath))
+            request.httpBody = try JSONEncoder().encode(ChatRequest(threadId: threadId, message: message, conversationId: conversationId, attachments: attachments, references: references, projectPath: projectPath))
 
             let (bytes, response) = try await session.bytes(for: request)
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
@@ -514,6 +516,12 @@ struct ChatRequestAttachment: Codable, Equatable {
     let kind: String?
 }
 
+struct ChatRequestReference: Codable, Equatable {
+    let path: String
+    let title: String
+    let kind: String
+}
+
 struct UploadedAttachment: Decodable, Equatable {
     let id: String
     let filename: String
@@ -622,6 +630,7 @@ private struct ChatRequest: Encodable {
     let message: String
     let conversationId: UUID?
     let attachments: [ChatRequestAttachment]
+    let references: [ChatRequestReference]
     let projectPath: String?
 
     enum CodingKeys: String, CodingKey {
@@ -629,6 +638,7 @@ private struct ChatRequest: Encodable {
         case message
         case conversationId
         case attachments
+        case references
         case projectPath
     }
 
@@ -640,6 +650,9 @@ private struct ChatRequest: Encodable {
         try container.encodeIfPresent(projectPath, forKey: .projectPath)
         if !attachments.isEmpty {
             try container.encode(attachments, forKey: .attachments)
+        }
+        if !references.isEmpty {
+            try container.encode(references, forKey: .references)
         }
     }
 }

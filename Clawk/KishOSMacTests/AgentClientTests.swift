@@ -235,6 +235,33 @@ final class AgentClientTests: XCTestCase {
         XCTAssertEqual(request.projectPath, "/Users/kishparikh/Code/clawk-ios")
     }
 
+    func testStreamingIncludesReferencesWhenPresent() async throws {
+        var capturedBody: Data?
+        let client = makeClient { request in
+            XCTAssertEqual(request.url?.path, "/chat-stream")
+            capturedBody = requestBodyData(from: request)
+            return ndjsonResponse(
+                #"{"type":"final","ok":true,"threadId":"thread-1","engine":"claude","text":"done","elapsedMs":4,"events":[]}"#
+            )
+        }
+
+        _ = try await client.sendStreaming(
+            "use this",
+            threadId: "thread-1",
+            references: [
+                ChatRequestReference(path: "/Users/kishparikh/Code/kish-agent", title: "kish-agent", kind: "folder")
+            ]
+        ) { _ in }
+
+        let body = try XCTUnwrap(capturedBody)
+        let request = try JSONDecoder().decode(TestChatRequest.self, from: body)
+
+        XCTAssertEqual(request.references?.count, 1)
+        XCTAssertEqual(request.references?.first?.path, "/Users/kishparikh/Code/kish-agent")
+        XCTAssertEqual(request.references?.first?.title, "kish-agent")
+        XCTAssertEqual(request.references?.first?.kind, "folder")
+    }
+
     func testFetchProjectsUsesProjectsEndpoint() async throws {
         let client = makeClient { request in
             XCTAssertEqual(request.url?.path, "/projects")
@@ -557,6 +584,7 @@ private struct TestChatRequest: Decodable {
     let message: String
     let conversationId: UUID?
     let attachments: [TestChatRequestAttachment]?
+    let references: [TestChatRequestReference]?
     let projectPath: String?
 }
 
@@ -565,6 +593,12 @@ private struct TestChatRequestAttachment: Decodable {
     let filename: String
     let mimeType: String?
     let kind: String?
+}
+
+private struct TestChatRequestReference: Decodable {
+    let path: String
+    let title: String
+    let kind: String
 }
 
 private struct TestCancelRequest: Decodable {

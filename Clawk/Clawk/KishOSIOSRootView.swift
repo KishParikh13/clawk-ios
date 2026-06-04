@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
 
 private enum IOSTheme {
     static let background = Color(uiColor: .systemBackground)
@@ -283,25 +284,27 @@ struct KishOSIOSRootView: View {
         min(356, max(304, containerWidth * 0.84))
     }
 
-    private func send(_ text: String, attachments: [ChatAttachment]) {
+    private func send(_ text: String, attachments: [ChatAttachment], references: [ChatReference]) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let outgoingText = trimmed.isEmpty ? defaultAttachmentPrompt(for: attachments) : trimmed
-        guard !outgoingText.isEmpty, attachments.allSatisfy(\.isReadyForSend) else { return }
+        let outgoingText = trimmed.isEmpty ? defaultContextPrompt(attachments: attachments, references: references) : trimmed
+        guard (!outgoingText.isEmpty || !references.isEmpty), attachments.allSatisfy(\.isReadyForSend) else { return }
         let requestAttachments = chatRequestAttachments(for: attachments)
+        let requestReferences = chatRequestReferences(for: references)
 
         if client.isDisconnected {
-            queue(outgoingText, attachments: attachments)
+            queue(outgoingText, attachments: attachments, references: references)
             return
         }
 
         let conversation: Conversation
         if let selectedConversationID,
-           let existing = workspace.appendUserMessage(outgoingText, to: selectedConversationID, attachments: attachments) {
+           let existing = workspace.appendUserMessage(outgoingText, to: selectedConversationID, attachments: attachments, references: references) {
             conversation = existing
         } else {
             conversation = workspace.createConversation(
                 firstMessage: outgoingText,
                 attachments: attachments,
+                references: references,
                 projectPath: pendingProject?.path,
                 projectName: pendingProject?.name
             )
@@ -310,14 +313,15 @@ struct KishOSIOSRootView: View {
         }
 
         sendPreparedMessage(
-            messageTextForAgent(outgoingText, attachments: attachments),
+            messageTextForAgent(outgoingText, attachments: attachments, references: references),
             attachments: requestAttachments,
+            references: requestReferences,
             in: conversation,
             messageID: conversation.messages.last?.id
         )
     }
 
-    private func sendPreparedMessage(_ text: String, attachments: [ChatRequestAttachment], in conversation: Conversation, messageID: UUID?) {
+    private func sendPreparedMessage(_ text: String, attachments: [ChatRequestAttachment], references: [ChatRequestReference], in conversation: Conversation, messageID: UUID?) {
         let conversationID = conversation.id
         activeSendTasks[conversationID]?.cancel()
         let task = Task {
@@ -331,6 +335,7 @@ struct KishOSIOSRootView: View {
                     threadId: conversation.threadId,
                     conversationId: conversationID,
                     attachments: attachments,
+                    references: references,
                     projectPath: conversation.projectPath
                 ) { event in
                     handleStreamEvent(event, conversationId: conversationID)
@@ -367,15 +372,16 @@ struct KishOSIOSRootView: View {
         }
     }
 
-    private func queue(_ text: String, attachments: [ChatAttachment]) {
+    private func queue(_ text: String, attachments: [ChatAttachment], references: [ChatReference]) {
         let conversation: Conversation
         if let selectedConversationID,
-           let existing = workspace.queueUserMessage(text, to: selectedConversationID, attachments: attachments) {
+           let existing = workspace.queueUserMessage(text, to: selectedConversationID, attachments: attachments, references: references) {
             conversation = existing
         } else {
             conversation = workspace.queueConversation(
                 firstMessage: text,
                 attachments: attachments,
+                references: references,
                 projectPath: pendingProject?.path,
                 projectName: pendingProject?.name
             )
@@ -400,6 +406,7 @@ struct KishOSIOSRootView: View {
                     threadId: retry.conversation.threadId,
                     conversationId: retry.conversation.id,
                     attachments: retry.attachments,
+                    references: retry.references,
                     projectPath: retry.conversation.projectPath
                 ) { event in
                     handleStreamEvent(event, conversationId: retry.conversation.id)
@@ -537,6 +544,7 @@ struct KishOSIOSRootView: View {
                     threadId: prepared.conversation.threadId,
                     conversationId: prepared.conversation.id,
                     attachments: prepared.attachments,
+                    references: prepared.references,
                     projectPath: prepared.conversation.projectPath
                 ) { event in
                     handleStreamEvent(event, conversationId: prepared.conversation.id)
@@ -585,7 +593,7 @@ private struct ChatScreen: View {
     let projectLocked: Bool
     @ObservedObject var voice: VoiceController
     @ObservedObject var audio: AudioRouteMonitor
-    let onSend: (String, [ChatAttachment]) -> Void
+    let onSend: (String, [ChatAttachment], [ChatReference]) -> Void
     let onStop: () -> Void
     let onStartCall: () -> Void
     let onPickProject: () -> Void
@@ -595,6 +603,7 @@ private struct ChatScreen: View {
 
     @State private var draft = ""
     @State private var pendingAttachments: [ChatAttachment] = []
+    @State private var pendingReferences: [ChatReference] = []
 
     private var messages: [ChatMessage] {
         conversation?.messages ?? []
@@ -667,14 +676,16 @@ private struct ChatScreen: View {
                 IOSComposer(
                     draft: $draft,
                     attachments: $pendingAttachments,
+                    references: $pendingReferences,
                     client: client,
                     isSending: client.isSending,
                     isDisabled: client.isSending || isSending,
                     runState: runState,
+                    allowsReferences: conversation != nil,
                     voice: voice,
                     onSend: sendDraft,
                     onStop: onStop,
-                    onStartCall: onStartCall,
+                    onStartCall: onStartCall
                 )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -690,7 +701,7 @@ private struct ChatScreen: View {
 
     private func sendDraft() {
         let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard (hasDraft || hasSendableAttachment),
+        guard (hasDraft || hasSendableAttachment || hasReference),
               pendingAttachments.allSatisfy(\.isReadyForSend),
               !client.isSending,
               !isSending,
@@ -699,9 +710,11 @@ private struct ChatScreen: View {
             return
         }
         let attachments = pendingAttachments
+        let references = pendingReferences
         draft = ""
         pendingAttachments = []
-        onSend(trimmed, attachments)
+        pendingReferences = []
+        onSend(trimmed, attachments, references)
     }
 
     private var hasDraft: Bool {
@@ -710,6 +723,10 @@ private struct ChatScreen: View {
 
     private var hasSendableAttachment: Bool {
         pendingAttachments.contains { $0.isReadyForSend }
+    }
+
+    private var hasReference: Bool {
+        !pendingReferences.isEmpty
     }
 
     private func scrollToBottom(_ proxy: ScrollViewProxy) {
@@ -776,6 +793,14 @@ private struct IOSMessageTurn: View {
                         VStack(alignment: message.sender == .user ? .trailing : .leading, spacing: 5) {
                             ForEach(message.attachments) { attachment in
                                 IOSContextChip(attachment: attachment)
+                            }
+                        }
+                    }
+
+                    if !message.references.isEmpty {
+                        HStack(spacing: 5) {
+                            ForEach(message.references) { reference in
+                                IOSReferenceChip(reference: reference)
                             }
                         }
                     }
@@ -966,10 +991,12 @@ private struct IOSActivityBlock: View {
 private struct IOSComposer: View {
     @Binding var draft: String
     @Binding var attachments: [ChatAttachment]
+    @Binding var references: [ChatReference]
     @ObservedObject var client: KishAgentClient
     let isSending: Bool
     let isDisabled: Bool
     let runState: ConversationRunState?
+    let allowsReferences: Bool
     @ObservedObject var voice: VoiceController
     let onSend: () -> Void
     let onStop: () -> Void
@@ -978,6 +1005,7 @@ private struct IOSComposer: View {
     @State private var showingTextCapture = false
     @State private var showingPhotoPicker = false
     @State private var showingFilePicker = false
+    @State private var showingReferencePicker = false
     @State private var scanError: String?
 
     var body: some View {
@@ -995,6 +1023,21 @@ private struct IOSComposer: View {
                                 onRetry: attachment.uploadState == .failed ? {
                                     retryUpload(attachment.id)
                                 } : nil
+                            )
+                        }
+                    }
+                }
+            }
+
+            if !references.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(references) { reference in
+                            IOSReferenceChip(
+                                reference: reference,
+                                onRemove: {
+                                    removeReference(reference)
+                                }
                             )
                         }
                     }
@@ -1050,6 +1093,18 @@ private struct IOSComposer: View {
                     .tint(Color(uiColor: .label))
                     .disabled(isDisabled)
                     .accessibilityLabel("Add")
+                }
+
+                if allowsReferences && !voice.isRecording {
+                    IOSComposerCircleButton(
+                        systemName: "at",
+                        tint: Color(uiColor: .label),
+                        isEnabled: !isDisabled,
+                        action: {
+                            showingReferencePicker = true
+                        }
+                    )
+                    .accessibilityLabel("Reference file or folder")
                 }
 
                 HStack(alignment: .bottom, spacing: 8) {
@@ -1136,6 +1191,14 @@ private struct IOSComposer: View {
                 showingFilePicker = false
             })
         }
+        .sheet(isPresented: $showingReferencePicker) {
+            IOSReferencePickerView(onResult: { result in
+                handleReferenceSelection(result)
+                showingReferencePicker = false
+            }, onCancel: {
+                showingReferencePicker = false
+            })
+        }
     }
 
     private var hasDraft: Bool {
@@ -1143,7 +1206,7 @@ private struct IOSComposer: View {
     }
 
     private var hasSendableContent: Bool {
-        hasDraft || attachments.contains { $0.isReadyForSend }
+        hasDraft || !references.isEmpty || attachments.contains { $0.isReadyForSend }
     }
 
     private var hasUploadingAttachment: Bool {
@@ -1242,6 +1305,26 @@ private struct IOSComposer: View {
         }
     }
 
+    private func handleReferenceSelection(_ result: Result<ChatReference, Error>) {
+        switch result {
+        case .success(let reference):
+            scanError = nil
+            guard !references.contains(where: { $0.path == reference.path }) else { return }
+            references.append(reference)
+            appendReferenceToken(reference)
+        case .failure(let error):
+            scanError = error.localizedDescription
+        }
+    }
+
+    private func removeReference(_ reference: ChatReference) {
+        references.removeAll { $0.id == reference.id }
+        draft = draft
+            .replacingOccurrences(of: reference.promptToken, with: "")
+            .replacingOccurrences(of: "  ", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private func retryUpload(_ attachmentId: UUID) {
         updateAttachment(attachmentId) { attachment in
             attachment.uploadState = .uploading
@@ -1317,6 +1400,12 @@ private struct IOSComposer: View {
         guard !clean.isEmpty else { return }
         let existing = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         draft = existing.isEmpty ? clean : "\(existing) \(clean)"
+    }
+
+    private func appendReferenceToken(_ reference: ChatReference) {
+        let token = reference.promptToken
+        let existing = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        draft = existing.isEmpty ? token : "\(existing) \(token)"
     }
 }
 
@@ -1820,6 +1909,101 @@ private struct IOSContextChip: View {
 
     private var strokeTint: Color {
         attachment.uploadState == .failed ? .red.opacity(0.55) : IOSTheme.hairline
+    }
+}
+
+private struct IOSReferenceChip: View {
+    let reference: ChatReference
+    var onRemove: (() -> Void)?
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: reference.kind == .folder ? "folder" : "doc.text")
+                .font(.caption2.weight(.semibold))
+            Text(reference.promptToken)
+                .font(.caption.weight(.medium))
+                .lineLimit(1)
+            if let onRemove {
+                Button(action: onRemove) {
+                    Image(systemName: "xmark")
+                        .font(.caption2.weight(.bold))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Remove \(reference.title)")
+            }
+        }
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(IOSTheme.elevatedBackground, in: Capsule())
+        .overlay(Capsule().stroke(IOSTheme.hairline))
+    }
+}
+
+private struct IOSReferencePickerView: UIViewControllerRepresentable {
+    let onResult: (Result<ChatReference, Error>) -> Void
+    let onCancel: () -> Void
+
+    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.item, .folder])
+        picker.delegate = context.coordinator
+        picker.allowsMultipleSelection = false
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {}
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onResult: onResult, onCancel: onCancel)
+    }
+
+    final class Coordinator: NSObject, UIDocumentPickerDelegate {
+        private let onResult: (Result<ChatReference, Error>) -> Void
+        private let onCancel: () -> Void
+
+        init(onResult: @escaping (Result<ChatReference, Error>) -> Void, onCancel: @escaping () -> Void) {
+            self.onResult = onResult
+            self.onCancel = onCancel
+        }
+
+        func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+            onCancel()
+        }
+
+        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+            guard let url = urls.first else {
+                onResult(.failure(ReferencePickerError.noSelection))
+                return
+            }
+
+            let didAccess = url.startAccessingSecurityScopedResource()
+            defer {
+                if didAccess {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
+
+            do {
+                let values = try url.resourceValues(forKeys: [.isDirectoryKey])
+                let title = url.lastPathComponent.isEmpty ? "Reference" : url.lastPathComponent
+                let reference = ChatReference(
+                    kind: values.isDirectory == true ? .folder : .file,
+                    title: title,
+                    path: url.path
+                )
+                onResult(.success(reference))
+            } catch {
+                onResult(.failure(error))
+            }
+        }
+    }
+}
+
+private enum ReferencePickerError: LocalizedError {
+    case noSelection
+
+    var errorDescription: String? {
+        "No reference selected."
     }
 }
 
