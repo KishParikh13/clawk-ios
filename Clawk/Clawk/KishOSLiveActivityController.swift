@@ -63,7 +63,7 @@ final class KishOSLiveActivityController {
     ) -> (state: KishOSCallActivityAttributes.ContentState?, expiresAt: Date?) {
         let recentCutoff = now.addingTimeInterval(-Self.recentWindow)
         let review = conversations
-            .filter { $0.needsLiveActivityReview(selectedConversationID: selectedConversationID, recentCutoff: recentCutoff) }
+            .filter { $0.needsLiveActivityReview(selectedConversationID: selectedConversationID) }
             .sorted { $0.updatedAt > $1.updatedAt }
         let recent = conversations
             .filter { $0.runState.isActive || $0.updatedAt >= recentCutoff }
@@ -176,11 +176,8 @@ final class KishOSLiveActivityController {
 }
 
 private extension Conversation {
-    func needsLiveActivityReview(selectedConversationID: UUID?, recentCutoff: Date) -> Bool {
-        if !approvals.isEmpty || lastError != nil || queuedUserMessageCount > 0 {
-            return true
-        }
-        return runState == .done && updatedAt >= recentCutoff && id != selectedConversationID
+    func needsLiveActivityReview(selectedConversationID: UUID?) -> Bool {
+        id != selectedConversationID && needsReview
     }
 }
 #else

@@ -11,6 +11,7 @@ struct Conversation: Identifiable, Codable, Equatable {
     var elapsedMs: Int?
     var isRunning: Bool
     var updatedAt: Date
+    var lastReadAt: Date?
     var lastError: String?
     var approvals: [ApprovalRequest]
 
@@ -25,6 +26,7 @@ struct Conversation: Identifiable, Codable, Equatable {
         case elapsedMs
         case isRunning
         case updatedAt
+        case lastReadAt
         case lastError
         case approvals
     }
@@ -46,6 +48,7 @@ struct Conversation: Identifiable, Codable, Equatable {
         self.elapsedMs = nil
         self.isRunning = false
         self.updatedAt = now
+        self.lastReadAt = now
         self.lastError = nil
         self.approvals = []
     }
@@ -62,6 +65,7 @@ struct Conversation: Identifiable, Codable, Equatable {
         elapsedMs = try container.decodeIfPresent(Int.self, forKey: .elapsedMs)
         isRunning = try container.decode(Bool.self, forKey: .isRunning)
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        lastReadAt = try container.decodeIfPresent(Date.self, forKey: .lastReadAt)
         lastError = try container.decodeIfPresent(String.self, forKey: .lastError)
         approvals = try container.decodeIfPresent([ApprovalRequest].self, forKey: .approvals) ?? []
     }
@@ -125,6 +129,15 @@ struct Conversation: Identifiable, Codable, Equatable {
             return .sending
         }
         return .done
+    }
+
+    var isUnread: Bool {
+        guard let lastReadAt else { return true }
+        return updatedAt > lastReadAt
+    }
+
+    var needsReview: Bool {
+        !approvals.isEmpty || lastError != nil || queuedUserMessageCount > 0 || (runState == .done && isUnread)
     }
 
     var agentStatusSummary: AgentStatusSummary? {

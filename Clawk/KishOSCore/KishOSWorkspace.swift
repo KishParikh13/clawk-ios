@@ -11,9 +11,13 @@ final class KishOSWorkspace: ObservableObject {
 
     init(store: ConversationStoring = JSONConversationStore()) {
         self.store = store
+        var shouldPersistLoadedConversations = false
         do {
-            self.conversations = try store.load()
+            let loadedConversations = try store.load()
+            let migratedConversations = Self.migratedLoadedReadState(loadedConversations)
+            self.conversations = migratedConversations
             self.storeError = nil
+            shouldPersistLoadedConversations = migratedConversations != loadedConversations
         } catch {
             self.conversations = []
             self.storeError = error.localizedDescription
@@ -29,6 +33,9 @@ final class KishOSWorkspace: ObservableObject {
         } catch {
             self.remoteConversationIDs = []
             self.storeError = error.localizedDescription
+        }
+        if shouldPersistLoadedConversations {
+            persist()
         }
     }
 
@@ -310,6 +317,15 @@ final class KishOSWorkspace: ObservableObject {
         conversations.first { $0.id == id }
     }
 
+    func markConversationRead(_ id: UUID, at readAt: Date = Date()) {
+        guard let index = conversations.firstIndex(where: { $0.id == id }) else { return }
+        if let lastReadAt = conversations[index].lastReadAt, lastReadAt >= readAt {
+            return
+        }
+        conversations[index].lastReadAt = readAt
+        persist()
+    }
+
     func mergeRemoteConversations(_ remote: [Conversation]) {
         let remoteIDs = Set(remote.map(\.id))
         var byId = Dictionary(uniqueKeysWithValues: conversations.map { ($0.id, $0) })
@@ -323,9 +339,17 @@ final class KishOSWorkspace: ObservableObject {
             guard !deletedConversationIDs.contains(remoteConversation.id) else { continue }
             if let localConversation = byId[remoteConversation.id],
                localConversation.updatedAt >= remoteConversation.updatedAt {
+                if shouldUse(remoteConversation.lastReadAt, over: localConversation.lastReadAt) {
+                    byId[remoteConversation.id]?.lastReadAt = remoteConversation.lastReadAt
+                }
                 continue
             }
-            byId[remoteConversation.id] = remoteConversation
+            var mergedRemote = remoteConversation
+            if let localConversation = byId[remoteConversation.id],
+               shouldUse(localConversation.lastReadAt, over: mergedRemote.lastReadAt) {
+                mergedRemote.lastReadAt = localConversation.lastReadAt
+            }
+            byId[remoteConversation.id] = mergedRemote
         }
 
         remoteConversationIDs = remoteConversationIDs.union(remoteIDs).subtracting(deletedConversationIDs)
@@ -370,6 +394,21 @@ final class KishOSWorkspace: ObservableObject {
             storeError = error.localizedDescription
         }
     }
+
+    private static func migratedLoadedReadState(_ loadedConversations: [Conversation]) -> [Conversation] {
+        loadedConversations.map { conversation in
+            guard conversation.lastReadAt == nil else { return conversation }
+            var migrated = conversation
+            migrated.lastReadAt = migrated.updatedAt
+            return migrated
+        }
+    }
+}
+
+private func shouldUse(_ candidate: Date?, over current: Date?) -> Bool {
+    guard let candidate else { return false }
+    guard let current else { return true }
+    return candidate > current
 }
 
 private func markLastUserMessageSent(in conversation: inout Conversation) {

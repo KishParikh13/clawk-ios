@@ -65,6 +65,39 @@ final class ConversationStoreTests: XCTestCase {
         XCTAssertFalse(store.savedConversations[0].isRunning)
     }
 
+    func testMarkConversationReadPersistsWithoutChangingUpdatedAt() {
+        let store = MemoryConversationStore()
+        let workspace = KishOSWorkspace(store: store)
+        let createdAt = Date(timeIntervalSince1970: 100)
+        let conversation = workspace.createConversation(firstMessage: "first", now: createdAt)
+        let replyAt = Date(timeIntervalSince1970: 200)
+        workspace.apply(ChatResult(text: "reply", engine: "claude", elapsedMs: 12, events: []), to: conversation.id, now: replyAt)
+
+        workspace.markConversationRead(conversation.id, at: replyAt)
+
+        let updated = workspace.conversation(id: conversation.id)
+        XCTAssertEqual(updated?.updatedAt, replyAt)
+        XCTAssertEqual(updated?.lastReadAt, replyAt)
+        XCTAssertFalse(updated?.isUnread == true)
+        XCTAssertEqual(store.savedConversations.first?.lastReadAt, replyAt)
+    }
+
+    func testWorkspaceMigratesLoadedConversationsWithoutReadStateAsRead() {
+        let store = MemoryConversationStore()
+        let updatedAt = Date(timeIntervalSince1970: 200)
+        var conversation = Conversation(firstMessage: "older", now: Date(timeIntervalSince1970: 100))
+        conversation.updatedAt = updatedAt
+        conversation.lastReadAt = nil
+        store.savedConversations = [conversation]
+
+        let workspace = KishOSWorkspace(store: store)
+
+        let migrated = workspace.conversation(id: conversation.id)
+        XCTAssertEqual(migrated?.lastReadAt, updatedAt)
+        XCTAssertFalse(migrated?.isUnread == true)
+        XCTAssertEqual(store.savedConversations.first?.lastReadAt, updatedAt)
+    }
+
     func testRetryLastFailedMessageKeepsThreadIdAndMarksSending() {
         let store = MemoryConversationStore()
         let workspace = KishOSWorkspace(store: store)
@@ -225,6 +258,30 @@ final class ConversationStoreTests: XCTestCase {
         XCTAssertEqual(merged?.title, "remote")
         XCTAssertEqual(merged?.updatedAt, newer)
         XCTAssertEqual(store.savedConversations.first?.title, "remote")
+    }
+
+    func testRemoteMergePreservesLocalReadStateOnNewerRemoteConversation() {
+        let store = MemoryConversationStore()
+        let workspace = KishOSWorkspace(store: store)
+        let id = UUID(uuidString: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")!
+        let older = Date(timeIntervalSince1970: 100)
+        let readAt = Date(timeIntervalSince1970: 150)
+        let newer = Date(timeIntervalSince1970: 200)
+        var local = Conversation(id: id, firstMessage: "local", now: older)
+        local.updatedAt = older
+        local.lastReadAt = readAt
+        var remote = Conversation(id: id, firstMessage: "remote", now: older)
+        remote.updatedAt = newer
+        remote.lastReadAt = nil
+
+        workspace.mergeRemoteConversations([local])
+        workspace.mergeRemoteConversations([remote])
+
+        let merged = workspace.conversation(id: id)
+        XCTAssertEqual(merged?.title, "remote")
+        XCTAssertEqual(merged?.updatedAt, newer)
+        XCTAssertEqual(merged?.lastReadAt, readAt)
+        XCTAssertTrue(merged?.isUnread == true)
     }
 
     func testRemoteMergeAddsNewConversationAndSortsByUpdatedAt() {

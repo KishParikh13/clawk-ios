@@ -92,6 +92,15 @@ private struct MacRootView: View {
                 .task {
                     audio.start()
                 }
+                .task {
+                    markSelectedConversationRead()
+                }
+                .onChange(of: selection) {
+                    markSelectedConversationRead()
+                }
+                .onChange(of: workspace.conversations) {
+                    markSelectedConversationRead()
+                }
                 .onChange(of: voice.isRecording) { _, isRecording in
                     audio.refresh(isRecording: isRecording)
                 }
@@ -171,6 +180,13 @@ private struct MacRootView: View {
 
     private var pendingDecisionConversations: [Conversation] {
         workspace.conversations.filter { !$0.approvals.isEmpty }
+    }
+
+    private func markSelectedConversationRead() {
+        guard case .conversation(let id) = selection,
+              let conversation = workspace.conversation(id: id)
+        else { return }
+        workspace.markConversationRead(conversation.id, at: conversation.updatedAt)
     }
 
     private func retry(_ conversationId: UUID) {

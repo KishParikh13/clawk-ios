@@ -22,6 +22,49 @@ final class ConversationTests: XCTestCase {
         XCTAssertEqual(conversation.messages.first?.text, "hello")
     }
 
+    func testConversationReadStateTracksUnreadUpdates() {
+        let createdAt = Date(timeIntervalSince1970: 100)
+        var conversation = Conversation(firstMessage: "hello", now: createdAt)
+
+        XCTAssertEqual(conversation.lastReadAt, createdAt)
+        XCTAssertFalse(conversation.isUnread)
+        XCTAssertFalse(conversation.needsReview)
+
+        conversation.updatedAt = Date(timeIntervalSince1970: 200)
+
+        XCTAssertTrue(conversation.isUnread)
+        XCTAssertTrue(conversation.needsReview)
+
+        conversation.lastReadAt = conversation.updatedAt
+
+        XCTAssertFalse(conversation.isUnread)
+        XCTAssertFalse(conversation.needsReview)
+    }
+
+    func testConversationDecodesOlderPayloadWithoutReadState() throws {
+        let json = """
+        {
+          "id": "11111111-2222-3333-4444-555555555555",
+          "threadId": "mac-11111111-2222-3333-4444-555555555555",
+          "title": "hello",
+          "idea": "hello",
+          "messages": [],
+          "events": [],
+          "engine": "claude",
+          "isRunning": false,
+          "updatedAt": "2026-06-04T05:20:00.000Z"
+        }
+        """.data(using: .utf8)!
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        let conversation = try decoder.decode(Conversation.self, from: json)
+
+        XCTAssertNil(conversation.lastReadAt)
+        XCTAssertTrue(conversation.isUnread)
+        XCTAssertTrue(conversation.needsReview)
+    }
+
     func testChatAttachmentDecodesOlderTextAttachmentWithoutUploadFields() throws {
         let json = """
         {

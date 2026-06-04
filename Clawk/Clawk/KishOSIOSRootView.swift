@@ -101,10 +101,15 @@ struct KishOSIOSRootView: View {
                     .task {
                         refreshWakeSuppression()
                     }
+                    .task {
+                        markSelectedConversationRead()
+                    }
                     .onChange(of: workspace.conversations) {
+                        markSelectedConversationRead()
                         refreshLiveActivitySummary()
                     }
                     .onChange(of: selectedConversationID) {
+                        markSelectedConversationRead()
                         refreshLiveActivitySummary()
                     }
                     .onChange(of: voice.isRecording) { _, isRecording in
@@ -234,6 +239,11 @@ struct KishOSIOSRootView: View {
             conversations: workspace.conversations,
             selectedConversationID: selectedConversationID
         )
+    }
+
+    private func markSelectedConversationRead() {
+        guard let selectedConversation else { return }
+        workspace.markConversationRead(selectedConversation.id, at: selectedConversation.updatedAt)
     }
 
     private func closeConversations() {
