@@ -285,13 +285,13 @@ enum KishOSFeature: String, CaseIterable, Identifiable, Codable {
         case .deleteReconciliation:
             return "Deleted conversations stay deleted across devices."
         case .connectionRecovery:
-            return "Make dropped streams, backend restarts, and app relaunches easy to recover from."
+            return "Deferred: the current offline queue is enough until live calls and long-running runs need stronger recovery."
         case .streamingEvents:
             return "Show text, steps, and tool activity while the agent works."
         case .approvalCards:
             return "Render agent questions as clear answer controls in the composer area."
         case .decisionInbox:
-            return "Collect pending questions, approvals, confirmations, and blockers in one place."
+            return "Deferred: current question cards work; build the inbox after richer approval types exist."
         case .toolInventory:
             return "Show the practical tools and engines the agent can use right now."
         case .pushToTalk:
@@ -301,19 +301,19 @@ enum KishOSFeature: String, CaseIterable, Identifiable, Codable {
         case .nativeAttachments:
             return "Upload files and photos to the agent with previews and backend ids."
         case .explicitSnapshot:
-            return "Take an intentional snapshot and ask the agent about it."
+            return "Validated through the native attachment path: capture or choose an image, upload it, then send the attachment id with the chat turn."
         case .snapshotReview:
-            return "Preview, retake, or attach an image before anything is sent."
+            return "Mostly UI: make the image review, retake, and send flow feel intentional before camera-first use."
         case .liveCallMode:
-            return "A chained listen-send-speak loop for hands-free agent conversations."
+            return "Needs QA and hardening: audio route activation, silence finalization, interruption, failure recovery, and conversation continuity."
         case .wakePhrase:
-            return "Start hands-free listening with a local wake phrase."
+            return "Port the Glassbridge pattern: local Speech wake phrase, pause while ASK/call owns the mic, resume after the turn."
         case .audioRouteAwareness:
             return "Detect Bluetooth, AirPods, and glasses-like audio routes."
         case .audioRoutePicker:
             return "Let the app prefer the right headset route when available."
         case .spokenReplies:
-            return "Speak final answers only inside live call or hands-free modes."
+            return "Use call-only spoken output, with stop/barge-in and no surprise read-aloud in normal chat."
         case .glassesWalkMode:
             return "Use glasses or headset audio as a walkie-talkie interface to KishOS."
         case .liveRunTimeline:
@@ -352,13 +352,13 @@ enum KishOSFeature: String, CaseIterable, Identifiable, Codable {
         case .deleteReconciliation:
             return ["Sync", "Safety"]
         case .connectionRecovery:
-            return ["Recovery", "Reliability"]
+            return ["Deferred", "Recovery"]
         case .streamingEvents:
             return ["Streaming", "Tools"]
         case .approvalCards:
             return ["Questions", "Control"]
         case .decisionInbox:
-            return ["Decisions", "Control"]
+            return ["Deferred", "Decisions"]
         case .toolInventory:
             return ["Tools", "Status"]
         case .pushToTalk:
@@ -368,13 +368,13 @@ enum KishOSFeature: String, CaseIterable, Identifiable, Codable {
         case .nativeAttachments:
             return ["Files", "Photos"]
         case .explicitSnapshot:
-            return ["Camera", "Vision"]
+            return ["Validated", "Vision"]
         case .snapshotReview:
-            return ["Camera", "Privacy"]
+            return ["UI", "Privacy"]
         case .liveCallMode:
-            return ["Voice", "Call"]
+            return ["M6", "QA"]
         case .wakePhrase:
-            return ["Voice", "Hands-free"]
+            return ["Glassbridge", "Wake"]
         case .audioRouteAwareness:
             return ["Audio", "Routes"]
         case .audioRoutePicker:
@@ -407,6 +407,7 @@ enum KishOSCapabilityState: String, Codable {
     case available = "Available"
     case inProgress = "In progress"
     case planned = "Planned"
+    case deferred = "Deferred"
     case off = "Off"
 }
 
@@ -437,15 +438,16 @@ enum KishOSFactoryPlan {
              .pushToTalk,
              .iOSSharedShell,
              .nativeAttachments,
+             .explicitSnapshot,
              .audioRouteAwareness:
             state = .available
         case .connectionRecovery,
-             .decisionInbox,
-             .liveCallMode,
+             .decisionInbox:
+            state = .deferred
+        case .liveCallMode,
              .wakePhrase,
              .audioRoutePicker,
              .spokenReplies,
-             .explicitSnapshot,
              .snapshotReview,
              .sessionRecovery:
             state = .inProgress

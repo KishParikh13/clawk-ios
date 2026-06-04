@@ -1844,6 +1844,8 @@ private struct RoadmapView: View {
             return "In progress"
         case .planned:
             return "Planned"
+        case .deferred:
+            return "Deferred"
         case .off:
             return "Off"
         case .available:
