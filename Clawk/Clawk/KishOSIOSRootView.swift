@@ -606,7 +606,12 @@ private struct ChatScreen: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 18) {
                         if messages.isEmpty {
-                            EmptyIOSChat()
+                            EmptyIOSChat(
+                                projectName: projectName,
+                                projectBranch: projectBranch,
+                                showsProjectPicker: conversation == nil,
+                                onPickProject: onPickProject
+                            )
                         } else {
                             ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
                                 IOSMessageTurn(
@@ -666,14 +671,10 @@ private struct ChatScreen: View {
                     isSending: client.isSending,
                     isDisabled: client.isSending || isSending,
                     runState: runState,
-                    projectName: projectName,
-                    projectBranch: projectBranch,
-                    projectLocked: projectLocked,
                     voice: voice,
                     onSend: sendDraft,
                     onStop: onStop,
                     onStartCall: onStartCall,
-                    onPickProject: onPickProject
                 )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -735,10 +736,14 @@ private struct IOSChatHeaderTitle: View {
                 .lineLimit(1)
 
             if let conversation {
-                Text(conversation.updatedDetailText)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                HStack(spacing: 4) {
+                    Text(conversation.projectBadgeText)
+                    Text("•")
+                    Text(conversation.updatedDetailText)
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
             }
         }
         .frame(maxWidth: 220)
@@ -965,14 +970,10 @@ private struct IOSComposer: View {
     let isSending: Bool
     let isDisabled: Bool
     let runState: ConversationRunState?
-    let projectName: String
-    let projectBranch: String?
-    let projectLocked: Bool
     @ObservedObject var voice: VoiceController
     let onSend: () -> Void
     let onStop: () -> Void
     let onStartCall: () -> Void
-    let onPickProject: () -> Void
 
     @State private var showingTextCapture = false
     @State private var showingPhotoPicker = false
@@ -1050,14 +1051,6 @@ private struct IOSComposer: View {
                     .disabled(isDisabled)
                     .accessibilityLabel("Add")
                 }
-
-                IOSProjectChip(
-                    name: projectName,
-                    branch: projectBranch,
-                    isLocked: projectLocked,
-                    isDisabled: isDisabled || voice.isRecording,
-                    onTap: onPickProject
-                )
 
                 HStack(alignment: .bottom, spacing: 8) {
                     Group {
@@ -2385,6 +2378,11 @@ private struct IOSOfflineQueueBar: View {
 }
 
 private struct EmptyIOSChat: View {
+    let projectName: String
+    let projectBranch: String?
+    let showsProjectPicker: Bool
+    let onPickProject: () -> Void
+
     var body: some View {
         VStack(spacing: 12) {
             Image(systemName: "sparkle.magnifyingglass")
@@ -2392,6 +2390,17 @@ private struct EmptyIOSChat: View {
                 .foregroundStyle(.secondary)
             Text("Ask KishOS")
                 .font(.title3.weight(.semibold))
+
+            if showsProjectPicker {
+                IOSProjectChip(
+                    name: projectName,
+                    branch: projectBranch,
+                    isLocked: false,
+                    isDisabled: false,
+                    onTap: onPickProject
+                )
+                .padding(.top, 2)
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 140)

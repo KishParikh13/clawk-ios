@@ -47,8 +47,8 @@
         "Verification command passes"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Removed project selectors from Mac and iOS composers. New-chat empty states now show the project picker below Ask KishOS, and active conversations show locked project context in the header. Verified with .ralph/verify.sh."
     },
     {
       "id": "US-004",

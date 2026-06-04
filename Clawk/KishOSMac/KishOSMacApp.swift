@@ -629,6 +629,7 @@ private struct ChatView: View {
             ChatHeader(
                 title: title,
                 subtitle: subtitle,
+                projectBadge: projectLocked ? projectLabel : nil,
                 runState: runState,
                 onCopyTranscript: onCopyTranscript,
                 onCopyChatID: onCopyChatID,
@@ -641,7 +642,12 @@ private struct ChatView: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 18) {
                         if messages.isEmpty {
-                            EmptyChatPrompt()
+                            EmptyChatPrompt(
+                                projectName: projectName,
+                                projectBranch: projectBranch,
+                                showsProjectPicker: !projectLocked,
+                                onPickProject: onPickProject
+                            )
                         } else {
                             ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
                                 MessageTurn(
@@ -708,12 +714,8 @@ private struct ChatView: View {
                     isDisabled: client.isSending || isRunning,
                     voice: voice,
                     runState: runState,
-                    projectName: projectName,
-                    projectBranch: projectBranch,
-                    projectLocked: projectLocked,
                     onSend: sendDraft,
-                    onStop: onStop,
-                    onPickProject: onPickProject
+                    onStop: onStop
                 )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -751,6 +753,11 @@ private struct ChatView: View {
         pendingAttachments.contains { $0.isReadyForSend }
     }
 
+    private var projectLabel: String {
+        let cleanBranch = (projectBranch ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return cleanBranch.isEmpty ? projectName : "\(projectName) \(cleanBranch)"
+    }
+
     private func previousUserText(before index: Int) -> String {
         guard index > 0 else { return "" }
         return messages[..<index].last(where: { $0.sender == .user })?.text ?? ""
@@ -760,6 +767,7 @@ private struct ChatView: View {
 private struct ChatHeader: View {
     let title: String
     let subtitle: String
+    let projectBadge: String?
     let runState: ConversationRunState?
     let onCopyTranscript: (() -> Void)?
     let onCopyChatID: (() -> Void)?
@@ -775,10 +783,16 @@ private struct ChatHeader: View {
                     .fontWeight(.semibold)
                     .lineLimit(1)
                 if shouldShowSubtitle {
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                    HStack(spacing: 6) {
+                        if let projectBadge {
+                            Label(projectBadge, systemImage: projectBadge == "Home" ? "house" : "folder")
+                                .labelStyle(.titleAndIcon)
+                        }
+                        Text(subtitle)
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
                 }
             }
 
@@ -956,6 +970,11 @@ private struct RenameConversationSheet: View {
 }
 
 private struct EmptyChatPrompt: View {
+    let projectName: String
+    let projectBranch: String?
+    let showsProjectPicker: Bool
+    let onPickProject: () -> Void
+
     var body: some View {
         VStack(spacing: 12) {
             Image(systemName: "sparkle.magnifyingglass")
@@ -963,6 +982,17 @@ private struct EmptyChatPrompt: View {
                 .foregroundStyle(.secondary)
             Text("Ask KishOS")
                 .font(.title3.weight(.semibold))
+
+            if showsProjectPicker {
+                MacProjectChip(
+                    name: projectName,
+                    branch: projectBranch,
+                    isLocked: false,
+                    isDisabled: false,
+                    onTap: onPickProject
+                )
+                .padding(.top, 2)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         .padding(.top, 120)
@@ -1397,12 +1427,8 @@ private struct ChatComposer: View {
     let isDisabled: Bool
     @ObservedObject var voice: VoiceController
     let runState: ConversationRunState?
-    let projectName: String
-    let projectBranch: String?
-    let projectLocked: Bool
     let onSend: () -> Void
     let onStop: () -> Void
-    let onPickProject: () -> Void
 
     @State private var attachmentError: String?
     @State private var isDropTarget = false
@@ -1456,14 +1482,6 @@ private struct ChatComposer: View {
                 .foregroundStyle(.secondary)
                 .help("Attach files")
                 .disabled(isDisabled)
-
-                MacProjectChip(
-                    name: projectName,
-                    branch: projectBranch,
-                    isLocked: projectLocked,
-                    isDisabled: isDisabled,
-                    onTap: onPickProject
-                )
 
                 VStack(alignment: .leading, spacing: 2) {
                     TextField(voice.isRecording ? "Listening" : "Ask KishOS", text: $draft)
