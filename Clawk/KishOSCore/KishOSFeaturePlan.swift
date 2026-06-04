@@ -303,7 +303,7 @@ enum KishOSFeature: String, CaseIterable, Identifiable, Codable {
         case .explicitSnapshot:
             return "Validated through the native attachment path: capture or choose an image, upload it, then send the attachment id with the chat turn."
         case .snapshotReview:
-            return "Mostly UI: make the image review, retake, and send flow feel intentional before camera-first use."
+            return "Review camera/photo captures before attaching, ask about them, retake, or cancel without auto-sending."
         case .liveCallMode:
             return "Hands-free call surface with conversation continuity, interruption controls, and a Live Activity override while a call is active."
         case .wakePhrase:
@@ -321,11 +321,11 @@ enum KishOSFeature: String, CaseIterable, Identifiable, Codable {
         case .interruptSteering:
             return "Let you steer or stop a running agent without waiting for the final answer."
         case .statusNotifications:
-            return "Use Live Activity and notifications to surface recent sessions, review-needed work, and completed runs."
+            return "Use Live Activity and contextual local notifications to surface recent sessions, review-needed work, and completed runs."
         case .sessionRecovery:
             return "Reopen the app and recover the final state of an in-flight run."
         case .capabilityMap:
-            return "Summarize what the agent can do, what needs setup, and what is broken."
+            return "Summarize real tool and engine availability, recent use, and unavailable capabilities."
         case .dailyBrief:
             return "Generate a short daily brief from active threads and recent work."
         case .memoryPins:
@@ -443,19 +443,19 @@ enum KishOSFactoryPlan {
              .liveCallMode,
              .wakePhrase,
              .audioRoutePicker,
-             .spokenReplies:
+             .spokenReplies,
+             .snapshotReview,
+             .statusNotifications,
+             .capabilityMap:
             state = .available
         case .connectionRecovery,
              .decisionInbox:
             state = .deferred
-        case .snapshotReview,
-             .statusNotifications,
-             .sessionRecovery:
+        case .sessionRecovery:
             state = .inProgress
         case .glassesWalkMode,
              .liveRunTimeline,
              .interruptSteering,
-             .capabilityMap,
              .dailyBrief,
              .memoryPins,
              .routines:
