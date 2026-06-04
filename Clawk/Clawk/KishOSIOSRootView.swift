@@ -1312,6 +1312,32 @@ private struct IOSConnectionPanel: View {
                 StatusChip(title: "Chat", value: client.chatStatus)
                 StatusChip(title: "Audio", value: audio.statusLabel)
             }
+
+            HStack(spacing: 8) {
+                Button {
+                    audio.setPrefersHandsFreeRoute(!audio.prefersHandsFreeRoute)
+                } label: {
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(audio.prefersHandsFreeRoute ? Color.green : Color.secondary)
+                            .frame(width: 7, height: 7)
+                        Text("External")
+                            .font(.caption.weight(.medium))
+                    }
+                    .padding(.horizontal, 10)
+                    .frame(height: 30)
+                    .background(IOSTheme.secondaryBackground, in: Capsule())
+                    .overlay(Capsule().stroke(IOSTheme.hairline))
+                }
+                .buttonStyle(.plain)
+
+                Text(audio.routeDetail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+
+                Spacer(minLength: 0)
+            }
         }
         .padding(10)
         .background(IOSTheme.elevatedBackground.opacity(0.74), in: RoundedRectangle(cornerRadius: 16, style: .continuous))

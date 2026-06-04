@@ -114,7 +114,7 @@ final class VoiceController: ObservableObject {
     private func configureAudioSession() throws {
         #if os(iOS)
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playAndRecord, mode: .measurement, options: [.allowBluetoothHFP, .duckOthers])
+        try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetoothHFP, .allowBluetoothA2DP, .defaultToSpeaker, .duckOthers])
         try session.setActive(true, options: .notifyOthersOnDeactivation)
         #endif
     }

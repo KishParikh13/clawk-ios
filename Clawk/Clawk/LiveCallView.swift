@@ -120,6 +120,7 @@ struct LiveCallView: View {
         .background(Color(uiColor: .systemBackground))
         .task {
             audio.start()
+            audio.activatePreferredHandsFreeRoute()
             await controller.start()
         }
         .onChange(of: voice.transcript) { _, transcript in
