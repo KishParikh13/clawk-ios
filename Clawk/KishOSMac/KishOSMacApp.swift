@@ -119,6 +119,8 @@ private struct MacRootView: View {
                 approvals: [],
                 onSend: { send($0, attachments: $1, in: nil) },
                 onRetry: nil,
+                onCopyTranscript: nil,
+                onCopyChatID: nil,
                 onRename: nil,
                 onDelete: nil,
                 onQuestionAnswer: nil,
@@ -132,7 +134,7 @@ private struct MacRootView: View {
                 ChatView(
                     client: client,
                     title: conversation.title,
-                    subtitle: conversation.idea,
+                    subtitle: conversation.updatedDetailText,
                     messages: conversation.messages,
                     isRunning: conversation.isRunning,
                     lastError: conversation.lastError,
@@ -142,6 +144,8 @@ private struct MacRootView: View {
                     approvals: conversation.approvals,
                     onSend: { send($0, attachments: $1, in: conversation.id) },
                     onRetry: { retry(conversation.id) },
+                    onCopyTranscript: { copyToPasteboard(conversation.transcriptText) },
+                    onCopyChatID: { copyToPasteboard(conversation.threadId) },
                     onRename: { conversationToRename = conversation },
                     onDelete: { deleteConversation(conversation.id) },
                     onQuestionAnswer: { approval, answer in answerQuestion(approval, answer: answer, in: conversation.id) },
@@ -174,7 +178,12 @@ private struct MacRootView: View {
         Task {
             do {
                 workspace.beginAgentResponse(in: retry.conversation.id)
-                let result = try await client.sendStreaming(retry.message, threadId: retry.conversation.threadId, conversationId: retry.conversation.id) { event in
+                let result = try await client.sendStreaming(
+                    retry.message,
+                    threadId: retry.conversation.threadId,
+                    conversationId: retry.conversation.id,
+                    attachments: retry.attachments
+                ) { event in
                     handleStreamEvent(event, conversationId: retry.conversation.id)
                 }
                 workspace.apply(result, to: retry.conversation.id)
@@ -219,31 +228,48 @@ private struct MacRootView: View {
         }
     }
 
+    private func copyToPasteboard(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+
     private func send(_ text: String, attachments: [ChatAttachment], in conversationId: UUID?) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        let outgoingText = trimmed.isEmpty ? defaultAttachmentPrompt(for: attachments) : trimmed
+        guard !outgoingText.isEmpty, attachments.allSatisfy(\.isReadyForSend) else { return }
+        let requestAttachments = chatRequestAttachments(for: attachments)
 
         if client.isDisconnected {
-            queue(trimmed, attachments: attachments, in: conversationId)
+            queue(outgoingText, attachments: attachments, in: conversationId)
             return
         }
 
         let conversation: Conversation
-        if let conversationId, let existing = workspace.appendUserMessage(trimmed, to: conversationId, attachments: attachments) {
+        if let conversationId, let existing = workspace.appendUserMessage(outgoingText, to: conversationId, attachments: attachments) {
             conversation = existing
         } else {
-            conversation = workspace.createConversation(firstMessage: trimmed, attachments: attachments)
+            conversation = workspace.createConversation(firstMessage: outgoingText, attachments: attachments)
             selection = .conversation(conversation.id)
         }
 
-        sendPreparedMessage(messageTextForAgent(trimmed, attachments: attachments), in: conversation, messageID: conversation.messages.last?.id)
+        sendPreparedMessage(
+            messageTextForAgent(outgoingText, attachments: attachments),
+            attachments: requestAttachments,
+            in: conversation,
+            messageID: conversation.messages.last?.id
+        )
     }
 
-    private func sendPreparedMessage(_ text: String, in conversation: Conversation, messageID: UUID?) {
+    private func sendPreparedMessage(_ text: String, attachments: [ChatRequestAttachment], in conversation: Conversation, messageID: UUID?) {
         Task {
             do {
                 workspace.beginAgentResponse(in: conversation.id)
-                let result = try await client.sendStreaming(text, threadId: conversation.threadId, conversationId: conversation.id) { event in
+                let result = try await client.sendStreaming(
+                    text,
+                    threadId: conversation.threadId,
+                    conversationId: conversation.id,
+                    attachments: attachments
+                ) { event in
                     handleStreamEvent(event, conversationId: conversation.id)
                 }
                 workspace.apply(result, to: conversation.id)
@@ -348,7 +374,8 @@ private struct MacRootView: View {
                 let result = try await client.sendStreaming(
                     prepared.message,
                     threadId: prepared.conversation.threadId,
-                    conversationId: prepared.conversation.id
+                    conversationId: prepared.conversation.id,
+                    attachments: prepared.attachments
                 ) { event in
                     handleStreamEvent(event, conversationId: prepared.conversation.id)
                 }
@@ -405,6 +432,13 @@ private struct ConversationRow: View {
         .padding(.horizontal, 6)
         .background(conversation.isRunning ? Color.accentColor.opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 8))
         .contextMenu {
+            Button("Copy Transcript") {
+                copyToPasteboard(conversation.transcriptText)
+            }
+            Button("Copy Chat ID") {
+                copyToPasteboard(conversation.threadId)
+            }
+            Divider()
             Button("Rename", action: onRename)
             Button("Delete", role: .destructive, action: onDelete)
         }
@@ -415,9 +449,14 @@ private struct ConversationRow: View {
             if conversation.queuedUserMessageCount > 0 {
                 return "\(conversation.queuedUserMessageCount) queued"
             }
-            return conversation.runState.label
+            return "\(conversation.runState.label) - \(conversation.updatedTimestampText)"
         }
-        return conversation.threadId
+        return conversation.updatedDetailText
+    }
+
+    private func copyToPasteboard(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
     }
 }
 
@@ -462,6 +501,8 @@ private struct ChatView: View {
     let approvals: [ApprovalRequest]
     let onSend: (String, [ChatAttachment]) -> Void
     let onRetry: (() -> Void)?
+    let onCopyTranscript: (() -> Void)?
+    let onCopyChatID: (() -> Void)?
     let onRename: (() -> Void)?
     let onDelete: (() -> Void)?
     let onQuestionAnswer: ((ApprovalRequest, String) -> Void)?
@@ -479,6 +520,8 @@ private struct ChatView: View {
                 title: title,
                 subtitle: subtitle,
                 runState: runState,
+                onCopyTranscript: onCopyTranscript,
+                onCopyChatID: onCopyChatID,
                 onRename: onRename,
                 onDelete: onDelete,
                 reservesTitleControlSpace: reservesTitleControlSpace
@@ -587,6 +630,8 @@ private struct ChatHeader: View {
     let title: String
     let subtitle: String
     let runState: ConversationRunState?
+    let onCopyTranscript: (() -> Void)?
+    let onCopyChatID: (() -> Void)?
     let onRename: (() -> Void)?
     let onDelete: (() -> Void)?
     let reservesTitleControlSpace: Bool
@@ -612,8 +657,17 @@ private struct ChatHeader: View {
 
             Spacer()
 
-            if onRename != nil || onDelete != nil {
+            if onCopyTranscript != nil || onCopyChatID != nil || onRename != nil || onDelete != nil {
                 Menu {
+                    if let onCopyTranscript {
+                        Button("Copy Transcript", action: onCopyTranscript)
+                    }
+                    if let onCopyChatID {
+                        Button("Copy Chat ID", action: onCopyChatID)
+                    }
+                    if onCopyTranscript != nil || onCopyChatID != nil {
+                        Divider()
+                    }
                     if let onRename {
                         Button("Rename", action: onRename)
                     }

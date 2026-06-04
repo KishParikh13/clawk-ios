@@ -4,13 +4,24 @@ import UIKit
 @preconcurrency import Vision
 
 struct CameraTextCaptureView: UIViewControllerRepresentable {
-    let onResult: (Result<String, Error>) -> Void
+    let sourceType: UIImagePickerController.SourceType
+    let onResult: (Result<ChatAttachment, Error>) -> Void
     let onCancel: () -> Void
+
+    init(
+        sourceType: UIImagePickerController.SourceType = .camera,
+        onResult: @escaping (Result<ChatAttachment, Error>) -> Void,
+        onCancel: @escaping () -> Void
+    ) {
+        self.sourceType = sourceType
+        self.onResult = onResult
+        self.onCancel = onCancel
+    }
 
     func makeUIViewController(context: Context) -> UIImagePickerController {
         let picker = UIImagePickerController()
         picker.delegate = context.coordinator
-        picker.sourceType = UIImagePickerController.isSourceTypeAvailable(.camera) ? .camera : .photoLibrary
+        picker.sourceType = UIImagePickerController.isSourceTypeAvailable(sourceType) ? sourceType : .photoLibrary
         picker.allowsEditing = false
         return picker
     }
@@ -18,14 +29,20 @@ struct CameraTextCaptureView: UIViewControllerRepresentable {
     func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onResult: onResult, onCancel: onCancel)
+        Coordinator(sourceType: sourceType, onResult: onResult, onCancel: onCancel)
     }
 
     final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
-        private let onResult: (Result<String, Error>) -> Void
+        private let sourceType: UIImagePickerController.SourceType
+        private let onResult: (Result<ChatAttachment, Error>) -> Void
         private let onCancel: () -> Void
 
-        init(onResult: @escaping (Result<String, Error>) -> Void, onCancel: @escaping () -> Void) {
+        init(
+            sourceType: UIImagePickerController.SourceType,
+            onResult: @escaping (Result<ChatAttachment, Error>) -> Void,
+            onCancel: @escaping () -> Void
+        ) {
+            self.sourceType = sourceType
             self.onResult = onResult
             self.onCancel = onCancel
         }
@@ -46,11 +63,12 @@ struct CameraTextCaptureView: UIViewControllerRepresentable {
             }
 
             picker.dismiss(animated: true)
+            let filename = (info[.imageURL] as? URL)?.lastPathComponent ?? (sourceType == .camera ? "Camera.jpg" : "Photo.jpg")
             Task {
                 do {
-                    let text = try await ImageTextExtractor.extractText(from: image)
+                    let attachment = try await Self.imageAttachment(from: image, filename: filename)
                     await MainActor.run {
-                        self.onResult(.success(text))
+                        self.onResult(.success(attachment))
                     }
                 } catch {
                     await MainActor.run {
@@ -58,6 +76,40 @@ struct CameraTextCaptureView: UIViewControllerRepresentable {
                     }
                 }
             }
+        }
+
+        private static func imageAttachment(from image: UIImage, filename: String) async throws -> ChatAttachment {
+            let normalizedFilename = filename.isEmpty ? "Photo.jpg" : filename
+            let data: Data
+            let mimeType: String
+            if let jpegData = image.jpegData(compressionQuality: 0.92) {
+                data = jpegData
+                mimeType = "image/jpeg"
+            } else if let pngData = image.pngData() {
+                data = pngData
+                mimeType = "image/png"
+            } else {
+                throw ImageTextExtractionError.unreadableImage
+            }
+
+            let extractedText = try? await ImageTextExtractor.extractText(from: image)
+            let cleanText = extractedText?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let id = UUID()
+            let localFilename = try AttachmentPayloadCache.shared.store(
+                data: data,
+                attachmentId: id,
+                filename: normalizedFilename
+            )
+            return ChatAttachment(
+                id: id,
+                kind: .image,
+                title: normalizedFilename,
+                text: cleanText?.isEmpty == false ? cleanText : nil,
+                mimeType: mimeType,
+                byteCount: data.count,
+                localFilename: localFilename,
+                uploadState: .local
+            )
         }
     }
 }

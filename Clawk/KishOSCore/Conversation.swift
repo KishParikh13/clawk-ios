@@ -77,6 +77,34 @@ struct Conversation: Identifiable, Codable, Equatable {
         messages.filter { $0.sender == .user && $0.deliveryState == .queued }.count
     }
 
+    var updatedTimestampText: String {
+        Self.timestampText(for: updatedAt)
+    }
+
+    var updatedDetailText: String {
+        "Updated \(updatedTimestampText)"
+    }
+
+    var transcriptText: String {
+        messages.map { message in
+            let speaker = message.sender == .user ? "User" : "KishOS"
+            let timestamp = Self.timestampText(for: message.createdAt)
+            return "\(speaker) (\(timestamp)):\n\(message.text)"
+        }
+        .joined(separator: "\n\n")
+    }
+
+    static func timestampText(for date: Date, now: Date = Date()) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = .current
+        if Calendar.current.isDate(date, equalTo: now, toGranularity: .year) {
+            formatter.setLocalizedDateFormatFromTemplate("MMM d h:mm a")
+        } else {
+            formatter.setLocalizedDateFormatFromTemplate("MMM d yyyy h:mm a")
+        }
+        return formatter.string(from: date)
+    }
+
     var runState: ConversationRunState {
         if !approvals.isEmpty {
             return .waitingForQuestion
@@ -290,23 +318,102 @@ struct ChatAttachment: Identifiable, Codable, Equatable {
         case url
     }
 
+    enum UploadState: String, Codable, Equatable {
+        case local
+        case uploading
+        case ready
+        case failed
+    }
+
     var id: UUID
     var kind: Kind
     var title: String
     var text: String?
     var createdAt: Date
+    var mimeType: String?
+    var byteCount: Int?
+    var uploadId: String?
+    var localFilename: String?
+    var uploadState: UploadState
+    var uploadError: String?
 
-    init(id: UUID = UUID(), kind: Kind, title: String, text: String? = nil, createdAt: Date = Date()) {
+    enum CodingKeys: String, CodingKey {
+        case id
+        case kind
+        case title
+        case text
+        case createdAt
+        case mimeType
+        case byteCount
+        case uploadId
+        case localFilename
+        case uploadState
+        case uploadError
+    }
+
+    init(
+        id: UUID = UUID(),
+        kind: Kind,
+        title: String,
+        text: String? = nil,
+        createdAt: Date = Date(),
+        mimeType: String? = nil,
+        byteCount: Int? = nil,
+        uploadId: String? = nil,
+        localFilename: String? = nil,
+        uploadState: UploadState? = nil,
+        uploadError: String? = nil
+    ) {
         self.id = id
         self.kind = kind
         self.title = title
         self.text = text
         self.createdAt = createdAt
+        self.mimeType = mimeType
+        self.byteCount = byteCount
+        self.uploadId = uploadId
+        self.localFilename = localFilename
+        self.uploadState = uploadState ?? Self.defaultUploadState(kind: kind, uploadId: uploadId, localFilename: localFilename)
+        self.uploadError = uploadError
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        kind = try container.decode(Kind.self, forKey: .kind)
+        title = try container.decode(String.self, forKey: .title)
+        text = try container.decodeIfPresent(String.self, forKey: .text)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        mimeType = try container.decodeIfPresent(String.self, forKey: .mimeType)
+        byteCount = try container.decodeIfPresent(Int.self, forKey: .byteCount)
+        uploadId = try container.decodeIfPresent(String.self, forKey: .uploadId)
+        localFilename = try container.decodeIfPresent(String.self, forKey: .localFilename)
+        uploadState = try container.decodeIfPresent(UploadState.self, forKey: .uploadState)
+            ?? Self.defaultUploadState(kind: kind, uploadId: uploadId, localFilename: localFilename)
+        uploadError = try container.decodeIfPresent(String.self, forKey: .uploadError)
     }
 
     static func textContext(_ text: String, title: String = "Clipboard") -> ChatAttachment {
         let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        return ChatAttachment(kind: .text, title: title, text: clean)
+        return ChatAttachment(kind: .text, title: title, text: clean, uploadState: .ready)
+    }
+
+    var needsUpload: Bool {
+        (kind == .image || kind == .file) && uploadId == nil
+    }
+
+    var isReadyForSend: Bool {
+        !needsUpload || uploadState == .ready
+    }
+
+    private static func defaultUploadState(kind: Kind, uploadId: String?, localFilename: String?) -> UploadState {
+        if uploadId != nil || kind == .text || kind == .url {
+            return .ready
+        }
+        if localFilename != nil {
+            return .local
+        }
+        return .failed
     }
 }
 
@@ -352,8 +459,31 @@ struct QueuedMessage: Equatable {
     let message: ChatMessage
 }
 
+struct PreparedAgentMessage: Equatable {
+    let conversation: Conversation
+    let message: String
+    let attachments: [ChatRequestAttachment]
+}
+
+func defaultAttachmentPrompt(for attachments: [ChatAttachment]) -> String {
+    attachments.isEmpty ? "" : "Look at the attached file(s) and respond."
+}
+
+func chatRequestAttachments(for attachments: [ChatAttachment]) -> [ChatRequestAttachment] {
+    attachments.compactMap { attachment in
+        guard let uploadId = attachment.uploadId else { return nil }
+        return ChatRequestAttachment(
+            id: uploadId,
+            filename: attachment.title,
+            mimeType: attachment.mimeType,
+            kind: attachment.kind.rawValue
+        )
+    }
+}
+
 func messageTextForAgent(_ text: String, attachments: [ChatAttachment]) -> String {
     let cleanText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    let userText = cleanText.isEmpty ? defaultAttachmentPrompt(for: attachments) : cleanText
     guard !attachments.isEmpty else { return cleanText }
 
     let renderedAttachments = attachments.enumerated().compactMap { index, attachment -> String? in
@@ -372,8 +502,8 @@ func messageTextForAgent(_ text: String, attachments: [ChatAttachment]) -> Strin
         }
     }
 
-    guard !renderedAttachments.isEmpty else { return cleanText }
-    return "\(renderedAttachments.joined(separator: "\n\n"))\n\nUser message:\n\(cleanText)"
+    guard !renderedAttachments.isEmpty else { return userText }
+    return "\(renderedAttachments.joined(separator: "\n\n"))\n\nUser message:\n\(userText)"
 }
 
 struct ChatResult: Equatable {

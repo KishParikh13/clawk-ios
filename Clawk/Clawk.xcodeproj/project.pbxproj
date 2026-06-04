@@ -18,6 +18,7 @@
 		16C0AA8C9F1D44F3A62F7C01 /* LiveCallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16C0AA8A9F1D44F3A62F7C01 /* LiveCallView.swift */; };
 		17A7C91055B246DAB55F2A01 /* CameraTextCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17A7C90055B246DAB55F2A01 /* CameraTextCaptureView.swift */; };
 		182D525333F502C00AAF063A /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 227D7EAA8BA576629153DE13 /* HomeView.swift */; };
+		1E9C7C8A7C9A4C3A9A4C1101 /* FileTextPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E9C7C897C9A4C3A9A4C1101 /* FileTextPickerView.swift */; };
 		1AFDFA4A2AC2CEE77CD4C856 /* ConversationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9440A6471F2F63111CB49B46 /* ConversationStore.swift */; };
 		1CDB7EBBF886F63BA1460083 /* GatewayProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA864BCB8E5CB4DC707F8304 /* GatewayProtocol.swift */; };
 		25CAA09F895BFE70FB427FE6 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9BBBBEE778FA330FC6B2E92 /* SettingsView.swift */; };
@@ -76,6 +77,7 @@
 		16C0AA8A9F1D44F3A62F7C01 /* LiveCallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveCallView.swift; sourceTree = "<group>"; };
 		17A7C90055B246DAB55F2A01 /* CameraTextCaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraTextCaptureView.swift; sourceTree = "<group>"; };
 		227D7EAA8BA576629153DE13 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		1E9C7C897C9A4C3A9A4C1101 /* FileTextPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileTextPickerView.swift; sourceTree = "<group>"; };
 		29F2E674D7271CB505C361DF /* ChatHistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatHistoryStore.swift; sourceTree = "<group>"; };
 		3BC007C150922B621095A597 /* MoreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoreView.swift; sourceTree = "<group>"; };
 		3BF9B02D88EDF9A8620601CA /* GatewayConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayConnection.swift; sourceTree = "<group>"; };
@@ -142,6 +144,7 @@
 				67B095715EC6D0657B8EF344 /* Config.swift */,
 				641664BF743F7453554BF316 /* ContentView.swift */,
 				493A6B6CB1096E8BA7B489A8 /* CostsView.swift */,
+				1E9C7C897C9A4C3A9A4C1101 /* FileTextPickerView.swift */,
 				CD2B0BD8253B85A1A695E980 /* CronManagementView.swift */,
 				19D33F8BBD6020A9F8F43C0D /* DashboardAPIClient.swift */,
 				A733B461015C5FBC8DD9322E /* DashboardView.swift */,
@@ -318,6 +321,7 @@
 				796D01F37B7326029545C9CC /* Config.swift in Sources */,
 				05611179C1434EA208CEF157 /* ContentView.swift in Sources */,
 				ECD45AB1DC169FB9AF51B23D /* Conversation.swift in Sources */,
+				1E9C7C8A7C9A4C3A9A4C1101 /* FileTextPickerView.swift in Sources */,
 				81647F15B3A011B04AB5F3D2 /* ConversationStore.swift in Sources */,
 				520D1CD0D409E1F4E2F2256B /* CostsView.swift in Sources */,
 				E0970E477EF5F286C09EE94C /* CronManagementView.swift in Sources */,

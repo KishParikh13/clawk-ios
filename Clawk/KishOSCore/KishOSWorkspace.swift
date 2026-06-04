@@ -85,7 +85,7 @@ final class KishOSWorkspace: ObservableObject {
         appendUserMessage(text, to: id, now: now, deliveryState: .queued, attachments: attachments)
     }
 
-    func prepareRetryLastFailedMessage(in id: UUID, now: Date = Date()) -> (conversation: Conversation, message: String)? {
+    func prepareRetryLastFailedMessage(in id: UUID, now: Date = Date()) -> PreparedAgentMessage? {
         guard let index = conversations.firstIndex(where: { $0.id == id }),
               let messageIndex = conversations[index].messages.lastIndex(where: { $0.sender == .user && $0.deliveryState == .failed })
         else {
@@ -94,6 +94,7 @@ final class KishOSWorkspace: ObservableObject {
 
         let userMessage = conversations[index].messages[messageIndex]
         let message = messageTextForAgent(userMessage.text, attachments: userMessage.attachments)
+        let attachments = chatRequestAttachments(for: userMessage.attachments)
         conversations[index].messages[messageIndex].deliveryState = .sending
         conversations[index].events = ["retrying request", "continuing \(conversations[index].threadId)"]
         conversations[index].isRunning = true
@@ -101,7 +102,7 @@ final class KishOSWorkspace: ObservableObject {
         conversations[index].updatedAt = now
         let conversation = conversations[index]
         sortAndPersist()
-        return (conversation, message)
+        return PreparedAgentMessage(conversation: conversation, message: message, attachments: attachments)
     }
 
     func nextQueuedMessage() -> QueuedMessage? {
@@ -116,7 +117,7 @@ final class KishOSWorkspace: ObservableObject {
             }
     }
 
-    func prepareQueuedMessageForSending(conversationID: UUID, messageID: UUID, now: Date = Date()) -> (conversation: Conversation, message: String)? {
+    func prepareQueuedMessageForSending(conversationID: UUID, messageID: UUID, now: Date = Date()) -> PreparedAgentMessage? {
         guard let conversationIndex = conversations.firstIndex(where: { $0.id == conversationID }),
               let messageIndex = conversations[conversationIndex].messages.firstIndex(where: { $0.id == messageID && $0.sender == .user && $0.deliveryState == .queued })
         else {
@@ -125,6 +126,7 @@ final class KishOSWorkspace: ObservableObject {
 
         let userMessage = conversations[conversationIndex].messages[messageIndex]
         let message = messageTextForAgent(userMessage.text, attachments: userMessage.attachments)
+        let attachments = chatRequestAttachments(for: userMessage.attachments)
         conversations[conversationIndex].messages[messageIndex].deliveryState = .sending
         conversations[conversationIndex].events = ["sending queued message", "continuing \(conversations[conversationIndex].threadId)"]
         conversations[conversationIndex].isRunning = true
@@ -133,7 +135,7 @@ final class KishOSWorkspace: ObservableObject {
         conversations[conversationIndex].updatedAt = now
         let conversation = conversations[conversationIndex]
         sortAndPersist()
-        return (conversation, message)
+        return PreparedAgentMessage(conversation: conversation, message: message, attachments: attachments)
     }
 
     func apply(_ result: ChatResult, to id: UUID, now: Date = Date()) {

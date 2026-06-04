@@ -114,7 +114,7 @@ final class KishAgentClient: ObservableObject {
         }
     }
 
-    func send(_ message: String, threadId: String) async throws -> ChatResult {
+    func send(_ message: String, threadId: String, attachments: [ChatRequestAttachment] = []) async throws -> ChatResult {
         isSending = true
         status = "Sending"
         chatStatus = "Sending"
@@ -125,7 +125,7 @@ final class KishAgentClient: ObservableObject {
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.timeoutInterval = 180
-            request.httpBody = try JSONEncoder().encode(ChatRequest(threadId: threadId, message: message, conversationId: nil))
+            request.httpBody = try JSONEncoder().encode(ChatRequest(threadId: threadId, message: message, conversationId: nil, attachments: attachments))
 
             let (data, response) = try await session.data(for: request)
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
@@ -166,6 +166,7 @@ final class KishAgentClient: ObservableObject {
         _ message: String,
         threadId: String,
         conversationId: UUID? = nil,
+        attachments: [ChatRequestAttachment] = [],
         onEvent: @escaping (AgentStreamEvent) async -> Void
     ) async throws -> ChatResult {
         isSending = true
@@ -178,7 +179,7 @@ final class KishAgentClient: ObservableObject {
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.timeoutInterval = 180
-            request.httpBody = try JSONEncoder().encode(ChatRequest(threadId: threadId, message: message, conversationId: conversationId))
+            request.httpBody = try JSONEncoder().encode(ChatRequest(threadId: threadId, message: message, conversationId: conversationId, attachments: attachments))
 
             let (bytes, response) = try await session.bytes(for: request)
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
@@ -229,6 +230,40 @@ final class KishAgentClient: ObservableObject {
             status = "Error"
             chatStatus = "Error"
             detail = error.localizedDescription
+            throw error
+        }
+    }
+
+    func uploadAttachment(
+        _ payload: PendingAttachmentPayload,
+        conversationId: UUID? = nil,
+        threadId: String? = nil
+    ) async throws -> UploadedAttachment {
+        let boundary = "Boundary-\(UUID().uuidString)"
+        var request = URLRequest(url: baseURL.appendingPathComponent("attachments"))
+        request.httpMethod = "POST"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 120
+        request.httpBody = Self.multipartBody(
+            boundary: boundary,
+            payload: payload,
+            conversationId: conversationId,
+            threadId: threadId
+        )
+
+        do {
+            let (data, response) = try await session.data(for: request)
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            let decoded = try Self.decoder.decode(AttachmentUploadResponse.self, from: data)
+            guard statusCode == 200, decoded.ok, let attachment = decoded.attachment else {
+                let message = decoded.error ?? "Attachment upload returned HTTP \(statusCode)"
+                throw AgentClientError.requestFailed(message)
+            }
+            return attachment
+        } catch let error as URLError {
+            markNetworkError(error)
+            throw AgentClientError.network(error)
+        } catch {
             throw error
         }
     }
@@ -366,12 +401,179 @@ final class KishAgentClient: ObservableObject {
         }
         return output
     }
+
+    private static func multipartBody(
+        boundary: String,
+        payload: PendingAttachmentPayload,
+        conversationId: UUID?,
+        threadId: String?
+    ) -> Data {
+        var body = Data()
+
+        func append(_ string: String) {
+            body.append(Data(string.utf8))
+        }
+
+        func appendField(name: String, value: String) {
+            append("--\(boundary)\r\n")
+            append("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n")
+            append("\(value)\r\n")
+        }
+
+        appendField(name: "filename", value: payload.filename)
+        appendField(name: "mimeType", value: payload.mimeType)
+        if let conversationId {
+            appendField(name: "conversationId", value: conversationId.uuidString.lowercased())
+        }
+        if let threadId {
+            appendField(name: "threadId", value: threadId)
+        }
+
+        append("--\(boundary)\r\n")
+        append("Content-Disposition: form-data; name=\"file\"; filename=\"\(escapedMultipartValue(payload.filename))\"\r\n")
+        append("Content-Type: \(payload.mimeType)\r\n\r\n")
+        body.append(payload.data)
+        append("\r\n")
+        append("--\(boundary)--\r\n")
+        return body
+    }
+
+    private static func escapedMultipartValue(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+            .replacingOccurrences(of: "\r", with: "")
+            .replacingOccurrences(of: "\n", with: "")
+    }
+}
+
+struct ChatRequestAttachment: Codable, Equatable {
+    let id: String
+    let filename: String
+    let mimeType: String?
+    let kind: String?
+}
+
+struct UploadedAttachment: Decodable, Equatable {
+    let id: String
+    let filename: String
+    let mimeType: String?
+    let byteCount: Int?
+    let kind: String?
+}
+
+struct PendingAttachmentPayload: Equatable {
+    let attachmentId: UUID
+    let filename: String
+    let mimeType: String
+    let data: Data
+}
+
+final class AttachmentPayloadCache {
+    static let shared = AttachmentPayloadCache()
+
+    private let fileManager: FileManager
+    private let rootURL: URL
+
+    init(fileManager: FileManager = .default) {
+        self.fileManager = fileManager
+        let supportURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? fileManager.temporaryDirectory
+        self.rootURL = supportURL
+            .appendingPathComponent("KishOS", isDirectory: true)
+            .appendingPathComponent("Attachments", isDirectory: true)
+    }
+
+    func store(data: Data, attachmentId: UUID, filename: String) throws -> String {
+        let safeFilename = Self.safeFilename(filename)
+        let directory = rootURL.appendingPathComponent(attachmentId.uuidString.lowercased(), isDirectory: true)
+        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+        let fileURL = directory.appendingPathComponent(safeFilename, isDirectory: false)
+        try data.write(to: fileURL, options: [.atomic])
+        return "\(attachmentId.uuidString.lowercased())/\(safeFilename)"
+    }
+
+    func payload(for attachment: ChatAttachment) throws -> PendingAttachmentPayload {
+        guard let localFilename = attachment.localFilename else {
+            throw AttachmentPayloadCacheError.missingLocalFile
+        }
+        let fileURL = try resolvedURL(for: localFilename)
+        let data = try Data(contentsOf: fileURL)
+        return PendingAttachmentPayload(
+            attachmentId: attachment.id,
+            filename: attachment.title,
+            mimeType: attachment.mimeType ?? "application/octet-stream",
+            data: data
+        )
+    }
+
+    func removePayload(for attachment: ChatAttachment) {
+        guard let localFilename = attachment.localFilename,
+              let directoryName = localFilename.split(separator: "/").first
+        else {
+            return
+        }
+        let directory = rootURL.appendingPathComponent(String(directoryName), isDirectory: true)
+        try? fileManager.removeItem(at: directory)
+    }
+
+    private func resolvedURL(for localFilename: String) throws -> URL {
+        let parts = localFilename.split(separator: "/", omittingEmptySubsequences: true).map(String.init)
+        guard parts.count == 2,
+              parts.allSatisfy({ !$0.contains("..") && !$0.contains("/") })
+        else {
+            throw AttachmentPayloadCacheError.invalidLocalFile
+        }
+        return rootURL
+            .appendingPathComponent(parts[0], isDirectory: true)
+            .appendingPathComponent(parts[1], isDirectory: false)
+    }
+
+    private static func safeFilename(_ filename: String) -> String {
+        let cleaned = filename
+            .components(separatedBy: CharacterSet(charactersIn: "/\\:\0\r\n"))
+            .joined(separator: "_")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return cleaned.isEmpty ? "attachment" : cleaned
+    }
+}
+
+enum AttachmentPayloadCacheError: LocalizedError {
+    case missingLocalFile
+    case invalidLocalFile
+
+    var errorDescription: String? {
+        switch self {
+        case .missingLocalFile:
+            return "Could not read that file."
+        case .invalidLocalFile:
+            return "Could not read that file."
+        }
+    }
 }
 
 private struct ChatRequest: Encodable {
     let threadId: String
     let message: String
     let conversationId: UUID?
+    let attachments: [ChatRequestAttachment]
+
+    enum CodingKeys: String, CodingKey {
+        case threadId
+        case message
+        case conversationId
+        case attachments
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(threadId, forKey: .threadId)
+        try container.encode(message, forKey: .message)
+        try container.encodeIfPresent(conversationId, forKey: .conversationId)
+        if !attachments.isEmpty {
+            try container.encode(attachments, forKey: .attachments)
+        }
+    }
 }
 
 private struct ConversationListResponse: Decodable {
@@ -429,6 +631,12 @@ private struct HealthResponse: Decodable {
 
 private struct BasicResponse: Decodable {
     let ok: Bool
+    let error: String?
+}
+
+private struct AttachmentUploadResponse: Decodable {
+    let ok: Bool
+    let attachment: UploadedAttachment?
     let error: String?
 }
 

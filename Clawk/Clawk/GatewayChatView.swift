@@ -179,21 +179,33 @@ struct MessageInputBar: View {
     let onSend: () -> Void
     
     var body: some View {
-        HStack(spacing: 12) {
-            TextField("Message...", text: $text, axis: .vertical)
-                .textFieldStyle(RoundedBorderTextFieldStyle())
+        HStack(alignment: .bottom, spacing: 8) {
+            TextField("Ask KishOS", text: $text, axis: .vertical)
+                .textFieldStyle(.plain)
                 .lineLimit(1...5)
                 .disabled(!isEnabled)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(Color(.secondarySystemBackground), in: Capsule())
+                .overlay(Capsule().stroke(Color(.separator).opacity(0.35)))
             
             Button(action: onSend) {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.title2)
-                    .foregroundColor(isEnabled && !text.isEmpty ? .blue : .gray)
+                Image(systemName: "arrow.up")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 38, height: 38)
+                    .background(canSend ? Color(.label) : Color(.systemGray4), in: Circle())
             }
-            .disabled(!isEnabled || text.isEmpty)
+            .buttonStyle(.plain)
+            .disabled(!canSend)
         }
-        .padding()
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
         .background(Color(.systemBackground))
+    }
+
+    private var canSend: Bool {
+        isEnabled && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 }
 

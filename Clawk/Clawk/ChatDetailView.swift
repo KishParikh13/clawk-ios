@@ -258,25 +258,24 @@ struct ChatInputBar: View {
             Divider()
 
             HStack(alignment: .bottom, spacing: 10) {
-                // Text field
-                TextField("Message", text: $text, axis: .vertical)
+                TextField("Ask KishOS", text: $text, axis: .vertical)
                     .font(.system(size: 15))
                     .lineLimit(1...6)
                     .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(Color(.systemGray6))
-                    .clipShape(RoundedRectangle(cornerRadius: 20))
+                    .padding(.vertical, 10)
+                    .background(Color(.secondarySystemBackground), in: Capsule())
+                    .overlay(Capsule().stroke(Color(.separator).opacity(0.35)))
                     .disabled(!isConnected)
 
-                // Send button
                 Button(action: onSend) {
                     Image(systemName: "arrow.up")
-                        .font(.system(size: 14, weight: .bold))
+                        .font(.system(size: 15, weight: .bold))
                         .foregroundColor(.white)
-                        .frame(width: 32, height: 32)
-                        .background(canSend ? Color.blue : Color(.systemGray4))
+                        .frame(width: 38, height: 38)
+                        .background(canSend ? Color(.label) : Color(.systemGray4))
                         .clipShape(Circle())
                 }
+                .buttonStyle(.plain)
                 .disabled(!canSend)
                 .animation(.easeOut(duration: 0.15), value: canSend)
             }

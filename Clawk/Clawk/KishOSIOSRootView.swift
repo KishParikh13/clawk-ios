@@ -64,6 +64,10 @@ struct KishOSIOSRootView: View {
                             .accessibilityLabel("Conversations")
                         }
 
+                        ToolbarItem(placement: .principal) {
+                            IOSChatHeaderTitle(conversation: selectedConversation)
+                        }
+
                         ToolbarItem(placement: .topBarTrailing) {
                             HStack(spacing: 14) {
                                 Button(action: startLiveCall) {
@@ -135,6 +139,12 @@ struct KishOSIOSRootView: View {
                             closeConversations()
                         },
                         onDelete: deleteConversation,
+                        onCopyTranscript: { conversation in
+                            copyToPasteboard(conversation.transcriptText)
+                        },
+                        onCopyChatID: { conversation in
+                            copyToPasteboard(conversation.threadId)
+                        },
                         onClose: closeConversations
                     )
                     .frame(width: sidebarWidth(for: geometry.size.width))
@@ -219,30 +229,42 @@ struct KishOSIOSRootView: View {
 
     private func send(_ text: String, attachments: [ChatAttachment]) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        let outgoingText = trimmed.isEmpty ? defaultAttachmentPrompt(for: attachments) : trimmed
+        guard !outgoingText.isEmpty, attachments.allSatisfy(\.isReadyForSend) else { return }
+        let requestAttachments = chatRequestAttachments(for: attachments)
 
         if client.isDisconnected {
-            queue(trimmed, attachments: attachments)
+            queue(outgoingText, attachments: attachments)
             return
         }
 
         let conversation: Conversation
         if let selectedConversationID,
-           let existing = workspace.appendUserMessage(trimmed, to: selectedConversationID, attachments: attachments) {
+           let existing = workspace.appendUserMessage(outgoingText, to: selectedConversationID, attachments: attachments) {
             conversation = existing
         } else {
-            conversation = workspace.createConversation(firstMessage: trimmed, attachments: attachments)
+            conversation = workspace.createConversation(firstMessage: outgoingText, attachments: attachments)
             selection = .conversation(conversation.id)
         }
 
-        sendPreparedMessage(messageTextForAgent(trimmed, attachments: attachments), in: conversation, messageID: conversation.messages.last?.id)
+        sendPreparedMessage(
+            messageTextForAgent(outgoingText, attachments: attachments),
+            attachments: requestAttachments,
+            in: conversation,
+            messageID: conversation.messages.last?.id
+        )
     }
 
-    private func sendPreparedMessage(_ text: String, in conversation: Conversation, messageID: UUID?) {
+    private func sendPreparedMessage(_ text: String, attachments: [ChatRequestAttachment], in conversation: Conversation, messageID: UUID?) {
         Task {
             do {
                 workspace.beginAgentResponse(in: conversation.id)
-                let result = try await client.sendStreaming(text, threadId: conversation.threadId, conversationId: conversation.id) { event in
+                let result = try await client.sendStreaming(
+                    text,
+                    threadId: conversation.threadId,
+                    conversationId: conversation.id,
+                    attachments: attachments
+                ) { event in
                     handleStreamEvent(event, conversationId: conversation.id)
                 }
                 workspace.apply(result, to: conversation.id)
@@ -280,7 +302,12 @@ struct KishOSIOSRootView: View {
         Task {
             do {
                 workspace.beginAgentResponse(in: retry.conversation.id)
-                let result = try await client.sendStreaming(retry.message, threadId: retry.conversation.threadId, conversationId: retry.conversation.id) { event in
+                let result = try await client.sendStreaming(
+                    retry.message,
+                    threadId: retry.conversation.threadId,
+                    conversationId: retry.conversation.id,
+                    attachments: retry.attachments
+                ) { event in
                     handleStreamEvent(event, conversationId: retry.conversation.id)
                 }
                 workspace.apply(result, to: retry.conversation.id)
@@ -362,6 +389,10 @@ struct KishOSIOSRootView: View {
         }
     }
 
+    private func copyToPasteboard(_ text: String) {
+        UIPasteboard.general.string = text
+    }
+
     private func syncSharedConversations() async {
         do {
             let remote = try await client.fetchConversations()
@@ -410,7 +441,8 @@ struct KishOSIOSRootView: View {
                 let result = try await client.sendStreaming(
                     prepared.message,
                     threadId: prepared.conversation.threadId,
-                    conversationId: prepared.conversation.id
+                    conversationId: prepared.conversation.id,
+                    attachments: prepared.attachments
                 ) { event in
                     handleStreamEvent(event, conversationId: prepared.conversation.id)
                 }
@@ -519,6 +551,7 @@ private struct ChatScreen: View {
                 IOSComposer(
                     draft: $draft,
                     attachments: $pendingAttachments,
+                    client: client,
                     isSending: client.isSending,
                     isDisabled: client.isSending || isSending,
                     runState: runState,
@@ -539,11 +572,26 @@ private struct ChatScreen: View {
 
     private func sendDraft() {
         let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, !client.isSending, !isSending, approvals.isEmpty else { return }
+        guard (hasDraft || hasSendableAttachment),
+              pendingAttachments.allSatisfy(\.isReadyForSend),
+              !client.isSending,
+              !isSending,
+              approvals.isEmpty
+        else {
+            return
+        }
         let attachments = pendingAttachments
         draft = ""
         pendingAttachments = []
         onSend(trimmed, attachments)
+    }
+
+    private var hasDraft: Bool {
+        !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var hasSendableAttachment: Bool {
+        pendingAttachments.contains { $0.isReadyForSend }
     }
 
     private func scrollToBottom(_ proxy: ScrollViewProxy) {
@@ -556,6 +604,27 @@ private struct ChatScreen: View {
     private func previousUserText(before index: Int) -> String {
         guard index > 0 else { return "" }
         return messages[..<index].last(where: { $0.sender == .user })?.text ?? ""
+    }
+}
+
+private struct IOSChatHeaderTitle: View {
+    let conversation: Conversation?
+
+    var body: some View {
+        VStack(spacing: 1) {
+            Text(conversation?.title ?? "KishOS")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+
+            if let conversation {
+                Text(conversation.updatedDetailText)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+        .frame(maxWidth: 220)
     }
 }
 
@@ -790,6 +859,7 @@ private struct IOSActivityBlock: View {
 private struct IOSComposer: View {
     @Binding var draft: String
     @Binding var attachments: [ChatAttachment]
+    @ObservedObject var client: KishAgentClient
     let isSending: Bool
     let isDisabled: Bool
     let runState: ConversationRunState?
@@ -797,6 +867,8 @@ private struct IOSComposer: View {
     let onSend: () -> Void
 
     @State private var showingTextCapture = false
+    @State private var showingPhotoPicker = false
+    @State private var showingFilePicker = false
     @State private var scanError: String?
 
     var body: some View {
@@ -805,9 +877,16 @@ private struct IOSComposer: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
                         ForEach(attachments) { attachment in
-                            IOSContextChip(attachment: attachment) {
-                                attachments.removeAll { $0.id == attachment.id }
-                            }
+                            IOSContextChip(
+                                attachment: attachment,
+                                onRemove: {
+                                    AttachmentPayloadCache.shared.removePayload(for: attachment)
+                                    attachments.removeAll { $0.id == attachment.id }
+                                },
+                                onRetry: attachment.uploadState == .failed ? {
+                                    retryUpload(attachment.id)
+                                } : nil
+                            )
                         }
                     }
                 }
@@ -818,103 +897,273 @@ private struct IOSComposer: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+            } else if hasBlockedAttachment {
+                Text(blockedAttachmentText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
 
-            HStack(spacing: 10) {
-                Button(action: toggleDictation) {
-                    Image(systemName: voice.isRecording ? "stop.circle.fill" : "mic")
-                }
-                .foregroundStyle(voice.isRecording ? .red : .secondary)
-                .disabled(isDisabled)
-                .accessibilityLabel(voice.isRecording ? "Stop dictation" : "Start dictation")
-
-                Button {
-                    scanError = nil
-                    showingTextCapture = true
-                } label: {
-                    Image(systemName: "viewfinder")
-                }
-                .foregroundStyle(.secondary)
-                .disabled(isDisabled)
-                .accessibilityLabel("Scan text")
-
-                Button(action: attachClipboard) {
-                    Image(systemName: "paperclip")
-                }
-                .foregroundStyle(.secondary)
-                .disabled(isDisabled || clipboardText() == nil)
-                .accessibilityLabel("Attach clipboard")
-
-                TextField(voice.isRecording ? "Listening" : "Ask KishOS", text: $draft, axis: .vertical)
-                    .lineLimit(1...5)
-                    .textFieldStyle(.plain)
-                    .onSubmit(onSend)
-                    .disabled(isDisabled)
-
-                if let runState, runState.isActive {
-                    IOSRunStatePill(runState: runState)
-                }
-
-                Button(action: onSend) {
-                    if isSending {
-                        ProgressView()
-                    } else {
-                        Image(systemName: "paperplane.fill")
+            HStack(alignment: .bottom, spacing: 8) {
+                if voice.isRecording {
+                    IOSComposerCircleButton(
+                        systemName: "stop.fill",
+                        tint: .red,
+                        isEnabled: true,
+                        action: cancelDictation
+                    )
+                    .accessibilityLabel("Stop dictation")
+                } else {
+                    Menu {
+                        Button("Camera", systemImage: "camera") {
+                            scanError = nil
+                            showingTextCapture = true
+                        }
+                        Button("Choose a photo", systemImage: "photo") {
+                            scanError = nil
+                            showingPhotoPicker = true
+                        }
+                        Button("Select a file", systemImage: "doc") {
+                            scanError = nil
+                            showingFilePicker = true
+                        }
+                    } label: {
+                        Circle()
+                            .fill(IOSTheme.elevatedBackground)
+                            .overlay {
+                                Image(systemName: "plus")
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundStyle(Color(uiColor: .label))
+                            }
+                            .overlay(Circle().stroke(IOSTheme.hairline))
+                            .frame(width: 46, height: 46)
                     }
+                    .tint(Color(uiColor: .label))
+                    .disabled(isDisabled)
+                    .accessibilityLabel("Add")
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(isDisabled || isSending || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                HStack(alignment: .bottom, spacing: 8) {
+                    Group {
+                        if voice.isRecording {
+                            IOSWaveformInputSurface(transcript: voice.transcript)
+                        } else {
+                            TextField("Ask KishOS", text: $draft, axis: .vertical)
+                                .lineLimit(1...5)
+                                .textFieldStyle(.plain)
+                                .onSubmit {
+                                    if hasSendableContent {
+                                        onSend()
+                                    }
+                                }
+                                .disabled(isDisabled)
+                                .padding(.leading, 16)
+                                .padding(.vertical, 13)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 46, alignment: .leading)
+
+                    if let runState, runState.isActive {
+                        IOSRunStatePill(runState: runState)
+                    }
+
+                    Button(action: trailingAction) {
+                        if isSending || hasUploadingAttachment {
+                            ProgressView()
+                                .frame(width: 18, height: 18)
+                        } else {
+                            Image(systemName: trailingIconName)
+                                .font(.system(size: 15, weight: .bold))
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.white)
+                    .frame(width: 40, height: 40)
+                    .background(trailingButtonColor, in: Circle())
+                    .disabled(trailingButtonDisabled)
+                    .accessibilityLabel(trailingAccessibilityLabel)
+                    .padding(.trailing, 5)
+                    .padding(.vertical, 4)
+                }
+                .background(IOSTheme.background, in: RoundedRectangle(cornerRadius: 27, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 27, style: .continuous).stroke(IOSTheme.hairline))
             }
         }
         .opacity(isDisabled ? 0.62 : 1)
-        .padding(10)
-        .background(IOSTheme.secondaryBackground, in: RoundedRectangle(cornerRadius: 18))
-        .overlay(RoundedRectangle(cornerRadius: 18).stroke(IOSTheme.hairline))
         .padding(.horizontal, 12)
         .padding(.top, 8)
         .padding(.bottom, 8)
         .sheet(isPresented: $showingTextCapture) {
-            CameraTextCaptureView(onResult: { result in
-                handleTextCapture(result)
+            CameraTextCaptureView(sourceType: .camera, onResult: { result in
+                handleAttachmentSelection(result)
+                showingTextCapture = false
             }, onCancel: {
                 showingTextCapture = false
             })
         }
+        .sheet(isPresented: $showingPhotoPicker) {
+            CameraTextCaptureView(sourceType: .photoLibrary, onResult: { result in
+                handleAttachmentSelection(result)
+                showingPhotoPicker = false
+            }, onCancel: {
+                showingPhotoPicker = false
+            })
+        }
+        .sheet(isPresented: $showingFilePicker) {
+            FileTextPickerView(onResult: { result in
+                handleAttachmentSelection(result)
+                showingFilePicker = false
+            }, onCancel: {
+                showingFilePicker = false
+            })
+        }
     }
 
-    private func handleTextCapture(_ result: Result<String, Error>) {
-        showingTextCapture = false
+    private var hasDraft: Bool {
+        !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var hasSendableContent: Bool {
+        hasDraft || attachments.contains { $0.isReadyForSend }
+    }
+
+    private var hasUploadingAttachment: Bool {
+        attachments.contains { $0.uploadState == .uploading }
+    }
+
+    private var hasBlockedAttachment: Bool {
+        attachments.contains { $0.needsUpload && $0.uploadState != .uploading && $0.uploadState != .ready }
+    }
+
+    private var blockedAttachmentText: String {
+        attachments.first(where: { $0.needsUpload && $0.uploadState != .uploading && $0.uploadState != .ready })?.uploadError
+            ?? "Attachment needs upload."
+    }
+
+    private var trailingIconName: String {
+        if voice.isRecording {
+            return "checkmark"
+        }
+        return hasSendableContent ? "arrow.up" : "mic.fill"
+    }
+
+    private var trailingButtonColor: Color {
+        if trailingButtonDisabled {
+            return Color(uiColor: .systemGray4)
+        }
+        if voice.isRecording {
+            return Color(uiColor: .label)
+        }
+        return Color(uiColor: .label)
+    }
+
+    private var trailingButtonDisabled: Bool {
+        if voice.isRecording {
+            return false
+        }
+        if hasSendableContent {
+            return isDisabled || isSending || hasUploadingAttachment || hasBlockedAttachment
+        }
+        return isDisabled || isSending
+    }
+
+    private var trailingAccessibilityLabel: String {
+        if voice.isRecording {
+            return "Accept dictation"
+        }
+        return hasSendableContent ? "Send" : "Start dictation"
+    }
+
+    private func trailingAction() {
+        if voice.isRecording {
+            acceptDictation()
+        } else if hasSendableContent {
+            onSend()
+        } else {
+            startDictation()
+        }
+    }
+
+    private func handleAttachmentSelection(_ result: Result<ChatAttachment, Error>) {
         switch result {
-        case .success(let text):
-            let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !clean.isEmpty else {
-                scanError = "No text found."
-                return
-            }
-            attachments.append(.textContext(clean, title: "Scan"))
+        case .success(let attachment):
             scanError = nil
+            var pending = attachment
+            if pending.needsUpload {
+                pending.uploadState = .uploading
+            }
+            attachments.append(pending)
+            if pending.needsUpload {
+                uploadAttachment(pending.id)
+            }
         case .failure(let error):
             scanError = error.localizedDescription
         }
     }
 
-    private func attachClipboard() {
-        guard let text = clipboardText() else { return }
-        attachments.append(.textContext(text, title: "Clipboard"))
+    private func retryUpload(_ attachmentId: UUID) {
+        updateAttachment(attachmentId) { attachment in
+            attachment.uploadState = .uploading
+            attachment.uploadError = nil
+        }
+        uploadAttachment(attachmentId)
     }
 
-    private func clipboardText() -> String? {
-        let text = UIPasteboard.general.string?.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let text, !text.isEmpty else { return nil }
-        return text
-    }
+    private func uploadAttachment(_ attachmentId: UUID) {
+        guard !client.isDisconnected else {
+            updateAttachment(attachmentId) { attachment in
+                attachment.uploadState = .failed
+                attachment.uploadError = "Reconnect to upload."
+            }
+            return
+        }
 
-    private func toggleDictation() {
         Task {
-            if let transcript = await voice.toggleRecording() {
-                appendTranscript(transcript)
+            guard let attachment = attachments.first(where: { $0.id == attachmentId }) else { return }
+            do {
+                let payload = try AttachmentPayloadCache.shared.payload(for: attachment)
+                let uploaded = try await client.uploadAttachment(payload)
+                AttachmentPayloadCache.shared.removePayload(for: attachment)
+                updateAttachment(attachmentId) { current in
+                    current.title = uploaded.filename
+                    current.mimeType = uploaded.mimeType ?? current.mimeType
+                    current.byteCount = uploaded.byteCount ?? current.byteCount
+                    current.uploadId = uploaded.id
+                    current.localFilename = nil
+                    current.uploadState = .ready
+                    current.uploadError = nil
+                    if uploaded.kind == ChatAttachment.Kind.image.rawValue {
+                        current.kind = .image
+                    }
+                }
+            } catch {
+                updateAttachment(attachmentId) { current in
+                    current.uploadState = .failed
+                    current.uploadError = error.localizedDescription
+                }
             }
         }
+    }
+
+    private func updateAttachment(_ id: UUID, transform: (inout ChatAttachment) -> Void) {
+        guard let index = attachments.firstIndex(where: { $0.id == id }) else { return }
+        transform(&attachments[index])
+    }
+
+    private func startDictation() {
+        Task {
+            await voice.startRecording()
+        }
+    }
+
+    private func acceptDictation() {
+        if let transcript = voice.stopRecording() {
+            appendTranscript(transcript)
+        }
+    }
+
+    private func cancelDictation() {
+        _ = voice.stopRecording()
     }
 
     private func appendTranscript(_ transcript: String) {
@@ -922,6 +1171,94 @@ private struct IOSComposer: View {
         guard !clean.isEmpty else { return }
         let existing = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         draft = existing.isEmpty ? clean : "\(existing) \(clean)"
+    }
+}
+
+private struct IOSComposerCircleButton: View {
+    let systemName: String
+    let tint: Color
+    let isEnabled: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Circle()
+                .fill(isEnabled ? tint.opacity(0.14) : Color(uiColor: .systemGray5))
+                .overlay {
+                    Image(systemName: systemName)
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(isEnabled ? tint : .secondary)
+                }
+                .overlay(Circle().stroke(IOSTheme.hairline))
+                .frame(width: 38, height: 38)
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+    }
+}
+
+private struct IOSWaveformInputSurface: View {
+    let transcript: String
+    @State private var isAnimating = false
+
+    private let bars: [CGFloat] = [
+        0.34, 0.62, 0.46, 0.82, 0.52, 0.72, 0.38, 0.66,
+        0.44, 0.78, 0.48, 0.60, 0.36, 0.68, 0.50, 0.86,
+        0.54, 0.74, 0.40, 0.64, 0.46, 0.80, 0.52, 0.70
+    ]
+
+    private var cleanTranscript: String {
+        transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(cleanTranscript.isEmpty ? "Listening" : cleanTranscript)
+                .font(.callout)
+                .foregroundStyle(cleanTranscript.isEmpty ? .tertiary : .primary)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            GeometryReader { proxy in
+                HStack(alignment: .center, spacing: 4) {
+                    ForEach(Array(bars.enumerated()), id: \.offset) { index, value in
+                        Capsule()
+                            .fill(Color(uiColor: .label).opacity(0.86))
+                            .frame(
+                                width: barWidth(for: proxy.size.width),
+                                height: barHeight(value, index: index)
+                            )
+                            .animation(
+                                .easeInOut(duration: 0.55 + Double(index % 3) * 0.08)
+                                    .repeatForever(autoreverses: true),
+                                value: isAnimating
+                            )
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                .clipped()
+            }
+            .frame(height: 24)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(cleanTranscript.isEmpty ? "Listening" : cleanTranscript)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.leading, 16)
+        .padding(.vertical, cleanTranscript.isEmpty ? 9 : 8)
+        .onAppear {
+            isAnimating = true
+        }
+    }
+
+    private func barWidth(for availableWidth: CGFloat) -> CGFloat {
+        let totalSpacing = CGFloat(max(0, bars.count - 1)) * 4
+        return max(3, min(7, (availableWidth - totalSpacing) / CGFloat(bars.count)))
+    }
+
+    private func barHeight(_ value: CGFloat, index: Int) -> CGFloat {
+        let base = 6 + value * 16
+        let delta = isAnimating ? CGFloat((index % 2) == 0 ? 6 : -4) : 0
+        return max(6, min(24, base + delta))
     }
 }
 
@@ -1134,6 +1471,7 @@ private struct IOSRunStatePill: View {
 private struct IOSContextChip: View {
     let attachment: ChatAttachment
     var onRemove: (() -> Void)?
+    var onRetry: (() -> Void)?
 
     var body: some View {
         HStack(spacing: 6) {
@@ -1142,6 +1480,24 @@ private struct IOSContextChip: View {
             Text(attachment.title)
                 .font(.caption.weight(.medium))
                 .lineLimit(1)
+            if let stateText {
+                Text(stateText)
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(stateTint)
+            }
+            if attachment.uploadState == .uploading {
+                ProgressView()
+                    .controlSize(.small)
+                    .frame(width: 12, height: 12)
+            }
+            if let onRetry {
+                Button(action: onRetry) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.caption2.weight(.bold))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Retry \(attachment.title)")
+            }
             if let onRemove {
                 Button(action: onRemove) {
                     Image(systemName: "xmark")
@@ -1155,7 +1511,7 @@ private struct IOSContextChip: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
         .background(IOSTheme.elevatedBackground, in: Capsule())
-        .overlay(Capsule().stroke(IOSTheme.hairline))
+        .overlay(Capsule().stroke(strokeTint))
     }
 
     private var iconName: String {
@@ -1170,6 +1526,27 @@ private struct IOSContextChip: View {
             return "link"
         }
     }
+
+    private var stateText: String? {
+        switch attachment.uploadState {
+        case .uploading:
+            return "Uploading"
+        case .failed:
+            return "Failed"
+        case .local:
+            return attachment.needsUpload ? "Waiting" : nil
+        case .ready:
+            return nil
+        }
+    }
+
+    private var stateTint: Color {
+        attachment.uploadState == .failed ? .red : .secondary
+    }
+
+    private var strokeTint: Color {
+        attachment.uploadState == .failed ? .red.opacity(0.55) : IOSTheme.hairline
+    }
 }
 
 private struct ConversationPicker: View {
@@ -1181,6 +1558,8 @@ private struct ConversationPicker: View {
     let onSelect: (UUID) -> Void
     let onNewChat: () -> Void
     let onDelete: (UUID) -> Void
+    let onCopyTranscript: (Conversation) -> Void
+    let onCopyChatID: (Conversation) -> Void
     let onClose: () -> Void
 
     @State private var agentURLDraft = ""
@@ -1319,6 +1698,15 @@ private struct ConversationPicker: View {
                                 updatedText: relativeUpdatedText(for: conversation.updatedAt),
                                 onSelect: {
                                     onSelect(conversation.id)
+                                },
+                                onCopyTranscript: {
+                                    onCopyTranscript(conversation)
+                                },
+                                onCopyChatID: {
+                                    onCopyChatID(conversation)
+                                },
+                                onDelete: {
+                                    onDelete(conversation.id)
                                 }
                             )
                             .swipeActions {
@@ -1542,6 +1930,9 @@ private struct ConversationPickerRow: View {
     let isSelected: Bool
     let updatedText: String
     let onSelect: () -> Void
+    let onCopyTranscript: () -> Void
+    let onCopyChatID: () -> Void
+    let onDelete: () -> Void
 
     var body: some View {
         Button(action: onSelect) {
@@ -1587,11 +1978,17 @@ private struct ConversationPickerRow: View {
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(Color.accentColor)
                         .accessibilityHidden(true)
-                    }
                 }
             }
             .contentShape(Rectangle())
+        }
         .buttonStyle(.plain)
+        .contextMenu {
+            Button("Copy Transcript", action: onCopyTranscript)
+            Button("Copy Chat ID", action: onCopyChatID)
+            Divider()
+            Button("Delete", role: .destructive, action: onDelete)
+        }
         .padding(.horizontal, 10)
         .padding(.vertical, 10)
         .background(rowBackground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -1607,9 +2004,9 @@ private struct ConversationPickerRow: View {
 
     private var rowDetail: String {
         if conversation.runState.isActive {
-            return conversation.runState.label
+            return "\(conversation.runState.label) - \(conversation.updatedTimestampText)"
         }
-        return conversation.idea
+        return conversation.updatedDetailText
     }
 }
 
