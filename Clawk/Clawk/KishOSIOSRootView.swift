@@ -6,12 +6,17 @@ private enum IOSTheme {
     static let hairline = Color.secondary.opacity(0.18)
 }
 
+private enum IOSChatSelection: Equatable {
+    case newChat
+    case conversation(UUID)
+}
+
 struct KishOSIOSRootView: View {
     @StateObject private var client = KishAgentClient()
     @StateObject private var workspace = KishOSWorkspace()
     @StateObject private var voice = VoiceController()
 
-    @State private var selectedConversationID: UUID?
+    @State private var selection: IOSChatSelection = .newChat
     @State private var showingConversations = false
 
     var body: some View {
@@ -25,6 +30,7 @@ struct KishOSIOSRootView: View {
                         approvals: selectedConversation?.approvals ?? [],
                         voice: voice,
                         onSend: send,
+                        onRetry: retrySelectedConversation,
                         onQuestionAnswer: answerQuestion
                     )
                     .navigationTitle(selectedConversation?.title ?? "KishOS")
@@ -61,7 +67,7 @@ struct KishOSIOSRootView: View {
                             conversations: workspace.conversations,
                             selectedID: selectedConversationID,
                             onSelect: { id in
-                                selectedConversationID = id
+                                selection = .conversation(id)
                                 closeConversations()
                             },
                             onNewChat: {
@@ -89,9 +95,6 @@ struct KishOSIOSRootView: View {
             .task {
                 await startSharedConversationSyncLoop()
             }
-            .onAppear {
-                selectedConversationID = selectedConversationID ?? workspace.conversations.first?.id
-            }
         }
     }
 
@@ -100,12 +103,19 @@ struct KishOSIOSRootView: View {
         return workspace.conversation(id: selectedConversationID)
     }
 
+    private var selectedConversationID: UUID? {
+        if case .conversation(let id) = selection {
+            return id
+        }
+        return nil
+    }
+
     private var currentIsRunning: Bool {
         selectedConversation?.isRunning ?? client.isSending
     }
 
     private func startNewChat() {
-        selectedConversationID = nil
+        selection = .newChat
     }
 
     private func closeConversations() {
@@ -128,7 +138,7 @@ struct KishOSIOSRootView: View {
             conversation = existing
         } else {
             conversation = workspace.createConversation(firstMessage: trimmed)
-            selectedConversationID = conversation.id
+            selection = .conversation(conversation.id)
         }
 
         Task {
@@ -141,6 +151,28 @@ struct KishOSIOSRootView: View {
                 await syncSharedConversations()
             } catch {
                 workspace.applyFailure(error, to: conversation.id)
+            }
+        }
+    }
+
+    private func retrySelectedConversation() {
+        guard let selectedConversationID else { return }
+        retry(selectedConversationID)
+    }
+
+    private func retry(_ conversationId: UUID) {
+        guard let retry = workspace.prepareRetryLastFailedMessage(in: conversationId) else { return }
+
+        Task {
+            do {
+                workspace.beginAgentResponse(in: retry.conversation.id)
+                let result = try await client.sendStreaming(retry.message, threadId: retry.conversation.threadId, conversationId: retry.conversation.id) { event in
+                    handleStreamEvent(event, conversationId: retry.conversation.id)
+                }
+                workspace.apply(result, to: retry.conversation.id)
+                await syncSharedConversations()
+            } catch {
+                workspace.applyFailure(error, to: retry.conversation.id)
             }
         }
     }
@@ -197,7 +229,7 @@ struct KishOSIOSRootView: View {
     private func deleteConversation(_ id: UUID) {
         workspace.deleteConversation(id)
         if selectedConversationID == id {
-            selectedConversationID = workspace.conversations.first?.id
+            selection = .newChat
         }
         Task {
             try? await client.deleteConversation(id)
@@ -208,7 +240,9 @@ struct KishOSIOSRootView: View {
         do {
             let remote = try await client.fetchConversations()
             workspace.mergeRemoteConversations(remote)
-            selectedConversationID = selectedConversationID ?? workspace.conversations.first?.id
+            if let selectedConversationID, workspace.conversation(id: selectedConversationID) == nil {
+                selection = .newChat
+            }
         } catch {
             // Keep local conversations usable when the shared backend is unavailable.
         }
@@ -231,6 +265,7 @@ private struct ChatScreen: View {
     let approvals: [ApprovalRequest]
     @ObservedObject var voice: VoiceController
     let onSend: (String) -> Void
+    let onRetry: (() -> Void)?
     let onQuestionAnswer: (ApprovalRequest, String) -> Void
 
     @State private var draft = ""
@@ -270,7 +305,7 @@ private struct ChatScreen: View {
             }
 
             if let lastError = conversation?.lastError {
-                IOSErrorBar(message: lastError)
+                IOSErrorBar(message: lastError, onRetry: onRetry)
             }
 
             if let pendingQuestion = approvals.first {
@@ -765,6 +800,7 @@ private struct ConversationPicker: View {
 
 private struct IOSErrorBar: View {
     let message: String
+    let onRetry: (() -> Void)?
 
     var body: some View {
         HStack(spacing: 8) {
@@ -775,6 +811,13 @@ private struct IOSErrorBar: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
             Spacer()
+            if let onRetry {
+                Button(action: onRetry) {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .buttonStyle(.bordered)
+                .accessibilityLabel("Retry")
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
