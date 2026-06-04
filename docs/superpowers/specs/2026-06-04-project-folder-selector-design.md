@@ -6,10 +6,11 @@
 ## Goal
 
 Let me choose which folder on the mini a conversation runs in. Default is home (`~`).
-Valid folders are anything under `~/Code`. The folder is fixed for the life of a
-conversation. Each conversation shows a small project badge plus its current git
-branch. Recently edited folders (last 7 days) are the quick-pick list, I can browse
-to any folder under `~/Code`, and once I chat with a folder it stays pinned.
+The default pick list is `~/Code` (recents + browse), but any existing directory is
+valid: I can paste a path (including `~/...`) to run anywhere. The folder is fixed for
+the life of a conversation. Each conversation shows a small project badge plus its
+current git branch. Recently edited folders (last 7 days) are the quick-pick list, I
+can browse the rest of `~/Code`, and once I chat with a folder it stays pinned.
 
 Both halves (app + agent) ship together. The feature does nothing without the agent
 honoring the chosen folder as the working directory.
@@ -37,16 +38,19 @@ honoring the chosen folder as the working directory.
    (`.slack-sessions.json`) and on the conversation record, then spawns Claude/Codex
    with `cwd = boundPath || $HOME`. Later turns reuse the stored binding, so the folder
    is fixed for the conversation's life.
-2. **Validation.** `realpath(projectPath)` must resolve inside `realpath(~/Code)` and
-   be an existing directory. Otherwise reject with HTTP 400 and the app falls back to
-   Home. This blocks path traversal and symlink escapes.
-3. **`/projects` endpoint.**
+2. **Validation.** `projectPath` may be any path (a leading `~` is expanded). It must
+   resolve to an existing directory; otherwise the turn returns `ok:false`
+   (`not_found` / `not_directory`) and the app falls back to Home. No `~/Code`
+   containment check — the agent already runs from `$HOME` with full access, so a
+   chosen folder is never broader than the default.
+3. **`/projects` endpoint.** Scopes the *default list* to `~/Code` (discovery only;
+   pasted paths bypass it).
    - `GET /projects` → recents: top-level dirs under `~/Code` modified within 7 days,
      newest first.
-   - `GET /projects?all=1` → every valid top-level dir under `~/Code` for the browse
-     list, sorted by name.
+   - `GET /projects?all=1` → every top-level dir under `~/Code` for the browse list,
+     sorted by name.
    - Each entry: `{name, path, relPath, branch, lastModified}`. Branch via
-     `git -C <dir> rev-parse --abbrev-ref HEAD` (null if not a repo).
+     `git -C <dir> symbolic-ref --short HEAD` (null if not a repo or detached).
 4. **Conversation records** (`.kishos-conversations.json`) gain `projectPath`,
    `projectName`, `branch`. `beginSharedConversationTurn` stores `projectPath` /
    `projectName` from the input on the first turn. Branch is recomputed when
@@ -63,10 +67,11 @@ honoring the chosen folder as the working directory.
    binds on the first and ignores it thereafter).
 3. **Picker.** A "Project" chip in the composer row (next to `+`), prominent on the
    empty new-chat screen, showing "Home" or the folder name + branch. Tap opens a
-   sheet: a "Recent (7 days)" section, a "Browse all folders" row to the full list, and
-   a search field. Pinned folders (any I've chatted with, remembered in `UserDefaults`)
-   float to the top even if outside the 7-day window. Once the conversation has
-   messages the chip locks to a read-only badge (fixed at creation).
+   sheet: a "Recent (7 days)" section, a "Browse all folders" row to the full `~/Code`
+   list, a search field, and a "Use a custom path" field to paste any directory (e.g.
+   `~/Desktop/scratch`). Pinned folders (any I've chatted with, remembered in
+   `UserDefaults`) float to the top even if outside the 7-day window. Once the
+   conversation has messages the chip locks to a read-only badge (fixed at creation).
 4. **Sidebar.** Each conversation row in the `ConversationPicker` shows a small folder
    badge + branch glyph. Home chats read "Home". Same on both platforms: iOS uses a
    sheet, Mac a popover, with shared SwiftUI underneath.
@@ -79,20 +84,23 @@ reply → `/conversations` sync returns project + branch → all devices render 
 
 ## Edge cases
 
-- **Deleted/moved folder.** Agent returns 400 on a new bind; the app offers Home. A
-  previously bound folder that later vanishes falls back to `$HOME` with an activity
-  note and null branch.
+- **Deleted/moved or mistyped folder.** A new bind to a missing path or a file returns
+  `ok:false` (`not_found` / `not_directory`); the app surfaces the error and offers
+  Home. A previously bound folder that later vanishes falls back to `$HOME` with an
+  activity note and null branch.
 - **Back-compat.** Old conversations with no `projectPath` are treated as Home.
 - **Offline/queued.** A queued first message stores the project locally on the
   conversation and sends it when the queue drains.
 - **Non-repo folder.** Branch is null; the badge shows the folder name only.
-- **Path traversal / symlinks.** Guarded by the realpath containment check.
+- **Pasted paths.** A leading `~` is expanded; the path is realpath-resolved before
+  use.
 
 ## Testing
 
-- **Agent:** path validation (inside/outside `~/Code`, symlink escape, nonexistent),
-  `/projects` 7-day recents filter, branch resolution, cwd binding persists across a
-  restart, fallback to `$HOME` when a bound folder vanishes.
+- **Agent:** path validation (any existing dir accepted, nonexistent + file rejected,
+  `~` expansion + home-relative display), `/projects` 7-day recents filter, branch
+  resolution, cwd binding persists across a restart, fallback to `$HOME` when a bound
+  folder vanishes.
 - **Core:** `Conversation` Codable round-trip with and without `projectPath`;
   `createConversation` sets the fields; `ChatRequest` encodes `projectPath`; pinned
   store persistence.
@@ -101,5 +109,6 @@ reply → `/conversations` sync returns project + branch → all devices render 
 
 - Diff counts (+/-) per row, like the screenshot.
 - Changing a conversation's folder after creation.
-- Nested sub-folder browsing below top-level `~/Code` dirs.
+- A full filesystem browser (the paste-a-path field covers folders outside `~/Code`;
+  deeper in-app navigation can come later).
 - Per-conversation worktrees or branch creation.

@@ -66,44 +66,44 @@ function tmpRoot() {
 }
 
 test('validateProjectPath: null/empty means home (returns null)', () => {
-  const root = tmpRoot();
-  assert.strictEqual(validateProjectPath(null, root), null);
-  assert.strictEqual(validateProjectPath('', root), null);
+  assert.strictEqual(validateProjectPath(null), null);
+  assert.strictEqual(validateProjectPath(''), null);
 });
 
-test('validateProjectPath: valid dir inside root resolves', () => {
-  const root = tmpRoot();
-  fs.mkdirSync(path.join(root, 'clawk-ios'));
-  const v = validateProjectPath(path.join(root, 'clawk-ios'), root);
-  assert.strictEqual(v.name, 'clawk-ios');
-  assert.strictEqual(v.relPath, 'clawk-ios');
-  assert.strictEqual(v.path, path.join(root, 'clawk-ios'));
+test('validateProjectPath: an existing directory resolves', () => {
+  const dir = tmpRoot();
+  const v = validateProjectPath(dir);
+  assert.strictEqual(v.path, dir);
+  assert.strictEqual(v.name, path.basename(dir));
 });
 
-test('validateProjectPath: path outside root is rejected', () => {
-  const root = tmpRoot();
-  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'outside-'));
-  assert.strictEqual(validateProjectPath(outside, root).error, 'outside_code_root');
+test('validateProjectPath: a directory anywhere (not just ~/Code) is accepted', () => {
+  const outside = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'anywhere-')));
+  assert.strictEqual(validateProjectPath(outside).path, outside);
 });
 
 test('validateProjectPath: nonexistent path is rejected', () => {
   const root = tmpRoot();
-  assert.strictEqual(validateProjectPath(path.join(root, 'nope'), root).error, 'not_found');
+  assert.strictEqual(validateProjectPath(path.join(root, 'nope')).error, 'not_found');
 });
 
 test('validateProjectPath: a file (not a dir) is rejected', () => {
   const root = tmpRoot();
   const file = path.join(root, 'readme.txt');
   fs.writeFileSync(file, 'hi');
-  assert.strictEqual(validateProjectPath(file, root).error, 'not_directory');
+  assert.strictEqual(validateProjectPath(file).error, 'not_directory');
 });
 
-test('validateProjectPath: symlink escaping root is rejected', () => {
-  const root = tmpRoot();
-  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'escape-'));
-  const link = path.join(root, 'sneaky');
-  fs.symlinkSync(outside, link);
-  assert.strictEqual(validateProjectPath(link, root).error, 'outside_code_root');
+test('validateProjectPath: expands a leading ~ and collapses it in relPath', () => {
+  const v = validateProjectPath('~');
+  assert.strictEqual(v.path, fs.realpathSync(os.homedir()));
+  assert.strictEqual(v.relPath, '~');
+  const sub = fs.mkdtempSync(path.join(os.homedir(), '.kishtest-'));
+  try {
+    assert.ok(validateProjectPath(sub).relPath.startsWith('~/'));
+  } finally {
+    fs.rmdirSync(sub);
+  }
 });
 ```
 
@@ -128,20 +128,33 @@ function realpathSafe(p) {
   try { return fs.realpathSync(p); } catch { return null; }
 }
 
-// Returns: null (home/default), {error} (invalid), or {path, name, relPath} (valid).
-function validateProjectPath(input, codeRoot = CODE_ROOT) {
+// Expand a leading ~ so the user can paste paths like "~/Code/foo" or "~/Desktop".
+function expandHome(input) {
+  const str = String(input);
+  if (str === '~') return os.homedir();
+  if (str.startsWith('~/')) return path.join(os.homedir(), str.slice(2));
+  return str;
+}
+
+// Display form: collapse the home prefix back to ~ for readability.
+function homeRelative(resolved) {
+  const home = os.homedir();
+  if (resolved === home) return '~';
+  if (resolved.startsWith(home + path.sep)) return '~' + resolved.slice(home.length);
+  return resolved;
+}
+
+// Any existing directory the user names is valid — the agent already runs from
+// home with full access, so a chosen folder is never broader than the default.
+// Returns: null (home/default), {error} (missing or not a dir), or {path, name, relPath}.
+function validateProjectPath(input) {
   if (input == null || String(input).trim() === '') return null;
-  const root = realpathSafe(codeRoot);
-  const resolved = realpathSafe(path.resolve(String(input)));
-  if (!root) return { error: 'not_found' };
+  const resolved = realpathSafe(path.resolve(expandHome(String(input).trim())));
   if (!resolved) return { error: 'not_found' };
-  const rel = path.relative(root, resolved);
-  const inside = resolved === root || (!rel.startsWith('..') && !path.isAbsolute(rel));
-  if (!inside) return { error: 'outside_code_root' };
   let stat;
   try { stat = fs.statSync(resolved); } catch { return { error: 'not_found' }; }
   if (!stat.isDirectory()) return { error: 'not_directory' };
-  return { path: resolved, name: path.basename(resolved), relPath: rel || path.basename(resolved) };
+  return { path: resolved, name: path.basename(resolved), relPath: homeRelative(resolved) };
 }
 
 module.exports = { CODE_ROOT, realpathSafe, validateProjectPath };
@@ -535,15 +548,15 @@ curl -s -X POST http://kishs-mac-mini-1:17891/chat \
 ```
 Expected: still `/Users/kishparikh/Code/clawk-ios` (first binding wins).
 
-- [ ] **Step 7: Verify invalid folder is rejected**
+- [ ] **Step 7: Verify a nonexistent folder is rejected**
 
 ```bash
 curl -s -X POST http://kishs-mac-mini-1:17891/chat \
   -H 'Content-Type: application/json' \
-  -d '{"threadId":"proj-test-bad","conversationId":"00000000-0000-0000-0000-0000000000b1","message":"hi","projectPath":"/etc"}' \
+  -d '{"threadId":"proj-test-bad","conversationId":"00000000-0000-0000-0000-0000000000b1","message":"hi","projectPath":"/Users/kishparikh/Code/does-not-exist-xyz"}' \
   | python3 -m json.tool
 ```
-Expected: `ok: false`, error contains `invalid project folder (outside_code_root)`.
+Expected: `ok: false`, error contains `invalid project folder (not_found)`. (A folder *outside* `~/Code` is now accepted by design — only missing paths and files are rejected.)
 
 - [ ] **Step 8: Verify the conversation record carries project + branch**
 
@@ -1206,6 +1219,7 @@ struct ProjectPickerSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
     @State private var showingAll = false
+    @State private var customPath = ""
 
     private var quickList: [Project] {
         ProjectCatalog.filter(ProjectCatalog.merge(recents: catalog.recents, pinned: pinned.pinned), query: query)
@@ -1260,6 +1274,17 @@ struct ProjectPickerSheet: View {
                         }
                     }
                 }
+
+                Section("Custom path") {
+                    HStack {
+                        TextField("~/path/to/folder", text: $customPath)
+                            .autocorrectionDisabled()
+                            .textInputAutocapitalization(.never)
+                            .onSubmit(useCustomPath)
+                        Button("Use", action: useCustomPath)
+                            .disabled(customPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+                }
             }
             .searchable(text: $query)
             .navigationTitle("Project")
@@ -1275,6 +1300,17 @@ struct ProjectPickerSheet: View {
 
     private var currentLoading: Bool {
         showingAll ? catalog.isLoadingAll : catalog.isLoadingRecents
+    }
+
+    // The agent validates the path on send; an invalid one surfaces as a chat error.
+    private func useCustomPath() {
+        let trimmed = customPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let base = (trimmed as NSString).lastPathComponent
+        let project = Project(name: base.isEmpty ? trimmed : base, path: trimmed, relPath: trimmed)
+        pinned.pin(path: project.path, name: project.name)
+        onSelect(project)
+        dismiss()
     }
 }
 ```
@@ -1538,12 +1574,22 @@ struct ProjectPickerPopover: View {
 
     @State private var query = ""
     @State private var showingAll = false
+    @State private var customPath = ""
 
     private var quickList: [Project] {
         ProjectCatalog.filter(ProjectCatalog.merge(recents: catalog.recents, pinned: pinned.pinned), query: query)
     }
     private var fullList: [Project] {
         ProjectCatalog.filter(catalog.all, query: query)
+    }
+
+    private func useCustomPath() {
+        let trimmed = customPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let base = (trimmed as NSString).lastPathComponent
+        let project = Project(name: base.isEmpty ? trimmed : base, path: trimmed, relPath: trimmed)
+        pinned.pin(path: project.path, name: project.name)
+        onSelect(project); onClose()
     }
 
     var body: some View {
@@ -1590,6 +1636,16 @@ struct ProjectPickerPopover: View {
                     Label("Browse all folders", systemImage: "folder.badge.plus")
                 }
                 .buttonStyle(.plain)
+            }
+
+            Divider()
+
+            HStack {
+                TextField("~/path/to/folder", text: $customPath)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit(useCustomPath)
+                Button("Use", action: useCustomPath)
+                    .disabled(customPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
         .padding(12)
