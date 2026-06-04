@@ -20,6 +20,7 @@ struct ThinkingStepsView: View {
 struct ThinkingStepRow: View {
     let step: GatewayThinkingStep
     @State private var isExpanded = false
+    private let expansionAnimation = Animation.spring(response: 0.3, dampingFraction: 0.88)
 
     var body: some View {
         HStack(spacing: 8) {
@@ -43,13 +44,12 @@ struct ThinkingStepRow: View {
                     .cornerRadius(4)
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(Color(.systemGray6).opacity(0.6))
-        .cornerRadius(8)
+        .padding(.vertical, 2)
         .contentShape(Rectangle())
+        .clipped()
+        .animation(expansionAnimation, value: isExpanded)
         .onTapGesture {
-            withAnimation(.easeInOut(duration: 0.2)) {
+            withAnimation(expansionAnimation) {
                 isExpanded.toggle()
             }
         }
