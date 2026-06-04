@@ -6,6 +6,7 @@ final class AudioRouteMonitor: ObservableObject {
     @Published private(set) var inputName = "System"
     @Published private(set) var outputName = "System"
     @Published private(set) var status = "System"
+    @Published private(set) var activationDetail = ""
     @Published private(set) var availableInputNames: [String] = []
     @Published var prefersHandsFreeRoute = false
 
@@ -67,27 +68,34 @@ final class AudioRouteMonitor: ObservableObject {
         prefersHandsFreeRoute = enabled
         userDefaults.set(enabled, forKey: Self.prefersHandsFreeRouteKey)
         if enabled {
-            activatePreferredHandsFreeRoute()
+            Task { await activatePreferredHandsFreeRoute() }
         } else {
             clearPreferredInput()
+            activationDetail = ""
         }
         refresh()
     }
 
-    func activatePreferredHandsFreeRoute() {
+    func activatePreferredHandsFreeRoute(timeout: TimeInterval = 2.0) async {
         #if os(iOS)
         guard prefersHandsFreeRoute else { return }
         let session = AVAudioSession.sharedInstance()
         do {
-            try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetoothHFP, .allowBluetoothA2DP, .defaultToSpeaker])
+            try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetoothHFP, .allowBluetoothA2DP, .defaultToSpeaker, .duckOthers])
             try session.setActive(true, options: .notifyOthersOnDeactivation)
             if let preferredInput = preferredInput(from: session.availableInputs ?? []) {
-                try session.setPreferredInput(preferredInput)
+                try? session.setPreferredInput(preferredInput)
+                await waitForRouteActivation(preferredInput: preferredInput, timeout: timeout)
+            } else {
+                activationDetail = "No external input"
+                refresh()
             }
-            refresh()
         } catch {
             status = "Unavailable"
+            activationDetail = error.localizedDescription
         }
+        #else
+        refresh()
         #endif
     }
 
@@ -108,32 +116,73 @@ final class AudioRouteMonitor: ObservableObject {
 
     private func isGlassesLike(_ input: AVAudioSessionPortDescription) -> Bool {
         let name = input.portName.lowercased()
-        return name.contains("ray-ban") || name.contains("rayban") || name.contains("meta") || name.contains("glasses")
+        return name.contains("rb meta")
+            || name.contains("ray-ban")
+            || name.contains("ray ban")
+            || name.contains("rayban")
+            || name.contains("meta")
+            || name.contains("glasses")
     }
 
     private func isHandsFreeCapable(_ input: AVAudioSessionPortDescription) -> Bool {
-        switch input.portType {
-        case .bluetoothHFP, .bluetoothLE, .headsetMic:
-            return true
-        default:
-            return false
+        Self.handsFreePortTypes.contains(input.portType)
+    }
+
+    private func waitForRouteActivation(preferredInput: AVAudioSessionPortDescription, timeout: TimeInterval) async {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            refresh()
+            if currentRouteUsesPreferredInput(preferredInput) || routeUsesHandsFree(AVAudioSession.sharedInstance().currentRoute) {
+                activationDetail = "Using \(routeDetail)"
+                return
+            }
+            try? await Task.sleep(nanoseconds: 100_000_000)
         }
+        refresh()
+        activationDetail = "Fallback \(routeDetail)"
+    }
+
+    private func currentRouteUsesPreferredInput(_ preferredInput: AVAudioSessionPortDescription) -> Bool {
+        AVAudioSession.sharedInstance().currentRoute.inputs.contains { input in
+            input.portType == preferredInput.portType && input.portName == preferredInput.portName
+        }
+    }
+
+    private func routeUsesHandsFree(_ route: AVAudioSessionRouteDescription) -> Bool {
+        let ports = route.inputs.map(\.portType) + route.outputs.map(\.portType)
+        return ports.contains { Self.handsFreePortTypes.contains($0) }
     }
 
     private func routeStatus(for route: AVAudioSessionRouteDescription) -> String {
         let ports = route.inputs.map(\.portType) + route.outputs.map(\.portType)
         let names = (route.inputs.map(\.portName) + route.outputs.map(\.portName)).joined(separator: " ").lowercased()
 
-        if names.contains("ray-ban") || names.contains("meta") || names.contains("glasses") {
+        if names.contains("rb meta")
+            || names.contains("ray-ban")
+            || names.contains("ray ban")
+            || names.contains("rayban")
+            || names.contains("meta")
+            || names.contains("glasses") {
             return "Glasses"
         }
         if ports.contains(.bluetoothHFP) || ports.contains(.bluetoothA2DP) || ports.contains(.bluetoothLE) {
             return "Bluetooth"
+        }
+        if ports.contains(.headsetMic) || ports.contains(.headphones) {
+            return "Headset"
         }
         if route.inputs.isEmpty && route.outputs.isEmpty {
             return "Unavailable"
         }
         return "System"
     }
+
+    private static let handsFreePortTypes: Set<AVAudioSession.Port> = [
+        .bluetoothHFP,
+        .bluetoothLE,
+        .bluetoothA2DP,
+        .headsetMic,
+        .headphones
+    ]
     #endif
 }

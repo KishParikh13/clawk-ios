@@ -20,6 +20,8 @@ targets:
     sources:
       - Clawk
       - KishOSCore
+    dependencies:
+      - target: KishOSWidgetsExtension
     settings:
       base:
         PRODUCT_NAME: KishOS
@@ -42,6 +44,32 @@ targets:
         NSMicrophoneUsageDescription: "KishOS uses the microphone for push-to-talk messages."
         NSPhotoLibraryUsageDescription: "KishOS can scan text from selected photos into chat context."
         NSSpeechRecognitionUsageDescription: "KishOS uses speech recognition to turn voice into chat messages."
+        NSSupportsLiveActivities: true
+        UIBackgroundModes:
+          - audio
+  KishOSWidgetsExtension:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - KishOSWidgets
+      - path: KishOSCore/KishOSCallActivityAttributes.swift
+    settings:
+      base:
+        PRODUCT_NAME: KishOSWidgets
+        PRODUCT_BUNDLE_IDENTIFIER: com.kishparikh.clawk.widgets
+        INFOPLIST_FILE: KishOSWidgets/Info.plist
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: GN3TH9WD6W
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SKIP_INSTALL: YES
+        APPLICATION_EXTENSION_API_ONLY: YES
+    info:
+      path: KishOSWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: KishOS
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
   KishOSMac:
     type: application
     platform: macOS

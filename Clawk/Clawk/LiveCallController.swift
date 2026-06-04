@@ -29,23 +29,34 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
         }
     }
 
-    @Published private(set) var state: CallState = .connecting
-    @Published private(set) var activeConversationID: UUID?
+    @Published private(set) var state: CallState = .connecting {
+        didSet {
+            guard oldValue != state else { return }
+            syncLiveActivity()
+        }
+    }
+    @Published private(set) var activeConversationID: UUID? {
+        didSet { syncLiveActivity() }
+    }
     @Published private(set) var activeUserPartial = ""
     @Published private(set) var activeAgentText = ""
     @Published private(set) var elapsedSeconds = 0
     @Published var isMuted = false
     @Published var isOutputEnabled = true
-    @Published var failureMessage: String?
+    @Published var failureMessage: String? {
+        didSet { syncLiveActivity() }
+    }
 
     private let client: KishAgentClient
     private let workspace: KishOSWorkspace
     private let voice: VoiceController
     private let onConversationStarted: (UUID) -> Void
     private let speechSynthesizer = AVSpeechSynthesizer()
+    private let liveActivity = KishOSLiveActivityController.shared
     private var elapsedTask: Task<Void, Never>?
     private var finalizeTask: Task<Void, Never>?
     private var activeSendTask: Task<Void, Never>?
+    private var hasLiveActivitySession = false
 
     init(
         client: KishAgentClient,
@@ -66,6 +77,7 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
     func start() async {
         guard state == .connecting else { return }
         startElapsedTimer()
+        syncLiveActivity()
         await client.refreshHealth()
         await beginListening()
     }
@@ -148,6 +160,8 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
         activeUserPartial = ""
         activeAgentText = ""
         state = .ended
+        liveActivity.endLiveCall()
+        hasLiveActivitySession = false
     }
 
     private func beginListening() async {
@@ -236,6 +250,7 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
                     await self.handleStreamEvent(event, conversationId: conversation.id)
                 }
                 self.workspace.apply(result, to: conversation.id)
+                self.syncLiveActivity(detailOverride: "Reply ready")
                 self.speak(result.text)
             } catch {
                 if self.isOfflineError(error),
@@ -323,6 +338,7 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
         }
 
         state = .agentSpeaking
+        syncLiveActivity(detailOverride: "Replying")
         let utterance = AVSpeechUtterance(string: clean)
         utterance.rate = AVSpeechUtteranceDefaultSpeechRate
         utterance.pitchMultiplier = 1.0
@@ -362,5 +378,54 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
             return true
         }
         return false
+    }
+
+    private func syncLiveActivity(detailOverride: String? = nil) {
+        guard state != .ended else {
+            liveActivity.endLiveCall()
+            hasLiveActivitySession = false
+            return
+        }
+
+        let title = activeConversationID
+            .flatMap { workspace.conversation(id: $0)?.title }
+            ?? "KishOS"
+        let status = state.label
+        let detail = detailOverride ?? liveActivityDetail
+
+        liveActivity.updateLiveCall(title: title, status: status, detail: detail)
+        hasLiveActivitySession = true
+    }
+
+    private var liveActivityDetail: String {
+        if let failureMessage, !failureMessage.isEmpty {
+            return clipped(failureMessage)
+        }
+        switch state {
+        case .connecting:
+            return "Starting call"
+        case .listening:
+            return "Waiting for you"
+        case .userSpeaking:
+            return clipped(activeUserPartial)
+        case .sendingTurn:
+            return "Sending"
+        case .agentThinking:
+            return "kish-agent is working"
+        case .agentSpeaking:
+            return activeAgentText.isEmpty ? "Replying" : clipped(activeAgentText)
+        case .needsAnswer:
+            return "Answer needed"
+        case .failed:
+            return "Call paused"
+        case .ended:
+            return ""
+        }
+    }
+
+    private func clipped(_ text: String) -> String {
+        let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard clean.count > 90 else { return clean }
+        return String(clean.prefix(87)) + "..."
     }
 }

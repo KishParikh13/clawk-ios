@@ -33,6 +33,12 @@
 	<string>KishOS can scan text from selected photos into chat context.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>KishOS uses speech recognition to turn voice into chat messages.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UISupportedInterfaceOrientations</key>

@@ -8,43 +8,49 @@
 
 /* Begin PBXBuildFile section */
 		008080B3368DE6AEA80E6807 /* ApprovalQueueView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE29A68B30630F58BCB47CF0 /* ApprovalQueueView.swift */; };
-		018A2D510D40E2F17AF8C201 /* AudioRouteMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 018A2D500D40E2F17AF8C201 /* AudioRouteMonitor.swift */; };
-		018A2D520D40E2F17AF8C201 /* AudioRouteMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 018A2D500D40E2F17AF8C201 /* AudioRouteMonitor.swift */; };
 		04F144AAB362A6236543697B /* GatewayConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BF9B02D88EDF9A8620601CA /* GatewayConnection.swift */; };
 		05611179C1434EA208CEF157 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 641664BF743F7453554BF316 /* ContentView.swift */; };
+		07ECBC7DBE333CC10DB84502 /* WakePhraseController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D141A3B5C138ABA7F09EB3 /* WakePhraseController.swift */; };
 		13D989FEDC813BC32D37A770 /* SharedViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62E583E96D8734B6045457C9 /* SharedViews.swift */; };
+		14D0013ECE6E7348671AB8E1 /* AudioRouteMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B96F6934906F6A77BBB59125 /* AudioRouteMonitor.swift */; };
 		1692CD406B2399800935424F /* GatewayChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A89B98F7C06E05A590381E2 /* GatewayChatView.swift */; };
-		16C0AA8B9F1D44F3A62F7C01 /* LiveCallController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16C0AA899F1D44F3A62F7C01 /* LiveCallController.swift */; };
-		16C0AA8C9F1D44F3A62F7C01 /* LiveCallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16C0AA8A9F1D44F3A62F7C01 /* LiveCallView.swift */; };
-		17A7C91055B246DAB55F2A01 /* CameraTextCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17A7C90055B246DAB55F2A01 /* CameraTextCaptureView.swift */; };
 		182D525333F502C00AAF063A /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 227D7EAA8BA576629153DE13 /* HomeView.swift */; };
-		1E9C7C8A7C9A4C3A9A4C1101 /* FileTextPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E9C7C897C9A4C3A9A4C1101 /* FileTextPickerView.swift */; };
 		1AFDFA4A2AC2CEE77CD4C856 /* ConversationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9440A6471F2F63111CB49B46 /* ConversationStore.swift */; };
 		1CDB7EBBF886F63BA1460083 /* GatewayProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA864BCB8E5CB4DC707F8304 /* GatewayProtocol.swift */; };
 		25CAA09F895BFE70FB427FE6 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9BBBBEE778FA330FC6B2E92 /* SettingsView.swift */; };
 		2808C6EC9F10FBF1D766B1E0 /* MessageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB9ECBC77D8360B0E33A59D8 /* MessageStore.swift */; };
+		308209664CE7C20106C3362B /* FileTextPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FD04F5548C04F8DD34D6D50 /* FileTextPickerView.swift */; };
 		406B8FE4F7E6B617DF8742F4 /* ClawkApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A7C72458B614B76F4F4240A /* ClawkApp.swift */; };
+		4086A8FB27F7D6AD5FB77BFF /* LiveCallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53E846F62D3AD85A7F290A3A /* LiveCallView.swift */; };
 		4DF47FC10F47C2C8D771C0BF /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A733B461015C5FBC8DD9322E /* DashboardView.swift */; };
 		520D1CD0D409E1F4E2F2256B /* CostsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 493A6B6CB1096E8BA7B489A8 /* CostsView.swift */; };
 		544FE18D516A26C1E3093F9D /* ChatListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8E4765E74CC787BC5A5D4C7 /* ChatListView.swift */; };
 		5693E81908F23485ACF4340B /* KishOSIOSRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D387D95D0B541A46D648E1C0 /* KishOSIOSRootView.swift */; };
 		57022D80604899DEC98B40DB /* AgentLogsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D479C595005207FF75F951E6 /* AgentLogsView.swift */; };
+		57EEDF2278D52EF23C2B1A38 /* KishOSWidgetsExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 7FF44E68ED45E7EEF8CCBB51 /* KishOSWidgetsExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		5867E09D19864EF00D3856F9 /* ConversationStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57945B542C95784AEA518EA7 /* ConversationStoreTests.swift */; };
+		5A7AFF483B2ADF25FE7A563D /* LiveCallController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CC1BF11D78A813E2D75B65E /* LiveCallController.swift */; };
 		6B004850282B901FDC7DFBCF /* Conversation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D66F48AF324D00EE65E801F /* Conversation.swift */; };
+		6BA31FC7928D5D03B10723E8 /* AudioRouteMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B96F6934906F6A77BBB59125 /* AudioRouteMonitor.swift */; };
 		70C3FD5985DE350508CA7576 /* DashboardAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19D33F8BBD6020A9F8F43C0D /* DashboardAPIClient.swift */; };
 		71970BDF43769ECE44DC4FED /* ConversationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75E96526AACAAE4CF7DDFF93 /* ConversationTests.swift */; };
+		73F74DFCB23CD38C4F9B61ED /* KishOSLiveActivityWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C1A0D60877DBDD9B129B343 /* KishOSLiveActivityWidget.swift */; };
 		74447BD79F9DC75DD521D7A0 /* VoiceController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6FCA3DA8BE4B76E2A75DD23 /* VoiceController.swift */; };
 		7666D67DF6BC6148AD3BF7EC /* KishOSFeaturePlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47CE52D6F6C3B3791B2874BF /* KishOSFeaturePlan.swift */; };
 		796D01F37B7326029545C9CC /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67B095715EC6D0657B8EF344 /* Config.swift */; };
-		7C1A4E540A1E4F4C8D242101 /* WakePhraseController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C1A4E530A1E4F4C8D242101 /* WakePhraseController.swift */; };
+		7BD5F5B36769FA80703D2671 /* KishOSCallActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7EAB08A2E3A0A5C69507E33 /* KishOSCallActivityAttributes.swift */; };
 		81647F15B3A011B04AB5F3D2 /* ConversationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9440A6471F2F63111CB49B46 /* ConversationStore.swift */; };
+		84BFEA1D564F790D22C66C45 /* KishOSWidgetsBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF4A758449B0DDC52CA5EC66 /* KishOSWidgetsBundle.swift */; };
 		89D3E7F8286D9CCF88978618 /* VoiceController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6FCA3DA8BE4B76E2A75DD23 /* VoiceController.swift */; };
 		8EA0D1D5917487AA69C3C978 /* KishOSMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61D254F493783576AAF3D410 /* KishOSMacApp.swift */; };
+		928890E0FA908816C1A0A749 /* KishOSCallActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7EAB08A2E3A0A5C69507E33 /* KishOSCallActivityAttributes.swift */; };
 		948B83E8BA1F40E0036CA590 /* MemoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E59A447B777F28AAE47C8346 /* MemoryView.swift */; };
 		9F2ABD0D551D1F7292C5A5F9 /* AgentClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F0A10E61286CFABA0ACA0C /* AgentClientTests.swift */; };
+		9FFAF5F0C740BC711E743240 /* CameraTextCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FB7BD6F07C94FA433856EFD /* CameraTextCaptureView.swift */; };
 		A910280A5CEBEB328812E732 /* MoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BC007C150922B621095A597 /* MoreView.swift */; };
 		AF059C6FC928B2316266DA4A /* AgentClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A57A732EA4AFC2B553AF70A /* AgentClient.swift */; };
 		B8036E2296F7628A5C0572CE /* AgentClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A57A732EA4AFC2B553AF70A /* AgentClient.swift */; };
+		BDEEDBE68E3D64469C36508C /* KishOSLiveActivityController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FE1FF29E9B858E390CE9933 /* KishOSLiveActivityController.swift */; };
 		BEA296B530D3EE0B1A1037F2 /* LiveDashboardTabs.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC24015FE274E4F772DA97DD /* LiveDashboardTabs.swift */; };
 		CC774E2820437531FBB8D8EE /* KishOSWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = F873185D94B16907C1073B00 /* KishOSWorkspace.swift */; };
 		D5E0FA06E527E6EE4F6524CE /* SessionChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FA8028A0517DF1195BA7854 /* SessionChatView.swift */; };
@@ -54,10 +60,18 @@
 		E5B9761377A5DDC85827D781 /* ChatDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F68684194B8B5DC79D73D38 /* ChatDetailView.swift */; };
 		E987A5A657F8E60CD3D6D53C /* ChatHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29F2E674D7271CB505C361DF /* ChatHistoryStore.swift */; };
 		ECD45AB1DC169FB9AF51B23D /* Conversation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D66F48AF324D00EE65E801F /* Conversation.swift */; };
+		F49790AC7650ECEAB5D6A053 /* KishOSCallActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7EAB08A2E3A0A5C69507E33 /* KishOSCallActivityAttributes.swift */; };
 		F94BAA3974D909D010154B90 /* ThinkingStepsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 716ADB4A08C625A0CEDDD715 /* ThinkingStepsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		035ED6CA1D2AF41AF6E56CDA /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C0CE5586F71B4AFA40F4FCF1 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 20C0B8E1B3E02964774BB6EF;
+			remoteInfo = KishOSWidgetsExtension;
+		};
 		7FBB694F93CB4F799B0368C5 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = C0CE5586F71B4AFA40F4FCF1 /* Project object */;
@@ -67,17 +81,26 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		3210AC750C824DBA0DBF8D3D /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				57EEDF2278D52EF23C2B1A38 /* KishOSWidgetsExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		04F0A10E61286CFABA0ACA0C /* AgentClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentClientTests.swift; sourceTree = "<group>"; };
-		018A2D500D40E2F17AF8C201 /* AudioRouteMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRouteMonitor.swift; sourceTree = "<group>"; };
 		185356541FC2C862D03FB7A2 /* KishOSMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KishOSMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		19D33F8BBD6020A9F8F43C0D /* DashboardAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardAPIClient.swift; sourceTree = "<group>"; };
 		1FA8028A0517DF1195BA7854 /* SessionChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionChatView.swift; sourceTree = "<group>"; };
-		16C0AA899F1D44F3A62F7C01 /* LiveCallController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveCallController.swift; sourceTree = "<group>"; };
-		16C0AA8A9F1D44F3A62F7C01 /* LiveCallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveCallView.swift; sourceTree = "<group>"; };
-		17A7C90055B246DAB55F2A01 /* CameraTextCaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraTextCaptureView.swift; sourceTree = "<group>"; };
 		227D7EAA8BA576629153DE13 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
-		1E9C7C897C9A4C3A9A4C1101 /* FileTextPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileTextPickerView.swift; sourceTree = "<group>"; };
 		29F2E674D7271CB505C361DF /* ChatHistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatHistoryStore.swift; sourceTree = "<group>"; };
 		3BC007C150922B621095A597 /* MoreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoreView.swift; sourceTree = "<group>"; };
 		3BF9B02D88EDF9A8620601CA /* GatewayConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayConnection.swift; sourceTree = "<group>"; };
@@ -85,8 +108,10 @@
 		493A6B6CB1096E8BA7B489A8 /* CostsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CostsView.swift; sourceTree = "<group>"; };
 		4A57A732EA4AFC2B553AF70A /* AgentClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentClient.swift; sourceTree = "<group>"; };
 		4F68684194B8B5DC79D73D38 /* ChatDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatDetailView.swift; sourceTree = "<group>"; };
+		53E846F62D3AD85A7F290A3A /* LiveCallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveCallView.swift; sourceTree = "<group>"; };
 		57945B542C95784AEA518EA7 /* ConversationStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationStoreTests.swift; sourceTree = "<group>"; };
 		5A89B98F7C06E05A590381E2 /* GatewayChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayChatView.swift; sourceTree = "<group>"; };
+		5FB7BD6F07C94FA433856EFD /* CameraTextCaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraTextCaptureView.swift; sourceTree = "<group>"; };
 		61D254F493783576AAF3D410 /* KishOSMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KishOSMacApp.swift; sourceTree = "<group>"; };
 		62E583E96D8734B6045457C9 /* SharedViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedViews.swift; sourceTree = "<group>"; };
 		641664BF743F7453554BF316 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -95,19 +120,28 @@
 		6D66F48AF324D00EE65E801F /* Conversation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Conversation.swift; sourceTree = "<group>"; };
 		716ADB4A08C625A0CEDDD715 /* ThinkingStepsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThinkingStepsView.swift; sourceTree = "<group>"; };
 		75E96526AACAAE4CF7DDFF93 /* ConversationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationTests.swift; sourceTree = "<group>"; };
-		7C1A4E530A1E4F4C8D242101 /* WakePhraseController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WakePhraseController.swift; sourceTree = "<group>"; };
 		7A7C72458B614B76F4F4240A /* ClawkApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClawkApp.swift; sourceTree = "<group>"; };
+		7FF44E68ED45E7EEF8CCBB51 /* KishOSWidgetsExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = KishOSWidgetsExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		8C1A0D60877DBDD9B129B343 /* KishOSLiveActivityWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KishOSLiveActivityWidget.swift; sourceTree = "<group>"; };
+		8FD04F5548C04F8DD34D6D50 /* FileTextPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileTextPickerView.swift; sourceTree = "<group>"; };
 		9440A6471F2F63111CB49B46 /* ConversationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationStore.swift; sourceTree = "<group>"; };
+		9CC1BF11D78A813E2D75B65E /* LiveCallController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveCallController.swift; sourceTree = "<group>"; };
+		9FE1FF29E9B858E390CE9933 /* KishOSLiveActivityController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KishOSLiveActivityController.swift; sourceTree = "<group>"; };
 		A733B461015C5FBC8DD9322E /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		AB9ECBC77D8360B0E33A59D8 /* MessageStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageStore.swift; sourceTree = "<group>"; };
 		AD712A5FAAB152C8254982BC /* KishOSMacTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = KishOSMacTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B8E4765E74CC787BC5A5D4C7 /* ChatListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatListView.swift; sourceTree = "<group>"; };
+		B96F6934906F6A77BBB59125 /* AudioRouteMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRouteMonitor.swift; sourceTree = "<group>"; };
+		C2D141A3B5C138ABA7F09EB3 /* WakePhraseController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WakePhraseController.swift; sourceTree = "<group>"; };
 		C6FCA3DA8BE4B76E2A75DD23 /* VoiceController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceController.swift; sourceTree = "<group>"; };
+		C8A11F3E2CC0EFED534C022B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		CA864BCB8E5CB4DC707F8304 /* GatewayProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayProtocol.swift; sourceTree = "<group>"; };
 		CD2B0BD8253B85A1A695E980 /* CronManagementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CronManagementView.swift; sourceTree = "<group>"; };
+		CF4A758449B0DDC52CA5EC66 /* KishOSWidgetsBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KishOSWidgetsBundle.swift; sourceTree = "<group>"; };
 		D2D7F8370605F68579B5D56D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		D387D95D0B541A46D648E1C0 /* KishOSIOSRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KishOSIOSRootView.swift; sourceTree = "<group>"; };
 		D479C595005207FF75F951E6 /* AgentLogsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentLogsView.swift; sourceTree = "<group>"; };
+		D7EAB08A2E3A0A5C69507E33 /* KishOSCallActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KishOSCallActivityAttributes.swift; sourceTree = "<group>"; };
 		DC24015FE274E4F772DA97DD /* LiveDashboardTabs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveDashboardTabs.swift; sourceTree = "<group>"; };
 		DE29A68B30630F58BCB47CF0 /* ApprovalQueueView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovalQueueView.swift; sourceTree = "<group>"; };
 		E59A447B777F28AAE47C8346 /* MemoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryView.swift; sourceTree = "<group>"; };
@@ -121,9 +155,10 @@
 			isa = PBXGroup;
 			children = (
 				4A57A732EA4AFC2B553AF70A /* AgentClient.swift */,
-				018A2D500D40E2F17AF8C201 /* AudioRouteMonitor.swift */,
+				B96F6934906F6A77BBB59125 /* AudioRouteMonitor.swift */,
 				6D66F48AF324D00EE65E801F /* Conversation.swift */,
 				9440A6471F2F63111CB49B46 /* ConversationStore.swift */,
+				D7EAB08A2E3A0A5C69507E33 /* KishOSCallActivityAttributes.swift */,
 				47CE52D6F6C3B3791B2874BF /* KishOSFeaturePlan.swift */,
 				F873185D94B16907C1073B00 /* KishOSWorkspace.swift */,
 				C6FCA3DA8BE4B76E2A75DD23 /* VoiceController.swift */,
@@ -136,7 +171,7 @@
 			children = (
 				D479C595005207FF75F951E6 /* AgentLogsView.swift */,
 				DE29A68B30630F58BCB47CF0 /* ApprovalQueueView.swift */,
-				17A7C90055B246DAB55F2A01 /* CameraTextCaptureView.swift */,
+				5FB7BD6F07C94FA433856EFD /* CameraTextCaptureView.swift */,
 				4F68684194B8B5DC79D73D38 /* ChatDetailView.swift */,
 				29F2E674D7271CB505C361DF /* ChatHistoryStore.swift */,
 				B8E4765E74CC787BC5A5D4C7 /* ChatListView.swift */,
@@ -144,18 +179,19 @@
 				67B095715EC6D0657B8EF344 /* Config.swift */,
 				641664BF743F7453554BF316 /* ContentView.swift */,
 				493A6B6CB1096E8BA7B489A8 /* CostsView.swift */,
-				1E9C7C897C9A4C3A9A4C1101 /* FileTextPickerView.swift */,
 				CD2B0BD8253B85A1A695E980 /* CronManagementView.swift */,
 				19D33F8BBD6020A9F8F43C0D /* DashboardAPIClient.swift */,
 				A733B461015C5FBC8DD9322E /* DashboardView.swift */,
+				8FD04F5548C04F8DD34D6D50 /* FileTextPickerView.swift */,
 				5A89B98F7C06E05A590381E2 /* GatewayChatView.swift */,
 				3BF9B02D88EDF9A8620601CA /* GatewayConnection.swift */,
 				CA864BCB8E5CB4DC707F8304 /* GatewayProtocol.swift */,
 				227D7EAA8BA576629153DE13 /* HomeView.swift */,
 				645A6F0E142A68BB46D021FB /* Info.plist */,
 				D387D95D0B541A46D648E1C0 /* KishOSIOSRootView.swift */,
-				16C0AA899F1D44F3A62F7C01 /* LiveCallController.swift */,
-				16C0AA8A9F1D44F3A62F7C01 /* LiveCallView.swift */,
+				9FE1FF29E9B858E390CE9933 /* KishOSLiveActivityController.swift */,
+				9CC1BF11D78A813E2D75B65E /* LiveCallController.swift */,
+				53E846F62D3AD85A7F290A3A /* LiveCallView.swift */,
 				DC24015FE274E4F772DA97DD /* LiveDashboardTabs.swift */,
 				E59A447B777F28AAE47C8346 /* MemoryView.swift */,
 				AB9ECBC77D8360B0E33A59D8 /* MessageStore.swift */,
@@ -164,7 +200,7 @@
 				F9BBBBEE778FA330FC6B2E92 /* SettingsView.swift */,
 				62E583E96D8734B6045457C9 /* SharedViews.swift */,
 				716ADB4A08C625A0CEDDD715 /* ThinkingStepsView.swift */,
-				7C1A4E530A1E4F4C8D242101 /* WakePhraseController.swift */,
+				C2D141A3B5C138ABA7F09EB3 /* WakePhraseController.swift */,
 			);
 			path = Clawk;
 			sourceTree = "<group>";
@@ -195,8 +231,19 @@
 				3E7D35ADFF5183E2A2A5B42A /* KishOSCore */,
 				8897B66058A2CF85EAECA3F8 /* KishOSMac */,
 				84851657C062D5CB9B1EE155 /* KishOSMacTests */,
+				F29A5628AB9044B2DB84FB71 /* KishOSWidgets */,
 				FF47E99327B575DC454AC59C /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		F29A5628AB9044B2DB84FB71 /* KishOSWidgets */ = {
+			isa = PBXGroup;
+			children = (
+				C8A11F3E2CC0EFED534C022B /* Info.plist */,
+				8C1A0D60877DBDD9B129B343 /* KishOSLiveActivityWidget.swift */,
+				CF4A758449B0DDC52CA5EC66 /* KishOSWidgetsBundle.swift */,
+			);
+			path = KishOSWidgets;
 			sourceTree = "<group>";
 		};
 		FF47E99327B575DC454AC59C /* Products */ = {
@@ -205,6 +252,7 @@
 				E8710FBF24E9CAA28D156CE7 /* Clawk.app */,
 				185356541FC2C862D03FB7A2 /* KishOSMac.app */,
 				AD712A5FAAB152C8254982BC /* KishOSMacTests.xctest */,
+				7FF44E68ED45E7EEF8CCBB51 /* KishOSWidgetsExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -217,10 +265,12 @@
 			buildConfigurationList = 69E1EC7F38785B2031E2BA3A /* Build configuration list for PBXNativeTarget "Clawk" */;
 			buildPhases = (
 				208DBEBD8890A387DE22E529 /* Sources */,
+				3210AC750C824DBA0DBF8D3D /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				EB7B52A4BA4448E485286015 /* PBXTargetDependency */,
 			);
 			name = Clawk;
 			packageProductDependencies = (
@@ -228,6 +278,23 @@
 			productName = Clawk;
 			productReference = E8710FBF24E9CAA28D156CE7 /* Clawk.app */;
 			productType = "com.apple.product-type.application";
+		};
+		20C0B8E1B3E02964774BB6EF /* KishOSWidgetsExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 86268DEAED5AD170B7EFFF30 /* Build configuration list for PBXNativeTarget "KishOSWidgetsExtension" */;
+			buildPhases = (
+				62C97CFA526AD4074B683851 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = KishOSWidgetsExtension;
+			packageProductDependencies = (
+			);
+			productName = KishOSWidgetsExtension;
+			productReference = 7FF44E68ED45E7EEF8CCBB51 /* KishOSWidgetsExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 		BC64B75872CEC41E6DA71BA3 /* KishOSMacTests */ = {
 			isa = PBXNativeTarget;
@@ -277,6 +344,10 @@
 						DevelopmentTeam = GN3TH9WD6W;
 						ProvisioningStyle = Automatic;
 					};
+					20C0B8E1B3E02964774BB6EF = {
+						DevelopmentTeam = GN3TH9WD6W;
+						ProvisioningStyle = Automatic;
+					};
 					F228BF02D6952AEAF0E6B08E = {
 						DevelopmentTeam = GN3TH9WD6W;
 						ProvisioningStyle = Automatic;
@@ -300,6 +371,7 @@
 				1549E8CABB9B75930BDC8B33 /* Clawk */,
 				F228BF02D6952AEAF0E6B08E /* KishOSMac */,
 				BC64B75872CEC41E6DA71BA3 /* KishOSMacTests */,
+				20C0B8E1B3E02964774BB6EF /* KishOSWidgetsExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -310,10 +382,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				AF059C6FC928B2316266DA4A /* AgentClient.swift in Sources */,
-				018A2D510D40E2F17AF8C201 /* AudioRouteMonitor.swift in Sources */,
 				57022D80604899DEC98B40DB /* AgentLogsView.swift in Sources */,
 				008080B3368DE6AEA80E6807 /* ApprovalQueueView.swift in Sources */,
-				17A7C91055B246DAB55F2A01 /* CameraTextCaptureView.swift in Sources */,
+				14D0013ECE6E7348671AB8E1 /* AudioRouteMonitor.swift in Sources */,
+				9FFAF5F0C740BC711E743240 /* CameraTextCaptureView.swift in Sources */,
 				E5B9761377A5DDC85827D781 /* ChatDetailView.swift in Sources */,
 				E987A5A657F8E60CD3D6D53C /* ChatHistoryStore.swift in Sources */,
 				544FE18D516A26C1E3093F9D /* ChatListView.swift in Sources */,
@@ -321,21 +393,23 @@
 				796D01F37B7326029545C9CC /* Config.swift in Sources */,
 				05611179C1434EA208CEF157 /* ContentView.swift in Sources */,
 				ECD45AB1DC169FB9AF51B23D /* Conversation.swift in Sources */,
-				1E9C7C8A7C9A4C3A9A4C1101 /* FileTextPickerView.swift in Sources */,
 				81647F15B3A011B04AB5F3D2 /* ConversationStore.swift in Sources */,
 				520D1CD0D409E1F4E2F2256B /* CostsView.swift in Sources */,
 				E0970E477EF5F286C09EE94C /* CronManagementView.swift in Sources */,
 				70C3FD5985DE350508CA7576 /* DashboardAPIClient.swift in Sources */,
 				4DF47FC10F47C2C8D771C0BF /* DashboardView.swift in Sources */,
+				308209664CE7C20106C3362B /* FileTextPickerView.swift in Sources */,
 				1692CD406B2399800935424F /* GatewayChatView.swift in Sources */,
 				04F144AAB362A6236543697B /* GatewayConnection.swift in Sources */,
 				1CDB7EBBF886F63BA1460083 /* GatewayProtocol.swift in Sources */,
 				182D525333F502C00AAF063A /* HomeView.swift in Sources */,
+				7BD5F5B36769FA80703D2671 /* KishOSCallActivityAttributes.swift in Sources */,
 				7666D67DF6BC6148AD3BF7EC /* KishOSFeaturePlan.swift in Sources */,
 				5693E81908F23485ACF4340B /* KishOSIOSRootView.swift in Sources */,
+				BDEEDBE68E3D64469C36508C /* KishOSLiveActivityController.swift in Sources */,
 				E0764B563F6690479678CB27 /* KishOSWorkspace.swift in Sources */,
-				16C0AA8B9F1D44F3A62F7C01 /* LiveCallController.swift in Sources */,
-				16C0AA8C9F1D44F3A62F7C01 /* LiveCallView.swift in Sources */,
+				5A7AFF483B2ADF25FE7A563D /* LiveCallController.swift in Sources */,
+				4086A8FB27F7D6AD5FB77BFF /* LiveCallView.swift in Sources */,
 				BEA296B530D3EE0B1A1037F2 /* LiveDashboardTabs.swift in Sources */,
 				948B83E8BA1F40E0036CA590 /* MemoryView.swift in Sources */,
 				2808C6EC9F10FBF1D766B1E0 /* MessageStore.swift in Sources */,
@@ -344,8 +418,8 @@
 				25CAA09F895BFE70FB427FE6 /* SettingsView.swift in Sources */,
 				13D989FEDC813BC32D37A770 /* SharedViews.swift in Sources */,
 				F94BAA3974D909D010154B90 /* ThinkingStepsView.swift in Sources */,
-				7C1A4E540A1E4F4C8D242101 /* WakePhraseController.swift in Sources */,
 				89D3E7F8286D9CCF88978618 /* VoiceController.swift in Sources */,
+				07ECBC7DBE333CC10DB84502 /* WakePhraseController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -359,14 +433,25 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		62C97CFA526AD4074B683851 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F49790AC7650ECEAB5D6A053 /* KishOSCallActivityAttributes.swift in Sources */,
+				73F74DFCB23CD38C4F9B61ED /* KishOSLiveActivityWidget.swift in Sources */,
+				84BFEA1D564F790D22C66C45 /* KishOSWidgetsBundle.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		D9D42BC51AE12BDF96C28ABB /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 				B8036E2296F7628A5C0572CE /* AgentClient.swift in Sources */,
-				018A2D520D40E2F17AF8C201 /* AudioRouteMonitor.swift in Sources */,
+				6BA31FC7928D5D03B10723E8 /* AudioRouteMonitor.swift in Sources */,
 				6B004850282B901FDC7DFBCF /* Conversation.swift in Sources */,
 				1AFDFA4A2AC2CEE77CD4C856 /* ConversationStore.swift in Sources */,
+				928890E0FA908816C1A0A749 /* KishOSCallActivityAttributes.swift in Sources */,
 				D8B63FA9F24AA1FF0F35754C /* KishOSFeaturePlan.swift in Sources */,
 				8EA0D1D5917487AA69C3C978 /* KishOSMacApp.swift in Sources */,
 				CC774E2820437531FBB8D8EE /* KishOSWorkspace.swift in Sources */,
@@ -381,6 +466,11 @@
 			isa = PBXTargetDependency;
 			target = F228BF02D6952AEAF0E6B08E /* KishOSMac */;
 			targetProxy = 7FBB694F93CB4F799B0368C5 /* PBXContainerItemProxy */;
+		};
+		EB7B52A4BA4448E485286015 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 20C0B8E1B3E02964774BB6EF /* KishOSWidgetsExtension */;
+			targetProxy = 035ED6CA1D2AF41AF6E56CDA /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -458,6 +548,27 @@
 			};
 			name = Release;
 		};
+		1F98BA94F22B03998F83BEA6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = GN3TH9WD6W;
+				INFOPLIST_FILE = KishOSWidgets/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.kishparikh.clawk.widgets;
+				PRODUCT_NAME = KishOSWidgets;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
 		2D9365DF8A4737BCF705D657 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -494,6 +605,27 @@
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/KishOS.app/Contents/MacOS/KishOS";
 			};
 			name = Debug;
+		};
+		749DD19EBA52C00CF6C99BC8 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = GN3TH9WD6W;
+				INFOPLIST_FILE = KishOSWidgets/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.kishparikh.clawk.widgets;
+				PRODUCT_NAME = KishOSWidgets;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
 		};
 		7E51E3D18D85DBB71247525E /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -640,6 +772,15 @@
 			buildConfigurations = (
 				7E51E3D18D85DBB71247525E /* Debug */,
 				9B8EB2BD52C84935AE3314C0 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		86268DEAED5AD170B7EFFF30 /* Build configuration list for PBXNativeTarget "KishOSWidgetsExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1F98BA94F22B03998F83BEA6 /* Debug */,
+				749DD19EBA52C00CF6C99BC8 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

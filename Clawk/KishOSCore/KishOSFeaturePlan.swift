@@ -305,13 +305,13 @@ enum KishOSFeature: String, CaseIterable, Identifiable, Codable {
         case .snapshotReview:
             return "Mostly UI: make the image review, retake, and send flow feel intentional before camera-first use."
         case .liveCallMode:
-            return "Needs QA and hardening: audio route activation, silence finalization, interruption, failure recovery, and conversation continuity."
+            return "Hands-free call surface with conversation continuity, interruption controls, and a Live Activity override while a call is active."
         case .wakePhrase:
-            return "Port the Glassbridge pattern: local Speech wake phrase, pause while ASK/call owns the mic, resume after the turn."
+            return "Glassbridge-style local Speech wake phrase that pauses while chat or call mode owns the mic."
         case .audioRouteAwareness:
             return "Detect Bluetooth, AirPods, and glasses-like audio routes."
         case .audioRoutePicker:
-            return "Let the app prefer the right headset route when available."
+            return "Prefer headset/glasses routes when available, then fall back cleanly to the iPhone route."
         case .spokenReplies:
             return "Use call-only spoken output, with stop/barge-in and no surprise read-aloud in normal chat."
         case .glassesWalkMode:
@@ -321,7 +321,7 @@ enum KishOSFeature: String, CaseIterable, Identifiable, Codable {
         case .interruptSteering:
             return "Let you steer or stop a running agent without waiting for the final answer."
         case .statusNotifications:
-            return "Notify when a task is blocked, done, or failed."
+            return "Use Live Activity and notifications to surface recent sessions, review-needed work, and completed runs."
         case .sessionRecovery:
             return "Reopen the app and recover the final state of an in-flight run."
         case .capabilityMap:
@@ -372,13 +372,13 @@ enum KishOSFeature: String, CaseIterable, Identifiable, Codable {
         case .snapshotReview:
             return ["UI", "Privacy"]
         case .liveCallMode:
-            return ["M6", "QA"]
+            return ["M6", "Live Activity"]
         case .wakePhrase:
             return ["Glassbridge", "Wake"]
         case .audioRouteAwareness:
             return ["Audio", "Routes"]
         case .audioRoutePicker:
-            return ["Audio", "Hardware"]
+            return ["Audio", "Glassbridge"]
         case .spokenReplies:
             return ["Voice", "Output"]
         case .glassesWalkMode:
@@ -388,7 +388,7 @@ enum KishOSFeature: String, CaseIterable, Identifiable, Codable {
         case .interruptSteering:
             return ["Runs", "Steering"]
         case .statusNotifications:
-            return ["Notifications", "Runs"]
+            return ["Live Activity", "Runs"]
         case .sessionRecovery:
             return ["Recovery", "Runs"]
         case .capabilityMap:
@@ -439,22 +439,22 @@ enum KishOSFactoryPlan {
              .iOSSharedShell,
              .nativeAttachments,
              .explicitSnapshot,
-             .audioRouteAwareness:
+             .audioRouteAwareness,
+             .liveCallMode,
+             .wakePhrase,
+             .audioRoutePicker,
+             .spokenReplies:
             state = .available
         case .connectionRecovery,
              .decisionInbox:
             state = .deferred
-        case .liveCallMode,
-             .wakePhrase,
-             .audioRoutePicker,
-             .spokenReplies,
-             .snapshotReview,
+        case .snapshotReview,
+             .statusNotifications,
              .sessionRecovery:
             state = .inProgress
         case .glassesWalkMode,
              .liveRunTimeline,
              .interruptSteering,
-             .statusNotifications,
              .capabilityMap,
              .dailyBrief,
              .memoryPins,

@@ -96,7 +96,16 @@ struct KishOSIOSRootView: View {
                         audio.start()
                     }
                     .task {
+                        refreshLiveActivitySummary()
+                    }
+                    .task {
                         refreshWakeSuppression()
+                    }
+                    .onChange(of: workspace.conversations) {
+                        refreshLiveActivitySummary()
+                    }
+                    .onChange(of: selectedConversationID) {
+                        refreshLiveActivitySummary()
                     }
                     .onChange(of: voice.isRecording) { _, isRecording in
                         audio.refresh(isRecording: isRecording)
@@ -175,6 +184,8 @@ struct KishOSIOSRootView: View {
                 },
                 onDismiss: {
                     liveCallSession = nil
+                    refreshWakeSuppression()
+                    refreshLiveActivitySummary()
                 }
             )
         }
@@ -202,6 +213,7 @@ struct KishOSIOSRootView: View {
 
     private func startLiveCall() {
         guard liveCallSession == nil else { return }
+        wake.updateSuppression(true)
         liveCallSession = LiveCallSession(conversationID: selectedConversationID)
     }
 
@@ -215,6 +227,13 @@ struct KishOSIOSRootView: View {
 
     private func refreshWakeSuppression() {
         wake.updateSuppression(voice.isRecording || currentIsRunning || liveCallSession != nil)
+    }
+
+    private func refreshLiveActivitySummary() {
+        KishOSLiveActivityController.shared.updateSummary(
+            conversations: workspace.conversations,
+            selectedConversationID: selectedConversationID
+        )
     }
 
     private func closeConversations() {
