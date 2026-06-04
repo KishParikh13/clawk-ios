@@ -140,6 +140,21 @@
       "priority": 9,
       "passes": true,
       "notes": "Allowed LiveCallController.start() to restart from failed state, clear the failure message, reset to connecting, and reuse the existing elapsed timer cancellation path. Ended and already-active calls still do not restart through this path. Verified with .ralph/verify.sh."
+    },
+    {
+      "id": "US-010",
+      "title": "Clear live-call partials on mute",
+      "description": "When muting during a live call, discard unsent partial dictation so stale words are not left visible or sendable.",
+      "acceptanceCriteria": [
+        "Muting cancels pending utterance finalization",
+        "Muting stops recording and clears active user partial text",
+        "Muted state does not leave the send control enabled for stale speech",
+        "Unmuting from listening resumes normal recording setup",
+        "Verification command passes"
+      ],
+      "priority": 10,
+      "passes": true,
+      "notes": "Muting now cancels pending utterance finalization, stops recording, clears active user partial text, and prevents stale speech from remaining sendable. Unmute still resumes normal listening setup. Verified with .ralph/verify.sh."
     }
   ]
 }

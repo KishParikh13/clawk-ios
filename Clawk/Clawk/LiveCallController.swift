@@ -96,7 +96,9 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
     func toggleMute() {
         isMuted.toggle()
         if isMuted {
+            finalizeTask?.cancel()
             _ = voice.stopRecording()
+            activeUserPartial = ""
             state = .listening
         } else if state == .listening {
             Task { await beginListening() }
