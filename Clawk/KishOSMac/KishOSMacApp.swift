@@ -1807,20 +1807,23 @@ private struct RoadmapView: View {
 
                         let milestoneCapabilities = capabilities.filter { $0.milestone == milestone }
                         if !milestoneCapabilities.isEmpty {
-                            HStack(spacing: 8) {
+                            LazyVGrid(
+                                columns: [GridItem(.adaptive(minimum: 150), spacing: 8, alignment: .leading)],
+                                alignment: .leading,
+                                spacing: 8
+                            ) {
                                 ForEach(milestoneCapabilities) { capability in
                                     CapabilityPill(capability: capability)
                                 }
-                                Spacer()
                             }
                         }
 
                         VStack(alignment: .leading, spacing: 6) {
                             ForEach(milestone.userCheckpoint, id: \.self) { checkpoint in
                                 HStack(alignment: .top, spacing: 7) {
-                                    Image(systemName: "circle")
+                                    Image(systemName: "checkmark.circle.fill")
                                         .font(.caption2)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(.green)
                                         .padding(.top, 3)
                                     Text(checkpoint)
                                         .font(.callout)
