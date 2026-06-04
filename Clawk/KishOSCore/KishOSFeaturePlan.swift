@@ -149,6 +149,8 @@ enum KishOSFeature: String, CaseIterable, Identifiable, Codable {
     case offlineQueue
     case sharedConversationSync
     case deleteReconciliation
+    case projectFolders
+    case conversationSearch
     case connectionRecovery
     case streamingEvents
     case approvalCards
@@ -157,9 +159,12 @@ enum KishOSFeature: String, CaseIterable, Identifiable, Codable {
     case pushToTalk
     case iOSSharedShell
     case nativeAttachments
+    case fileFolderReferences
     case explicitSnapshot
     case snapshotReview
     case liveCallMode
+    case liveCallHardening
+    case liveActivitySummary
     case wakePhrase
     case audioRouteAwareness
     case audioRoutePicker
@@ -178,7 +183,7 @@ enum KishOSFeature: String, CaseIterable, Identifiable, Codable {
 
     var milestone: KishOSMilestone {
         switch self {
-        case .nativeMacShell, .kishAgentBridge, .persistentConversations, .retryFailedMessage, .offlineQueue, .connectionRecovery:
+        case .nativeMacShell, .kishAgentBridge, .persistentConversations, .retryFailedMessage, .offlineQueue, .projectFolders, .connectionRecovery:
             return .foundation
         case .streamingEvents:
             return .streaming
@@ -186,11 +191,11 @@ enum KishOSFeature: String, CaseIterable, Identifiable, Codable {
             return .decisions
         case .pushToTalk:
             return .voice
-        case .iOSSharedShell, .sharedConversationSync, .deleteReconciliation:
+        case .iOSSharedShell, .sharedConversationSync, .deleteReconciliation, .conversationSearch:
             return .iOSParity
-        case .nativeAttachments, .explicitSnapshot, .snapshotReview:
+        case .nativeAttachments, .fileFolderReferences, .explicitSnapshot, .snapshotReview:
             return .attachments
-        case .liveCallMode, .spokenReplies, .wakePhrase:
+        case .liveCallMode, .liveCallHardening, .liveActivitySummary, .spokenReplies, .wakePhrase:
             return .liveCall
         case .audioRouteAwareness, .audioRoutePicker, .glassesWalkMode:
             return .glassesAudio
@@ -217,6 +222,10 @@ enum KishOSFeature: String, CaseIterable, Identifiable, Codable {
             return "Shared conversations"
         case .deleteReconciliation:
             return "Delete reconciliation"
+        case .projectFolders:
+            return "Project folders"
+        case .conversationSearch:
+            return "Conversation search"
         case .connectionRecovery:
             return "Connection recovery"
         case .streamingEvents:
@@ -233,12 +242,18 @@ enum KishOSFeature: String, CaseIterable, Identifiable, Codable {
             return "iOS shared shell"
         case .nativeAttachments:
             return "Native attachments"
+        case .fileFolderReferences:
+            return "@ file references"
         case .explicitSnapshot:
             return "Snapshot ask"
         case .snapshotReview:
             return "Snapshot review"
         case .liveCallMode:
             return "Live call mode"
+        case .liveCallHardening:
+            return "Live call hardening"
+        case .liveActivitySummary:
+            return "Live Activity summary"
         case .wakePhrase:
             return "Wake phrase"
         case .audioRouteAwareness:
@@ -284,6 +299,10 @@ enum KishOSFeature: String, CaseIterable, Identifiable, Codable {
             return "Mac and iOS load the same backend conversation history."
         case .deleteReconciliation:
             return "Deleted conversations stay deleted across devices."
+        case .projectFolders:
+            return "Choose a project/folder for a new session, then lock that context for the thread and live calls."
+        case .conversationSearch:
+            return "Search conversations by title, project, branch, messages, attachments, references, and thread id."
         case .connectionRecovery:
             return "Deferred: the current offline queue is enough until live calls and long-running runs need stronger recovery."
         case .streamingEvents:
@@ -300,12 +319,18 @@ enum KishOSFeature: String, CaseIterable, Identifiable, Codable {
             return "The iPhone app uses the same KishOS core and conversation model."
         case .nativeAttachments:
             return "Upload files and photos to the agent with previews and backend ids."
+        case .fileFolderReferences:
+            return "Insert removable @ file/folder references as prompt context, separate from binary uploads."
         case .explicitSnapshot:
             return "Validated through the native attachment path: capture or choose an image, upload it, then send the attachment id with the chat turn."
         case .snapshotReview:
             return "Review camera/photo captures before attaching, ask about them, retake, or cancel without auto-sending."
         case .liveCallMode:
             return "Hands-free call surface with conversation continuity, interruption controls, and a Live Activity override while a call is active."
+        case .liveCallHardening:
+            return "Cancel backend runs, retry failed calls, clear stale partials on mute, and preserve project context."
+        case .liveActivitySummary:
+            return "Show active/recent sessions, unread finished work, review-needed threads, and live-call state on the Lock Screen."
         case .wakePhrase:
             return "Glassbridge-style local Speech wake phrase that pauses while chat or call mode owns the mic."
         case .audioRouteAwareness:
@@ -351,6 +376,10 @@ enum KishOSFeature: String, CaseIterable, Identifiable, Codable {
             return ["Sync", "Mac+iOS"]
         case .deleteReconciliation:
             return ["Sync", "Safety"]
+        case .projectFolders:
+            return ["Projects", "Context"]
+        case .conversationSearch:
+            return ["Search", "Mac+iOS"]
         case .connectionRecovery:
             return ["Deferred", "Recovery"]
         case .streamingEvents:
@@ -367,12 +396,18 @@ enum KishOSFeature: String, CaseIterable, Identifiable, Codable {
             return ["iOS", "Shared Core"]
         case .nativeAttachments:
             return ["Files", "Photos"]
+        case .fileFolderReferences:
+            return ["References", "Context"]
         case .explicitSnapshot:
             return ["Validated", "Vision"]
         case .snapshotReview:
             return ["UI", "Privacy"]
         case .liveCallMode:
             return ["M6", "Live Activity"]
+        case .liveCallHardening:
+            return ["Cancel", "Recovery"]
+        case .liveActivitySummary:
+            return ["Live Activity", "Unread"]
         case .wakePhrase:
             return ["Glassbridge", "Wake"]
         case .audioRouteAwareness:
@@ -432,15 +467,20 @@ enum KishOSFactoryPlan {
              .offlineQueue,
              .sharedConversationSync,
              .deleteReconciliation,
+             .projectFolders,
+             .conversationSearch,
              .streamingEvents,
              .approvalCards,
              .toolInventory,
              .pushToTalk,
              .iOSSharedShell,
              .nativeAttachments,
+             .fileFolderReferences,
              .explicitSnapshot,
              .audioRouteAwareness,
              .liveCallMode,
+             .liveCallHardening,
+             .liveActivitySummary,
              .wakePhrase,
              .audioRoutePicker,
              .spokenReplies,
