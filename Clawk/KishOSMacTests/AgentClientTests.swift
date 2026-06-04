@@ -184,6 +184,83 @@ final class AgentClientTests: XCTestCase {
         XCTAssertFalse(client.isSending)
     }
 
+    func testStreamingIncludesAttachmentIdsWhenPresent() async throws {
+        var capturedBody: Data?
+        let client = makeClient { request in
+            XCTAssertEqual(request.url?.path, "/chat-stream")
+            capturedBody = requestBodyData(from: request)
+            return ndjsonResponse(
+                #"{"type":"final","ok":true,"threadId":"thread-1","engine":"claude","text":"done","elapsedMs":4,"events":[]}"#
+            )
+        }
+
+        _ = try await client.sendStreaming(
+            "what is this?",
+            threadId: "thread-1",
+            attachments: [
+                ChatRequestAttachment(id: "att_123", filename: "receipt.jpg", mimeType: "image/jpeg", kind: "image")
+            ]
+        ) { _ in }
+
+        let body = try XCTUnwrap(capturedBody)
+        let request = try JSONDecoder().decode(TestChatRequest.self, from: body)
+
+        XCTAssertEqual(request.attachments?.count, 1)
+        XCTAssertEqual(request.attachments?.first?.id, "att_123")
+        XCTAssertEqual(request.attachments?.first?.filename, "receipt.jpg")
+        XCTAssertEqual(request.attachments?.first?.mimeType, "image/jpeg")
+        XCTAssertEqual(request.attachments?.first?.kind, "image")
+    }
+
+    func testUploadAttachmentPostsMultipartAndDecodesResponse() async throws {
+        var capturedRequest: URLRequest?
+        var capturedBody: Data?
+        let client = makeClient { request in
+            capturedRequest = request
+            capturedBody = requestBodyData(from: request)
+            return jsonResponse(
+                """
+                {
+                  "ok": true,
+                  "attachment": {
+                    "id": "att_123",
+                    "filename": "receipt.jpg",
+                    "mimeType": "image/jpeg",
+                    "byteCount": 5,
+                    "kind": "image"
+                  }
+                }
+                """
+            )
+        }
+
+        let payload = PendingAttachmentPayload(
+            attachmentId: UUID(uuidString: "11111111-2222-3333-4444-555555555555")!,
+            filename: "receipt.jpg",
+            mimeType: "image/jpeg",
+            data: Data("image".utf8)
+        )
+
+        let uploaded = try await client.uploadAttachment(payload, conversationId: UUID(uuidString: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")!, threadId: "thread-1")
+        let request = try XCTUnwrap(capturedRequest)
+        let body = String(data: try XCTUnwrap(capturedBody), encoding: .utf8)
+
+        XCTAssertEqual(request.url?.path, "/attachments")
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertTrue(request.value(forHTTPHeaderField: "Content-Type")?.hasPrefix("multipart/form-data; boundary=") == true)
+        XCTAssertTrue(body?.contains(#"name="filename""#) == true)
+        XCTAssertTrue(body?.contains("receipt.jpg") == true)
+        XCTAssertTrue(body?.contains(#"name="mimeType""#) == true)
+        XCTAssertTrue(body?.contains("image/jpeg") == true)
+        XCTAssertTrue(body?.contains(#"name="conversationId""#) == true)
+        XCTAssertTrue(body?.contains("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee") == true)
+        XCTAssertTrue(body?.contains(#"name="threadId""#) == true)
+        XCTAssertTrue(body?.contains("thread-1") == true)
+        XCTAssertEqual(uploaded.id, "att_123")
+        XCTAssertEqual(uploaded.filename, "receipt.jpg")
+        XCTAssertEqual(uploaded.byteCount, 5)
+    }
+
     func testStreamingMissingFinalThrowsRecoverableError() async {
         let client = makeClient { _ in
             ndjsonResponse(
@@ -383,6 +460,14 @@ private struct TestChatRequest: Decodable {
     let threadId: String
     let message: String
     let conversationId: UUID?
+    let attachments: [TestChatRequestAttachment]?
+}
+
+private struct TestChatRequestAttachment: Decodable {
+    let id: String
+    let filename: String
+    let mimeType: String?
+    let kind: String?
 }
 
 private struct TestApprovalAnswerRequest: Decodable {

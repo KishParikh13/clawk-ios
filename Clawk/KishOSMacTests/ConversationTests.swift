@@ -22,6 +22,27 @@ final class ConversationTests: XCTestCase {
         XCTAssertEqual(conversation.messages.first?.text, "hello")
     }
 
+    func testChatAttachmentDecodesOlderTextAttachmentWithoutUploadFields() throws {
+        let json = """
+        {
+          "id": "11111111-2222-3333-4444-555555555555",
+          "kind": "text",
+          "title": "Clipboard",
+          "text": "hello",
+          "createdAt": "2026-06-04T05:20:00.000Z"
+        }
+        """.data(using: .utf8)!
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        let attachment = try decoder.decode(ChatAttachment.self, from: json)
+
+        XCTAssertEqual(attachment.kind, .text)
+        XCTAssertEqual(attachment.uploadState, .ready)
+        XCTAssertNil(attachment.uploadId)
+        XCTAssertNil(attachment.localFilename)
+    }
+
     func testAgentStatusUsesPendingQuestion() {
         var conversation = Conversation(firstMessage: "book a flight")
         conversation.approvals = [

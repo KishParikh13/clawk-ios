@@ -613,11 +613,26 @@ private struct ChatView: View {
 
     private func sendDraft() {
         let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, !client.isSending, !isRunning, approvals.isEmpty else { return }
+        guard (hasDraft || hasSendableAttachment),
+              pendingAttachments.allSatisfy(\.isReadyForSend),
+              !client.isSending,
+              !isRunning,
+              approvals.isEmpty
+        else {
+            return
+        }
         let attachments = pendingAttachments
         draft = ""
         pendingAttachments = []
         onSend(trimmed, attachments)
+    }
+
+    private var hasDraft: Bool {
+        !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var hasSendableAttachment: Bool {
+        pendingAttachments.contains { $0.isReadyForSend }
     }
 
     private func previousUserText(before index: Int) -> String {
@@ -1343,7 +1358,7 @@ private struct ChatComposer: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(isDisabled || isSending || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(isDisabled || isSending || !hasSendableContent)
             }
         }
         .opacity(isDisabled ? 0.62 : 1)
@@ -1365,6 +1380,10 @@ private struct ChatComposer: View {
                 appendTranscript(transcript)
             }
         }
+    }
+
+    private var hasSendableContent: Bool {
+        !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || attachments.contains { $0.isReadyForSend }
     }
 
     private func appendTranscript(_ transcript: String) {
