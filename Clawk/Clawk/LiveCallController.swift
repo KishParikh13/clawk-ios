@@ -75,7 +75,9 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
     }
 
     func start() async {
-        guard state == .connecting else { return }
+        guard state == .connecting || state == .failed else { return }
+        state = .connecting
+        failureMessage = nil
         startElapsedTimer()
         syncLiveActivity()
         await client.refreshHealth()

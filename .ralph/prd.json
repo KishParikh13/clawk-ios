@@ -125,6 +125,21 @@
       "priority": 8,
       "passes": true,
       "notes": "Removed the duplicate live-call KishOS partial row. The saved transcript row is now the only visible assistant stream, while activeAgentText remains internal for speech and Live Activity. The thinking spinner only appears before active assistant text starts. Verified with .ralph/verify.sh."
+    },
+    {
+      "id": "US-009",
+      "title": "Recover failed live calls",
+      "description": "Make the live-call retry control actually recover from a failed call state instead of no-oping.",
+      "acceptanceCriteria": [
+        "LiveCallController.start() can restart setup from failed state",
+        "Retry clears the visible failure message before reconnecting/listening",
+        "Ended calls still cannot be restarted through the failed retry path",
+        "Elapsed timer does not duplicate when retrying",
+        "Verification command passes"
+      ],
+      "priority": 9,
+      "passes": true,
+      "notes": "Allowed LiveCallController.start() to restart from failed state, clear the failure message, reset to connecting, and reuse the existing elapsed timer cancellation path. Ended and already-active calls still do not restart through this path. Verified with .ralph/verify.sh."
     }
   ]
 }
