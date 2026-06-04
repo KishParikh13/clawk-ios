@@ -731,6 +731,7 @@ private struct ChatView: View {
                     voice: voice,
                     runState: runState,
                     projectPath: projectPath,
+                    allowsReferences: projectLocked,
                     onSend: sendDraft,
                     onStop: onStop
                 )
@@ -1460,6 +1461,7 @@ private struct ChatComposer: View {
     @ObservedObject var voice: VoiceController
     let runState: ConversationRunState?
     let projectPath: String?
+    let allowsReferences: Bool
     let onSend: () -> Void
     let onStop: () -> Void
 
@@ -1531,13 +1533,15 @@ private struct ChatComposer: View {
                 .help("Attach files")
                 .disabled(isDisabled)
 
-                Button(action: chooseReference) {
-                    Image(systemName: "at")
+                if allowsReferences {
+                    Button(action: chooseReference) {
+                        Image(systemName: "at")
+                    }
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(.secondary)
+                    .help("Reference file or folder")
+                    .disabled(isDisabled)
                 }
-                .buttonStyle(.borderless)
-                .foregroundStyle(.secondary)
-                .help("Reference file or folder")
-                .disabled(isDisabled)
 
                 VStack(alignment: .leading, spacing: 2) {
                     TextField(voice.isRecording ? "Listening" : "Ask KishOS", text: $draft)
