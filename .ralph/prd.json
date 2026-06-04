@@ -1,0 +1,70 @@
+{
+  "project": "baghdad",
+  "branchName": "KishParikh13/project-folder-selector",
+  "targetBranch": "origin/main",
+  "verificationCommand": ".ralph/verify.sh",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Collapse steps while loading",
+      "description": "Make chat Steps/tool-call disclosures collapsed by default even while a response is loading, while preserving visible progress in the collapsed header.",
+      "acceptanceCriteria": [
+        "Steps/tool-call disclosures are collapsed by default during streaming/loading",
+        "The collapsed header still communicates progress with a spinner or concise status",
+        "Completed responses remain collapsed by default",
+        "The user can manually expand Steps to inspect activity/tool details",
+        "No redundant loading/status text is added elsewhere in the chat UI",
+        "Verification command passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Place call button next to mic",
+      "description": "Move the call button next to the microphone button and show it only when the composer text input is empty.",
+      "acceptanceCriteria": [
+        "Call button appears next to the microphone button when the input text is empty",
+        "Call button hides when text exists so send/stop remains primary",
+        "Composer layout stays stable across empty, typing, dictating, uploading, waiting, and stopped states",
+        "Mac and iOS behavior remain consistent where the call surface exists",
+        "Verification command passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Move project selector out of composer",
+      "description": "Remove the project selector from the chat input. On new chat, show project selection centered below the Ask KishOS empty-state prompt. In an active chat, project context is read-only in header/sidebar.",
+      "acceptanceCriteria": [
+        "Project selector is not shown inside the chat input/composer",
+        "New chat shows the project selector centered below the Ask KishOS prompt",
+        "Active chats show project/folder context as a small read-only affordance outside the composer",
+        "Follow-up messages continue using the conversation's locked project path",
+        "Verification command passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Insert @ file and folder references",
+      "description": "Add an active-chat bottom bar control that opens a file/folder browser and inserts @ reference tokens into the input as AI context, distinct from binary attachments.",
+      "acceptanceCriteria": [
+        "A compact bottom-bar button opens a file/folder browser rooted at the selected project when available",
+        "Selecting a file inserts a removable @ reference token into the input",
+        "Selecting a folder inserts a removable @ folder reference token into the input",
+        "Sending includes structured reference metadata plus visible prompt text",
+        "References are treated separately from binary attachments",
+        "Verification command passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}
