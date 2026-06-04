@@ -70,8 +70,8 @@ class PersistedSession {
     var totalCost: Double
     var isArchived: Bool
     
-    @Relationship(deleteRule: .cascade, inverse: \PersistedMessage.sessionId)
-    var messages: [PersistedMessage]?
+    // Note: Messages are fetched by sessionId query, not a SwiftData relationship
+    // (PersistedMessage.sessionId is a plain String, not a back-reference)
     
     init(
         id: String = UUID().uuidString,
@@ -135,16 +135,26 @@ import SwiftUI
 class ChatHistoryStore {
     private let modelContainer: ModelContainer
     private let modelContext: ModelContext
-    
+    private(set) var initError: Error?
+
     init() {
         let schema = Schema([PersistedMessage.self, PersistedSession.self, AgentIdentityRecord.self])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-        
+
         do {
             modelContainer = try ModelContainer(for: schema, configurations: [config])
             modelContext = ModelContext(modelContainer)
         } catch {
-            fatalError("Failed to initialize SwiftData: \(error)")
+            // Fallback to in-memory store so the app doesn't crash
+            print("⚠️ SwiftData persistent store failed: \(error). Using in-memory fallback.")
+            let fallbackConfig = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+            do {
+                modelContainer = try ModelContainer(for: schema, configurations: [fallbackConfig])
+                modelContext = ModelContext(modelContainer)
+                initError = error
+            } catch {
+                fatalError("Failed to initialize SwiftData even in-memory: \(error)")
+            }
         }
     }
     
@@ -277,7 +287,7 @@ class ChatHistoryStore {
     // MARK: - Import from Gateway
     
     func importGatewayMessages(
-        _ messages: [GatewayMessage],
+        _ messages: [GatewayChatMessage],
         sessionId: String,
         agentId: String? = nil
     ) {
