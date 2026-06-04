@@ -207,6 +207,66 @@ final class AgentClientTests: XCTestCase {
         XCTAssertFalse(client.isSending)
     }
 
+    func testConcurrentStreamingSendsKeepClientSendingUntilAllComplete() async throws {
+        let lock = NSLock()
+        var startedRequestCount = 0
+        var firstStatusReceived = false
+        var resumeFirstStatusEvent: CheckedContinuation<Void, Never>?
+
+        func requestCount() -> Int {
+            lock.lock()
+            defer { lock.unlock() }
+            return startedRequestCount
+        }
+
+        let client = makeClient { _ in
+            lock.lock()
+            startedRequestCount += 1
+            let currentRequest = startedRequestCount
+            lock.unlock()
+
+            if currentRequest == 1 {
+                return ndjsonResponse(
+                    #"{"type":"status","status":"running","threadId":"thread-1","engine":"claude"}"#,
+                    #"{"type":"final","ok":true,"threadId":"thread-1","engine":"claude","text":"done 1","elapsedMs":1,"events":[]}"#
+                )
+            }
+
+            return ndjsonResponse(
+                #"{"type":"final","ok":true,"threadId":"thread-2","engine":"claude","text":"done 2","elapsedMs":1,"events":[]}"#
+            )
+        }
+
+        let firstSend = Task {
+            try await client.sendStreaming("first", threadId: "thread-1") { event in
+                if event.type == "status" {
+                    firstStatusReceived = true
+                    await withCheckedContinuation { continuation in
+                        resumeFirstStatusEvent = continuation
+                    }
+                }
+            }
+        }
+        while !firstStatusReceived {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertTrue(client.isSending)
+
+        let secondSend = Task {
+            try await client.sendStreaming("second", threadId: "thread-2") { _ in }
+        }
+        while requestCount() < 2 {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        _ = try await secondSend.value
+        XCTAssertTrue(client.isSending)
+
+        resumeFirstStatusEvent?.resume()
+        _ = try await firstSend.value
+        XCTAssertFalse(client.isSending)
+    }
+
     func testStreamingIncludesAttachmentIdsWhenPresent() async throws {
         var capturedBody: Data?
         let client = makeClient { request in

@@ -5,7 +5,7 @@ final class KishAgentClient: ObservableObject {
     static let defaultBaseURL = URL(string: "http://kishs-mac-mini-1:17891")!
     private static let agentURLDefaultsKey = "KishOSAgentBaseURL"
 
-    @Published var isSending = false
+    @Published private var activeSendCount = 0
     @Published var status = "Checking"
     @Published var miniStatus = "Checking"
     @Published var httpStatus = "Checking"
@@ -20,6 +20,10 @@ final class KishAgentClient: ObservableObject {
     private let session: URLSession
     private let userDefaults: UserDefaults
     private var pollingStarted = false
+
+    var isSending: Bool {
+        activeSendCount > 0
+    }
 
     var isDisconnected: Bool {
         status == "Offline" || httpStatus == "Offline" || agentStatus == "Offline" || chatStatus == "Offline"
@@ -121,10 +125,8 @@ final class KishAgentClient: ObservableObject {
         references: [ChatRequestReference] = [],
         projectPath: String? = nil
     ) async throws -> ChatResult {
-        isSending = true
-        status = "Sending"
-        chatStatus = "Sending"
-        defer { isSending = false }
+        beginSending()
+        defer { endSending() }
 
         do {
             var request = URLRequest(url: baseURL.appendingPathComponent("chat"))
@@ -177,10 +179,8 @@ final class KishAgentClient: ObservableObject {
         projectPath: String? = nil,
         onEvent: @escaping (AgentStreamEvent) async -> Void
     ) async throws -> ChatResult {
-        isSending = true
-        status = "Sending"
-        chatStatus = "Sending"
-        defer { isSending = false }
+        beginSending()
+        defer { endSending() }
 
         do {
             var request = URLRequest(url: baseURL.appendingPathComponent("chat-stream"))
@@ -464,6 +464,16 @@ final class KishAgentClient: ObservableObject {
         toolInventoryStatus = "Offline"
         status = "Offline"
         detail = message
+    }
+
+    private func beginSending() {
+        activeSendCount += 1
+        status = "Sending"
+        chatStatus = "Sending"
+    }
+
+    private func endSending() {
+        activeSendCount = max(activeSendCount - 1, 0)
     }
 
     private func markChecking() {

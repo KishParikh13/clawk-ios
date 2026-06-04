@@ -150,7 +150,7 @@ private struct MacRootView: View {
                 title: "New chat",
                 subtitle: "Start a session",
                 messages: [],
-                isRunning: client.isSending,
+                isRunning: false,
                 lastError: nil,
                 runState: nil,
                 agentStatus: nil,
@@ -738,8 +738,8 @@ private struct ChatView: View {
                     attachments: $pendingAttachments,
                     references: $pendingReferences,
                     client: client,
-                    isSending: client.isSending,
-                    isDisabled: client.isSending || isRunning,
+                    isSending: isRunning,
+                    isDisabled: isRunning,
                     voice: voice,
                     runState: runState,
                     projectPath: projectPath,
@@ -754,7 +754,7 @@ private struct ChatView: View {
         }
         .background(KishOSTheme.chatBackground)
         .animation(.easeInOut(duration: 0.2), value: approvals.first?.id)
-        .animation(.easeInOut(duration: 0.2), value: client.isSending || isRunning)
+        .animation(.easeInOut(duration: 0.2), value: isRunning)
         .animation(.easeInOut(duration: 0.2), value: queuedMessageCount)
         .animation(.easeInOut(duration: 0.2), value: agentStatus?.detail)
     }
@@ -763,7 +763,6 @@ private struct ChatView: View {
         let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard (hasDraft || hasSendableAttachment || hasReference),
               pendingAttachments.allSatisfy(\.isReadyForSend),
-              !client.isSending,
               !isRunning,
               approvals.isEmpty
         else {

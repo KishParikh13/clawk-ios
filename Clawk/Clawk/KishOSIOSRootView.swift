@@ -221,7 +221,7 @@ struct KishOSIOSRootView: View {
     }
 
     private var currentIsRunning: Bool {
-        selectedConversation?.isRunning ?? client.isSending
+        selectedConversation?.isRunning ?? false
     }
 
     private func startNewChat() {
@@ -756,8 +756,8 @@ private struct ChatScreen: View {
                         client: client,
                         projectCatalog: projectCatalog,
                         projectStore: projectStore,
-                        isSending: client.isSending,
-                        isDisabled: client.isSending || isSending,
+                        isSending: isSending,
+                        isDisabled: isSending,
                         runState: runState,
                         voice: voice,
                         audio: audio,
@@ -773,7 +773,7 @@ private struct ChatScreen: View {
         }
         .background(IOSTheme.background)
         .animation(.easeInOut(duration: 0.2), value: approvals.first?.id)
-        .animation(.easeInOut(duration: 0.2), value: client.isSending || isSending)
+        .animation(.easeInOut(duration: 0.2), value: isSending)
         .animation(.spring(response: 0.34, dampingFraction: 0.88), value: callController != nil)
         .animation(.easeInOut(duration: 0.2), value: queuedMessageCount)
         .animation(.easeInOut(duration: 0.2), value: agentStatus?.detail)
@@ -786,7 +786,6 @@ private struct ChatScreen: View {
         let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard (hasDraft || hasSendableAttachment || hasReference),
               pendingAttachments.allSatisfy(\.isReadyForSend),
-              !client.isSending,
               !isSending,
               approvals.isEmpty
         else {
