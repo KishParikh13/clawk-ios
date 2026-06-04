@@ -796,6 +796,9 @@ private struct IOSComposer: View {
     @ObservedObject var voice: VoiceController
     let onSend: () -> Void
 
+    @State private var showingTextCapture = false
+    @State private var scanError: String?
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if !attachments.isEmpty {
@@ -810,6 +813,13 @@ private struct IOSComposer: View {
                 }
             }
 
+            if let scanError {
+                Text(scanError)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
             HStack(spacing: 10) {
                 Button(action: toggleDictation) {
                     Image(systemName: voice.isRecording ? "stop.circle.fill" : "mic")
@@ -817,6 +827,16 @@ private struct IOSComposer: View {
                 .foregroundStyle(voice.isRecording ? .red : .secondary)
                 .disabled(isDisabled)
                 .accessibilityLabel(voice.isRecording ? "Stop dictation" : "Start dictation")
+
+                Button {
+                    scanError = nil
+                    showingTextCapture = true
+                } label: {
+                    Image(systemName: "viewfinder")
+                }
+                .foregroundStyle(.secondary)
+                .disabled(isDisabled)
+                .accessibilityLabel("Scan text")
 
                 Button(action: attachClipboard) {
                     Image(systemName: "paperclip")
@@ -853,6 +873,29 @@ private struct IOSComposer: View {
         .padding(.horizontal, 12)
         .padding(.top, 8)
         .padding(.bottom, 8)
+        .sheet(isPresented: $showingTextCapture) {
+            CameraTextCaptureView(onResult: { result in
+                handleTextCapture(result)
+            }, onCancel: {
+                showingTextCapture = false
+            })
+        }
+    }
+
+    private func handleTextCapture(_ result: Result<String, Error>) {
+        showingTextCapture = false
+        switch result {
+        case .success(let text):
+            let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !clean.isEmpty else {
+                scanError = "No text found."
+                return
+            }
+            attachments.append(.textContext(clean, title: "Scan"))
+            scanError = nil
+        case .failure(let error):
+            scanError = error.localizedDescription
+        }
     }
 
     private func attachClipboard() {

@@ -25,8 +25,12 @@
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>KishOS connects to kish-agent on your local network.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>KishOS uses the camera to scan text into chat context.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>KishOS uses the microphone for push-to-talk messages.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>KishOS can scan text from selected photos into chat context.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>KishOS uses speech recognition to turn voice into chat messages.</string>
 	<key>UILaunchStoryboardName</key>

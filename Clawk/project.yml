@@ -38,7 +38,9 @@ targets:
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
         NSLocalNetworkUsageDescription: "KishOS connects to kish-agent on your local network."
+        NSCameraUsageDescription: "KishOS uses the camera to scan text into chat context."
         NSMicrophoneUsageDescription: "KishOS uses the microphone for push-to-talk messages."
+        NSPhotoLibraryUsageDescription: "KishOS can scan text from selected photos into chat context."
         NSSpeechRecognitionUsageDescription: "KishOS uses speech recognition to turn voice into chat messages."
   KishOSMac:
     type: application
