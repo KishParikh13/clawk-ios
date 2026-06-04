@@ -138,6 +138,7 @@ enum KishOSMilestone: String, CaseIterable, Identifiable, Codable {
             ]
         }
     }
+
 }
 
 enum KishOSFeature: String, CaseIterable, Identifiable, Codable {
@@ -266,6 +267,140 @@ enum KishOSFeature: String, CaseIterable, Identifiable, Codable {
             return "Routines"
         }
     }
+
+    var summary: String {
+        switch self {
+        case .nativeMacShell:
+            return "A minimal SwiftUI Mac app that is fast to iterate on."
+        case .kishAgentBridge:
+            return "The app talks to the Mac mini agent through the native HTTP bridge."
+        case .persistentConversations:
+            return "Threads survive relaunch and keep the same agent session."
+        case .retryFailedMessage:
+            return "Failed messages can be sent again without losing thread context."
+        case .offlineQueue:
+            return "Disconnected sends are saved locally and retried after reconnect."
+        case .sharedConversationSync:
+            return "Mac and iOS load the same backend conversation history."
+        case .deleteReconciliation:
+            return "Deleted conversations stay deleted across devices."
+        case .connectionRecovery:
+            return "Make dropped streams, backend restarts, and app relaunches easy to recover from."
+        case .streamingEvents:
+            return "Show text, steps, and tool activity while the agent works."
+        case .approvalCards:
+            return "Render agent questions as clear answer controls in the composer area."
+        case .decisionInbox:
+            return "Collect pending questions, approvals, confirmations, and blockers in one place."
+        case .toolInventory:
+            return "Show the practical tools and engines the agent can use right now."
+        case .pushToTalk:
+            return "Dictation fills the composer without sending automatically."
+        case .iOSSharedShell:
+            return "The iPhone app uses the same KishOS core and conversation model."
+        case .nativeAttachments:
+            return "Upload files and photos to the agent with previews and backend ids."
+        case .explicitSnapshot:
+            return "Take an intentional snapshot and ask the agent about it."
+        case .snapshotReview:
+            return "Preview, retake, or attach an image before anything is sent."
+        case .liveCallMode:
+            return "A chained listen-send-speak loop for hands-free agent conversations."
+        case .wakePhrase:
+            return "Start hands-free listening with a local wake phrase."
+        case .audioRouteAwareness:
+            return "Detect Bluetooth, AirPods, and glasses-like audio routes."
+        case .audioRoutePicker:
+            return "Let the app prefer the right headset route when available."
+        case .spokenReplies:
+            return "Speak final answers only inside live call or hands-free modes."
+        case .glassesWalkMode:
+            return "Use glasses or headset audio as a walkie-talkie interface to KishOS."
+        case .liveRunTimeline:
+            return "Show the current task, latest step, elapsed time, and blocked state."
+        case .interruptSteering:
+            return "Let you steer or stop a running agent without waiting for the final answer."
+        case .statusNotifications:
+            return "Notify when a task is blocked, done, or failed."
+        case .sessionRecovery:
+            return "Reopen the app and recover the final state of an in-flight run."
+        case .capabilityMap:
+            return "Summarize what the agent can do, what needs setup, and what is broken."
+        case .dailyBrief:
+            return "Generate a short daily brief from active threads and recent work."
+        case .memoryPins:
+            return "Pin, update, or forget durable facts and preferences."
+        case .routines:
+            return "Turn cron/background work into simple personal routines."
+        }
+    }
+
+    var tags: [String] {
+        switch self {
+        case .nativeMacShell:
+            return ["Mac", "UI"]
+        case .kishAgentBridge:
+            return ["Backend", "HTTP"]
+        case .persistentConversations:
+            return ["Chat", "Storage"]
+        case .retryFailedMessage:
+            return ["Recovery", "Chat"]
+        case .offlineQueue:
+            return ["Offline", "Queue"]
+        case .sharedConversationSync:
+            return ["Sync", "Mac+iOS"]
+        case .deleteReconciliation:
+            return ["Sync", "Safety"]
+        case .connectionRecovery:
+            return ["Recovery", "Reliability"]
+        case .streamingEvents:
+            return ["Streaming", "Tools"]
+        case .approvalCards:
+            return ["Questions", "Control"]
+        case .decisionInbox:
+            return ["Decisions", "Control"]
+        case .toolInventory:
+            return ["Tools", "Status"]
+        case .pushToTalk:
+            return ["Voice", "Composer"]
+        case .iOSSharedShell:
+            return ["iOS", "Shared Core"]
+        case .nativeAttachments:
+            return ["Files", "Photos"]
+        case .explicitSnapshot:
+            return ["Camera", "Vision"]
+        case .snapshotReview:
+            return ["Camera", "Privacy"]
+        case .liveCallMode:
+            return ["Voice", "Call"]
+        case .wakePhrase:
+            return ["Voice", "Hands-free"]
+        case .audioRouteAwareness:
+            return ["Audio", "Routes"]
+        case .audioRoutePicker:
+            return ["Audio", "Hardware"]
+        case .spokenReplies:
+            return ["Voice", "Output"]
+        case .glassesWalkMode:
+            return ["Glasses", "Walk mode"]
+        case .liveRunTimeline:
+            return ["Runs", "Visibility"]
+        case .interruptSteering:
+            return ["Runs", "Steering"]
+        case .statusNotifications:
+            return ["Notifications", "Runs"]
+        case .sessionRecovery:
+            return ["Recovery", "Runs"]
+        case .capabilityMap:
+            return ["Tools", "Trust"]
+        case .dailyBrief:
+            return ["Memory", "Brief"]
+        case .memoryPins:
+            return ["Memory", "Control"]
+        case .routines:
+            return ["Routines", "Cron"]
+        }
+    }
 }
 
 enum KishOSCapabilityState: String, Codable {
@@ -280,6 +415,8 @@ struct KishOSCapability: Identifiable, Codable, Equatable {
     var state: KishOSCapabilityState
 
     var title: String { id.title }
+    var summary: String { id.summary }
+    var tags: [String] { id.tags }
     var milestone: KishOSMilestone { id.milestone }
 }
 

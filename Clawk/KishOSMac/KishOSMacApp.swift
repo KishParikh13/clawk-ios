@@ -1789,6 +1789,7 @@ private struct RoadmapView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 Header(title: "Roadmap", subtitle: "Done first. Next work at the bottom.")
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                 roadmapSection(
                     title: "Done",
@@ -1803,6 +1804,7 @@ private struct RoadmapView: View {
                 )
             }
             .padding(22)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(Color(nsColor: .controlBackgroundColor))
     }
@@ -1811,25 +1813,29 @@ private struct RoadmapView: View {
         VStack(alignment: .leading, spacing: 14) {
             Text(title)
                 .font(.title3.weight(.semibold))
+                .frame(maxWidth: .infinity, alignment: .leading)
 
             ForEach(milestones) { milestone in
                 let items = capabilities.filter { $0.milestone == milestone }
                 if !items.isEmpty {
-                    VStack(alignment: .leading, spacing: 7) {
+                    VStack(alignment: .leading, spacing: 8) {
                         Text("\(milestone.rawValue) \(milestone.title)")
                             .font(.headline.weight(.bold))
+                            .frame(maxWidth: .infinity, alignment: .leading)
 
                         ForEach(items) { capability in
                             RoadmapChecklistRow(
-                                title: capability.title,
-                                detail: isDone ? nil : notDoneDetail(for: capability),
+                                capability: capability,
+                                statusText: isDone ? nil : notDoneDetail(for: capability),
                                 isDone: isDone
                             )
                         }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func notDoneDetail(for capability: KishOSCapability) -> String {
@@ -1847,25 +1853,44 @@ private struct RoadmapView: View {
 }
 
 private struct RoadmapChecklistRow: View {
-    let title: String
-    let detail: String?
+    let capability: KishOSCapability
+    let statusText: String?
     let isDone: Bool
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Image(systemName: isDone ? "checkmark.circle.fill" : "circle")
-                .font(.caption)
-                .foregroundStyle(isDone ? .green : .secondary)
-
-            Text(title)
+        DisclosureGroup {
+            Text(capability.summary)
                 .font(.callout)
+                .foregroundStyle(.secondary)
+                .padding(.leading, 24)
+                .padding(.top, 3)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } label: {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Image(systemName: isDone ? "checkmark.circle.fill" : "circle")
+                    .font(.caption)
+                    .foregroundStyle(isDone ? .green : .secondary)
 
-            if let detail, !detail.isEmpty {
-                Text(detail)
+                Text(capability.title)
+                    .font(.callout)
+
+                Text(rowTags)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+
+                Spacer(minLength: 0)
             }
+            .contentShape(Rectangle())
         }
+        .disclosureGroupStyle(.automatic)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 3)
+    }
+
+    private var rowTags: String {
+        let tags = statusText.map { [$0] + capability.tags } ?? capability.tags
+        return tags.joined(separator: " · ")
     }
 }
 
