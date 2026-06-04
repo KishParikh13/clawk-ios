@@ -39,8 +39,13 @@ final class KishOSLiveActivityController {
             title: title,
             status: status,
             detail: detail,
+            runningTitles: [title],
             sessionTitles: [],
             reviewTitles: latestSummary?.reviewTitles ?? [],
+            runningCount: 1,
+            unreadCount: latestSummary?.unreadCount ?? 0,
+            reviewCount: latestSummary?.reviewCount ?? 0,
+            sessionCount: latestSummary?.sessionCount ?? 0,
             startedAt: startedAt,
             updatedAt: now
         )
@@ -65,6 +70,12 @@ final class KishOSLiveActivityController {
         let review = conversations
             .filter { $0.needsLiveActivityReview(selectedConversationID: selectedConversationID) }
             .sorted { $0.updatedAt > $1.updatedAt }
+        let unread = conversations
+            .filter { $0.needsLiveActivityUnreadReview(selectedConversationID: selectedConversationID) }
+            .sorted { $0.updatedAt > $1.updatedAt }
+        let running = conversations
+            .filter(\.isRunning)
+            .sorted { $0.updatedAt > $1.updatedAt }
         let recent = conversations
             .filter { $0.runState.isActive || $0.updatedAt >= recentCutoff }
             .sorted { lhs, rhs in
@@ -78,14 +89,18 @@ final class KishOSLiveActivityController {
             return (nil, nil)
         }
 
-        let runningCount = conversations.filter(\.isRunning).count
+        let runningCount = running.count
+        let unreadCount = unread.count
+        let runningTitles = Array(running.map(\.title).prefix(Self.maxRunningTitles))
         let sessionTitles = Array(recent.map(\.title).prefix(Self.maxSessionTitles))
         let reviewTitles = Array(review.map(\.title).prefix(Self.maxReviewTitles))
         let status: String
-        if !review.isEmpty {
-            status = "Review"
-        } else if runningCount > 0 {
+        if runningCount > 0 {
             status = "Working"
+        } else if unreadCount > 0 {
+            status = "Unread"
+        } else if !review.isEmpty {
+            status = "Review"
         } else {
             status = "Recent"
         }
@@ -93,6 +108,7 @@ final class KishOSLiveActivityController {
         let detail = Self.summaryDetail(
             sessionCount: recent.count,
             reviewCount: review.count,
+            unreadCount: unreadCount,
             runningCount: runningCount
         )
         let expiresAt = review.isEmpty
@@ -104,8 +120,13 @@ final class KishOSLiveActivityController {
             title: "KishOS",
             status: status,
             detail: detail,
+            runningTitles: runningTitles,
             sessionTitles: sessionTitles,
             reviewTitles: reviewTitles,
+            runningCount: runningCount,
+            unreadCount: unreadCount,
+            reviewCount: review.count,
+            sessionCount: recent.count,
             startedAt: startedAt,
             updatedAt: now
         )
@@ -156,21 +177,30 @@ final class KishOSLiveActivityController {
         }
     }
 
-    private static func summaryDetail(sessionCount: Int, reviewCount: Int, runningCount: Int) -> String {
+    private static func summaryDetail(sessionCount: Int, reviewCount: Int, unreadCount: Int, runningCount: Int) -> String {
         var parts: [String] = []
         if runningCount > 0 {
-            parts.append("\(runningCount) running")
+            parts.append("\(runningCount) working")
+        }
+        if unreadCount > 0 {
+            parts.append("\(unreadCount) unread")
+        }
+        let nonUnreadReviewCount = max(0, reviewCount - unreadCount)
+        if nonUnreadReviewCount > 0 {
+            parts.append(Self.countText(nonUnreadReviewCount, singular: "review"))
         }
         if sessionCount > 0 {
             parts.append("\(sessionCount) recent")
         }
-        if reviewCount > 0 {
-            parts.append("\(reviewCount) review")
-        }
         return parts.joined(separator: " · ")
     }
 
+    private static func countText(_ count: Int, singular: String) -> String {
+        "\(count) \(singular)\(count == 1 ? "" : "s")"
+    }
+
     private static let recentWindow: TimeInterval = 5 * 60
+    private static let maxRunningTitles = 3
     private static let maxSessionTitles = 4
     private static let maxReviewTitles = 3
 }
@@ -178,6 +208,10 @@ final class KishOSLiveActivityController {
 private extension Conversation {
     func needsLiveActivityReview(selectedConversationID: UUID?) -> Bool {
         id != selectedConversationID && needsReview
+    }
+
+    func needsLiveActivityUnreadReview(selectedConversationID: UUID?) -> Bool {
+        id != selectedConversationID && runState == .done && isUnread
     }
 }
 #else

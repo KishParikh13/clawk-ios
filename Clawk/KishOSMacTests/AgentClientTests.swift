@@ -116,6 +116,7 @@ final class AgentClientTests: XCTestCase {
 
         XCTAssertEqual(request.threadId, "thread-1")
         XCTAssertEqual(request.message, "hello")
+        XCTAssertNil(request.projectPath)
         XCTAssertEqual(result.text, "hello back")
         XCTAssertEqual(result.engine, "claude")
         XCTAssertEqual(result.elapsedMs, 42)
@@ -212,6 +213,80 @@ final class AgentClientTests: XCTestCase {
         XCTAssertEqual(request.attachments?.first?.kind, "image")
     }
 
+    func testStreamingIncludesProjectPathWhenPresent() async throws {
+        var capturedBody: Data?
+        let client = makeClient { request in
+            XCTAssertEqual(request.url?.path, "/chat-stream")
+            capturedBody = requestBodyData(from: request)
+            return ndjsonResponse(
+                #"{"type":"final","ok":true,"threadId":"thread-1","engine":"claude","text":"done","elapsedMs":4,"events":[]}"#
+            )
+        }
+
+        _ = try await client.sendStreaming(
+            "pwd",
+            threadId: "thread-1",
+            projectPath: "/Users/kishparikh/Code/clawk-ios"
+        ) { _ in }
+
+        let body = try XCTUnwrap(capturedBody)
+        let request = try JSONDecoder().decode(TestChatRequest.self, from: body)
+
+        XCTAssertEqual(request.projectPath, "/Users/kishparikh/Code/clawk-ios")
+    }
+
+    func testFetchProjectsUsesProjectsEndpoint() async throws {
+        let client = makeClient { request in
+            XCTAssertEqual(request.url?.path, "/projects")
+            XCTAssertEqual(request.url?.query, "all=1")
+            return jsonResponse(
+                """
+                {
+                  "ok": true,
+                  "projects": [
+                    {
+                      "name": "clawk-ios",
+                      "path": "/Users/kishparikh/Code/clawk-ios",
+                      "relPath": "~/Code/clawk-ios",
+                      "branch": "main",
+                      "lastModified": "2026-06-04T05:20:00.000Z"
+                    }
+                  ]
+                }
+                """
+            )
+        }
+
+        let projects = try await client.fetchProjects(all: true)
+
+        XCTAssertEqual(projects.count, 1)
+        XCTAssertEqual(projects[0].name, "clawk-ios")
+        XCTAssertEqual(projects[0].path, "/Users/kishparikh/Code/clawk-ios")
+        XCTAssertEqual(projects[0].relPath, "~/Code/clawk-ios")
+        XCTAssertEqual(projects[0].branch, "main")
+        XCTAssertNotNil(projects[0].lastModified)
+    }
+
+    func testCancelPostsThreadId() async throws {
+        var capturedBody: Data?
+        let client = makeClient { request in
+            XCTAssertEqual(request.url?.path, "/cancel")
+            XCTAssertEqual(request.httpMethod, "POST")
+            capturedBody = requestBodyData(from: request)
+            return jsonResponse(#"{"ok":true}"#)
+        }
+
+        try await client.cancel(threadId: "thread-1")
+
+        let body = try XCTUnwrap(capturedBody)
+        let request = try JSONDecoder().decode(TestCancelRequest.self, from: body)
+
+        XCTAssertEqual(request.threadId, "thread-1")
+        XCTAssertEqual(client.status, "Ready")
+        XCTAssertEqual(client.chatStatus, "Ready")
+        XCTAssertEqual(client.detail, "Stopped")
+    }
+
     func testUploadAttachmentPostsMultipartAndDecodesResponse() async throws {
         var capturedRequest: URLRequest?
         var capturedBody: Data?
@@ -279,6 +354,27 @@ final class AgentClientTests: XCTestCase {
         XCTAssertEqual(client.status, "Error")
         XCTAssertEqual(client.chatStatus, "Error")
         XCTAssertEqual(client.detail, "Agent stream ended without a final response")
+        XCTAssertFalse(client.isSending)
+    }
+
+    func testStreamingCancelledFinalIsNeutral() async {
+        let client = makeClient { _ in
+            ndjsonResponse(
+                #"{"type":"status","status":"running","threadId":"thread-1","engine":"claude"}"#,
+                #"{"type":"final","ok":false,"cancelled":true,"threadId":"thread-1","engine":"claude","error":"Stopped.","elapsedMs":20,"events":["stopped"]}"#
+            )
+        }
+
+        do {
+            _ = try await client.sendStreaming("hello", threadId: "thread-1") { _ in }
+            XCTFail("Expected cancelled stream to throw neutral cancellation")
+        } catch {
+            XCTAssertEqual(error.localizedDescription, "Stopped.")
+        }
+
+        XCTAssertEqual(client.status, "Ready")
+        XCTAssertEqual(client.chatStatus, "Ready")
+        XCTAssertEqual(client.detail, "Stopped")
         XCTAssertFalse(client.isSending)
     }
 
@@ -461,6 +557,7 @@ private struct TestChatRequest: Decodable {
     let message: String
     let conversationId: UUID?
     let attachments: [TestChatRequestAttachment]?
+    let projectPath: String?
 }
 
 private struct TestChatRequestAttachment: Decodable {
@@ -468,6 +565,10 @@ private struct TestChatRequestAttachment: Decodable {
     let filename: String
     let mimeType: String?
     let kind: String?
+}
+
+private struct TestCancelRequest: Decodable {
+    let threadId: String
 }
 
 private struct TestApprovalAnswerRequest: Decodable {

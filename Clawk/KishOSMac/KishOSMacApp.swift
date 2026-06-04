@@ -31,10 +31,15 @@ private struct MacRootView: View {
     @StateObject private var workspace = KishOSWorkspace()
     @StateObject private var voice = VoiceController()
     @StateObject private var audio = AudioRouteMonitor()
+    @StateObject private var projectCatalog = ProjectCatalog()
+    @StateObject private var projectStore = ProjectStore()
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var selection: SidebarSelection? = .newChat
     @State private var conversationToRename: Conversation?
     @State private var isDrainingQueuedMessages = false
+    @State private var pendingProject: Project?
+    @State private var showingProjectPicker = false
+    @State private var activeSendTasks: [UUID: Task<Void, Never>] = [:]
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -96,6 +101,9 @@ private struct MacRootView: View {
                     markSelectedConversationRead()
                 }
                 .onChange(of: selection) {
+                    if selection == .newChat {
+                        pendingProject = nil
+                    }
                     markSelectedConversationRead()
                 }
                 .onChange(of: workspace.conversations) {
@@ -109,6 +117,19 @@ private struct MacRootView: View {
             RenameConversationSheet(conversation: conversation) { title in
                 workspace.renameConversation(conversation.id, title: title)
             }
+        }
+        .popover(isPresented: $showingProjectPicker) {
+            ProjectPickerPopover(
+                client: client,
+                catalog: projectCatalog,
+                pinned: projectStore,
+                onSelect: { project in
+                    pendingProject = project
+                },
+                onClose: {
+                    showingProjectPicker = false
+                }
+            )
         }
     }
 
@@ -127,7 +148,12 @@ private struct MacRootView: View {
                 agentStatus: nil,
                 queuedMessageCount: workspace.queuedMessageCount,
                 approvals: [],
+                projectName: activeProjectName,
+                projectBranch: activeProjectBranch,
+                projectLocked: activeProjectIsLocked,
                 onSend: { send($0, attachments: $1, in: nil) },
+                onStop: stopSelectedConversation,
+                onPickProject: { showingProjectPicker = true },
                 onRetry: nil,
                 onCopyTranscript: nil,
                 onCopyChatID: nil,
@@ -152,7 +178,12 @@ private struct MacRootView: View {
                     agentStatus: conversation.agentStatusSummary,
                     queuedMessageCount: conversation.queuedUserMessageCount,
                     approvals: conversation.approvals,
+                    projectName: activeProjectName,
+                    projectBranch: activeProjectBranch,
+                    projectLocked: activeProjectIsLocked,
                     onSend: { send($0, attachments: $1, in: conversation.id) },
+                    onStop: { stop(conversation) },
+                    onPickProject: { showingProjectPicker = true },
                     onRetry: { retry(conversation.id) },
                     onCopyTranscript: { copyToPasteboard(conversation.transcriptText) },
                     onCopyChatID: { copyToPasteboard(conversation.threadId) },
@@ -182,6 +213,23 @@ private struct MacRootView: View {
         workspace.conversations.filter { !$0.approvals.isEmpty }
     }
 
+    private var activeProjectName: String {
+        selectedConversation?.displayProjectName ?? pendingProject?.name ?? "Home"
+    }
+
+    private var activeProjectBranch: String? {
+        selectedConversation?.branch ?? pendingProject?.branch
+    }
+
+    private var activeProjectIsLocked: Bool {
+        selectedConversation != nil
+    }
+
+    private var selectedConversation: Conversation? {
+        guard case .conversation(let id) = selection else { return nil }
+        return workspace.conversation(id: id)
+    }
+
     private func markSelectedConversationRead() {
         guard case .conversation(let id) = selection,
               let conversation = workspace.conversation(id: id)
@@ -192,23 +240,12 @@ private struct MacRootView: View {
     private func retry(_ conversationId: UUID) {
         guard let retry = workspace.prepareRetryLastFailedMessage(in: conversationId) else { return }
 
-        Task {
-            do {
-                workspace.beginAgentResponse(in: retry.conversation.id)
-                let result = try await client.sendStreaming(
-                    retry.message,
-                    threadId: retry.conversation.threadId,
-                    conversationId: retry.conversation.id,
-                    attachments: retry.attachments
-                ) { event in
-                    handleStreamEvent(event, conversationId: retry.conversation.id)
-                }
-                workspace.apply(result, to: retry.conversation.id)
-                await syncSharedConversations()
-            } catch {
-                workspace.applyFailure(error, to: retry.conversation.id)
-            }
-        }
+        sendPreparedMessage(
+            retry.message,
+            attachments: retry.attachments,
+            in: retry.conversation,
+            messageID: nil
+        )
     }
 
     private func answerQuestion(_ approval: ApprovalRequest, answer: String, in conversationId: UUID) {
@@ -265,8 +302,14 @@ private struct MacRootView: View {
         if let conversationId, let existing = workspace.appendUserMessage(outgoingText, to: conversationId, attachments: attachments) {
             conversation = existing
         } else {
-            conversation = workspace.createConversation(firstMessage: outgoingText, attachments: attachments)
+            conversation = workspace.createConversation(
+                firstMessage: outgoingText,
+                attachments: attachments,
+                projectPath: pendingProject?.path,
+                projectName: pendingProject?.name
+            )
             selection = .conversation(conversation.id)
+            pendingProject = nil
         }
 
         sendPreparedMessage(
@@ -278,27 +321,55 @@ private struct MacRootView: View {
     }
 
     private func sendPreparedMessage(_ text: String, attachments: [ChatRequestAttachment], in conversation: Conversation, messageID: UUID?) {
-        Task {
+        let conversationID = conversation.id
+        activeSendTasks[conversationID]?.cancel()
+        let task = Task {
+            defer {
+                activeSendTasks[conversationID] = nil
+            }
             do {
-                workspace.beginAgentResponse(in: conversation.id)
+                workspace.beginAgentResponse(in: conversationID)
                 let result = try await client.sendStreaming(
                     text,
                     threadId: conversation.threadId,
-                    conversationId: conversation.id,
-                    attachments: attachments
+                    conversationId: conversationID,
+                    attachments: attachments,
+                    projectPath: conversation.projectPath
                 ) { event in
-                    handleStreamEvent(event, conversationId: conversation.id)
+                    handleStreamEvent(event, conversationId: conversationID)
                 }
-                workspace.apply(result, to: conversation.id)
+                workspace.apply(result, to: conversationID)
                 await syncSharedConversations()
             } catch {
-                if isOfflineError(error),
-                   let messageID,
-                   workspace.requeueMessageAfterOfflineFailure(conversationID: conversation.id, messageID: messageID) {
+                if isCancellation(error) {
                     return
                 }
-                workspace.applyFailure(error, to: conversation.id)
+                if isOfflineError(error),
+                   let messageID,
+                   workspace.requeueMessageAfterOfflineFailure(conversationID: conversationID, messageID: messageID) {
+                    return
+                }
+                workspace.applyFailure(error, to: conversationID)
             }
+        }
+        activeSendTasks[conversationID] = task
+    }
+
+    private func stopSelectedConversation() {
+        guard case .conversation(let id) = selection,
+              let conversation = workspace.conversation(id: id),
+              conversation.isRunning
+        else { return }
+        stop(conversation)
+    }
+
+    private func stop(_ conversation: Conversation) {
+        activeSendTasks[conversation.id]?.cancel()
+        activeSendTasks[conversation.id] = nil
+        workspace.cancelActiveResponse(in: conversation.id)
+        Task {
+            try? await client.cancel(threadId: conversation.threadId)
+            await syncSharedConversations()
         }
     }
 
@@ -307,7 +378,13 @@ private struct MacRootView: View {
         if let conversationId, let existing = workspace.queueUserMessage(text, to: conversationId, attachments: attachments) {
             conversation = existing
         } else {
-            conversation = workspace.queueConversation(firstMessage: text, attachments: attachments)
+            conversation = workspace.queueConversation(
+                firstMessage: text,
+                attachments: attachments,
+                projectPath: pendingProject?.path,
+                projectName: pendingProject?.name
+            )
+            pendingProject = nil
             selection = .conversation(conversation.id)
         }
         selection = .conversation(conversation.id)
@@ -392,7 +469,8 @@ private struct MacRootView: View {
                     prepared.message,
                     threadId: prepared.conversation.threadId,
                     conversationId: prepared.conversation.id,
-                    attachments: prepared.attachments
+                    attachments: prepared.attachments,
+                    projectPath: prepared.conversation.projectPath
                 ) { event in
                     handleStreamEvent(event, conversationId: prepared.conversation.id)
                 }
@@ -411,6 +489,16 @@ private struct MacRootView: View {
     private func isOfflineError(_ error: Error) -> Bool {
         guard let agentError = error as? AgentClientError else { return false }
         if case .network = agentError {
+            return true
+        }
+        return false
+    }
+
+    private func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError {
+            return true
+        }
+        if let agentError = error as? AgentClientError, case .cancelled = agentError {
             return true
         }
         return false
@@ -464,11 +552,11 @@ private struct ConversationRow: View {
     private var rowDetail: String {
         if conversation.runState.isActive {
             if conversation.queuedUserMessageCount > 0 {
-                return "\(conversation.queuedUserMessageCount) queued"
+                return "\(conversation.projectBadgeText) - \(conversation.queuedUserMessageCount) queued"
             }
-            return "\(conversation.runState.label) - \(conversation.updatedTimestampText)"
+            return "\(conversation.projectBadgeText) - \(conversation.runState.label) - \(conversation.updatedTimestampText)"
         }
-        return conversation.updatedDetailText
+        return "\(conversation.projectBadgeText) - \(conversation.updatedDetailText)"
     }
 
     private func copyToPasteboard(_ text: String) {
@@ -516,7 +604,12 @@ private struct ChatView: View {
     let agentStatus: AgentStatusSummary?
     let queuedMessageCount: Int
     let approvals: [ApprovalRequest]
+    let projectName: String
+    let projectBranch: String?
+    let projectLocked: Bool
     let onSend: (String, [ChatAttachment]) -> Void
+    let onStop: () -> Void
+    let onPickProject: () -> Void
     let onRetry: (() -> Void)?
     let onCopyTranscript: (() -> Void)?
     let onCopyChatID: (() -> Void)?
@@ -615,7 +708,12 @@ private struct ChatView: View {
                     isDisabled: client.isSending || isRunning,
                     voice: voice,
                     runState: runState,
-                    onSend: sendDraft
+                    projectName: projectName,
+                    projectBranch: projectBranch,
+                    projectLocked: projectLocked,
+                    onSend: sendDraft,
+                    onStop: onStop,
+                    onPickProject: onPickProject
                 )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -958,7 +1056,7 @@ private struct ChatBubble: View {
         case .queued:
             return "Saved locally"
         case .sending:
-            return "Sending"
+            return nil
         case .failed:
             return "Failed"
         case .sent:
@@ -997,25 +1095,26 @@ private struct AssistantActivityBlock: View {
     let previousUserText: String
     let isRunning: Bool
     @State private var isExpanded = true
+    private let disclosureAnimation = Animation.spring(response: 0.32, dampingFraction: 0.86)
 
     var body: some View {
         if !visibleEvents.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 7) {
                 Button {
-                    withAnimation(.easeInOut(duration: 0.18)) {
+                    withAnimation(disclosureAnimation) {
                         isExpanded.toggle()
                     }
                 } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        Image(systemName: "chevron.right")
                             .font(.caption2.weight(.semibold))
                             .frame(width: 10)
+                            .rotationEffect(.degrees(isExpanded ? 90 : 0))
                         Text("\(visibleEvents.count) Steps")
                             .font(.caption.weight(.semibold))
                         if isRunning {
                             ProgressView()
                                 .controlSize(.small)
-                                .scaleEffect(0.62)
                                 .frame(width: 10, height: 10)
                         }
                     }
@@ -1025,22 +1124,13 @@ private struct AssistantActivityBlock: View {
                 .buttonStyle(.plain)
 
                 if isExpanded {
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 7) {
                         ForEach(Array(visibleEvents.suffix(8).enumerated()), id: \.offset) { _, event in
                             HStack(alignment: .top, spacing: 8) {
-                                if isRunning && event == visibleEvents.last {
-                                    ProgressView()
-                                        .controlSize(.small)
-                                        .scaleEffect(0.62)
-                                        .frame(width: 10, height: 10)
-                                        .padding(.top, 3)
-                                } else {
-                                    Circle()
-                                        .fill(Color.secondary.opacity(0.55))
-                                        .frame(width: 5, height: 5)
-                                        .padding(.top, 7)
-                                        .padding(.horizontal, 2.5)
-                                }
+                                Circle()
+                                    .fill(Color.secondary.opacity(0.55))
+                                    .frame(width: 5, height: 5)
+                                    .padding(.top, 7)
 
                                 MarkdownText(text: displayEvent(event), isUser: false, font: .caption, color: .secondary)
                                     .lineLimit(3)
@@ -1048,22 +1138,19 @@ private struct AssistantActivityBlock: View {
                             }
                         }
                     }
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .padding(.leading, 1)
+                    .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .frame(maxWidth: 620, alignment: .leading)
-            .background(KishOSTheme.pillBackground, in: RoundedRectangle(cornerRadius: 12))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(KishOSTheme.hairline)
-            )
+            .padding(.vertical, 1)
+            .clipped()
+            .animation(disclosureAnimation, value: isExpanded)
+            .animation(disclosureAnimation, value: visibleEvents.count)
             .onAppear {
                 isExpanded = isRunning
             }
             .onChange(of: isRunning) { _, newValue in
-                withAnimation(.easeInOut(duration: 0.2)) {
+                withAnimation(disclosureAnimation) {
                     isExpanded = newValue
                 }
             }
@@ -1318,7 +1405,12 @@ private struct ChatComposer: View {
     let isDisabled: Bool
     @ObservedObject var voice: VoiceController
     let runState: ConversationRunState?
+    let projectName: String
+    let projectBranch: String?
+    let projectLocked: Bool
     let onSend: () -> Void
+    let onStop: () -> Void
+    let onPickProject: () -> Void
 
     @State private var attachmentError: String?
     @State private var isDropTarget = false
@@ -1373,6 +1465,14 @@ private struct ChatComposer: View {
                 .help("Attach files")
                 .disabled(isDisabled)
 
+                MacProjectChip(
+                    name: projectName,
+                    branch: projectBranch,
+                    isLocked: projectLocked,
+                    isDisabled: isDisabled,
+                    onTap: onPickProject
+                )
+
                 VStack(alignment: .leading, spacing: 2) {
                     TextField(voice.isRecording ? "Listening" : "Ask KishOS", text: $draft)
                         .textFieldStyle(.plain)
@@ -1388,20 +1488,17 @@ private struct ChatComposer: View {
                     }
                 }
 
-                if let runState, runState.isActive {
-                    RunStatePill(runState: runState)
-                }
-
-                Button(action: onSend) {
-                    if isSending {
+                Button(action: trailingAction) {
+                    if hasUploadingAttachment && !isWorking {
                         ProgressView()
                             .controlSize(.small)
                     } else {
-                        Image(systemName: "paperplane.fill")
+                        Image(systemName: isWorking ? "stop.fill" : "paperplane.fill")
                     }
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(isDisabled || isSending || hasUploadingAttachment || hasBlockedAttachment || !hasSendableContent)
+                .tint(isWorking ? .red : nil)
+                .disabled(trailingButtonDisabled)
             }
         }
         .opacity(isDisabled ? 0.62 : 1)
@@ -1441,6 +1538,25 @@ private struct ChatComposer: View {
     private var blockedAttachmentText: String? {
         attachments.first(where: { $0.needsUpload && $0.uploadState != .uploading && $0.uploadState != .ready })?.uploadError
             ?? (hasBlockedAttachment ? "Attachment needs upload." : nil)
+    }
+
+    private var isWorking: Bool {
+        runState?.isActive == true
+    }
+
+    private var trailingButtonDisabled: Bool {
+        if isWorking {
+            return false
+        }
+        return isDisabled || isSending || hasUploadingAttachment || hasBlockedAttachment || !hasSendableContent
+    }
+
+    private func trailingAction() {
+        if isWorking {
+            onStop()
+        } else {
+            onSend()
+        }
     }
 
     private func appendTranscript(_ transcript: String) {
@@ -1562,6 +1678,40 @@ private struct ChatComposer: View {
     private func updateAttachment(_ id: UUID, transform: (inout ChatAttachment) -> Void) {
         guard let index = attachments.firstIndex(where: { $0.id == id }) else { return }
         transform(&attachments[index])
+    }
+}
+
+private struct MacProjectChip: View {
+    let name: String
+    let branch: String?
+    let isLocked: Bool
+    let isDisabled: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 5) {
+                Image(systemName: name == "Home" ? "house" : "folder")
+                    .font(.caption.weight(.semibold))
+                Text(label)
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(KishOSTheme.pillBackground, in: Capsule())
+            .overlay(Capsule().stroke(KishOSTheme.hairline))
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.primary)
+        .disabled(isDisabled || isLocked)
+        .opacity(isLocked ? 0.72 : 1)
+        .help(isLocked ? "Project is fixed for this conversation" : "Choose project")
+    }
+
+    private var label: String {
+        let cleanBranch = (branch ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return cleanBranch.isEmpty ? name : "\(name) \(cleanBranch)"
     }
 }
 

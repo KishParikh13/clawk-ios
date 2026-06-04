@@ -49,9 +49,11 @@ final class KishOSWorkspace: ObservableObject {
         firstMessage: String,
         now: Date = Date(),
         deliveryState: MessageDeliveryState = .sending,
-        attachments: [ChatAttachment] = []
+        attachments: [ChatAttachment] = [],
+        projectPath: String? = nil,
+        projectName: String? = nil
     ) -> Conversation {
-        var conversation = Conversation(firstMessage: firstMessage, now: now)
+        var conversation = Conversation(firstMessage: firstMessage, now: now, projectPath: projectPath, projectName: projectName)
         conversation.messages[0].deliveryState = deliveryState
         conversation.messages[0].attachments = attachments
         conversation.isRunning = deliveryState == .sending
@@ -84,8 +86,21 @@ final class KishOSWorkspace: ObservableObject {
         return conversation
     }
 
-    func queueConversation(firstMessage: String, now: Date = Date(), attachments: [ChatAttachment] = []) -> Conversation {
-        createConversation(firstMessage: firstMessage, now: now, deliveryState: .queued, attachments: attachments)
+    func queueConversation(
+        firstMessage: String,
+        now: Date = Date(),
+        attachments: [ChatAttachment] = [],
+        projectPath: String? = nil,
+        projectName: String? = nil
+    ) -> Conversation {
+        createConversation(
+            firstMessage: firstMessage,
+            now: now,
+            deliveryState: .queued,
+            attachments: attachments,
+            projectPath: projectPath,
+            projectName: projectName
+        )
     }
 
     func queueUserMessage(_ text: String, to id: UUID, now: Date = Date(), attachments: [ChatAttachment] = []) -> Conversation? {
@@ -187,6 +202,20 @@ final class KishOSWorkspace: ObservableObject {
             conversation.events = ["request failed"]
             conversation.isRunning = false
             conversation.lastError = message
+            conversation.updatedAt = now
+        }
+    }
+
+    func cancelActiveResponse(in id: UUID, now: Date = Date()) {
+        updateConversation(id) { conversation in
+            markLastUserMessageSent(in: &conversation)
+            conversation.messages.removeAll { message in
+                message.sender == .agent && message.deliveryState == .sending
+            }
+            conversation.events = ["stopped"]
+            conversation.isRunning = false
+            conversation.lastError = nil
+            conversation.approvals = []
             conversation.updatedAt = now
         }
     }

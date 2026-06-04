@@ -43,12 +43,18 @@ final class ConversationStoreTests: XCTestCase {
     func testWorkspaceFollowUpKeepsSameThreadId() {
         let store = MemoryConversationStore()
         let workspace = KishOSWorkspace(store: store)
-        let conversation = workspace.createConversation(firstMessage: "first")
+        let conversation = workspace.createConversation(
+            firstMessage: "first",
+            projectPath: "/Users/kishparikh/Code/clawk-ios",
+            projectName: "clawk-ios"
+        )
         let threadId = conversation.threadId
 
         let updated = workspace.appendUserMessage("second", to: conversation.id)
 
         XCTAssertEqual(updated?.threadId, threadId)
+        XCTAssertEqual(updated?.projectPath, "/Users/kishparikh/Code/clawk-ios")
+        XCTAssertEqual(updated?.projectName, "clawk-ios")
         XCTAssertEqual(updated?.messages.map(\.text), ["first", "second"])
         XCTAssertEqual(updated?.messages.last?.deliveryState, .sending)
     }
@@ -63,6 +69,25 @@ final class ConversationStoreTests: XCTestCase {
         XCTAssertEqual(store.savedConversations.count, 1)
         XCTAssertEqual(store.savedConversations[0].messages.map(\.text), ["first", "reply"])
         XCTAssertFalse(store.savedConversations[0].isRunning)
+    }
+
+    func testCancelActiveResponseClearsRunningPlaceholderWithoutFailure() {
+        let store = MemoryConversationStore()
+        let workspace = KishOSWorkspace(store: store)
+        let conversation = workspace.createConversation(firstMessage: "first")
+        workspace.beginAgentResponse(in: conversation.id)
+
+        workspace.cancelActiveResponse(in: conversation.id)
+
+        let updated = workspace.conversation(id: conversation.id)
+        XCTAssertEqual(updated?.messages.count, 1)
+        XCTAssertEqual(updated?.messages.first?.sender, .user)
+        XCTAssertEqual(updated?.messages.first?.deliveryState, .sent)
+        XCTAssertEqual(updated?.events, ["stopped"])
+        XCTAssertFalse(updated?.isRunning ?? true)
+        XCTAssertNil(updated?.lastError)
+        XCTAssertTrue(updated?.approvals.isEmpty == true)
+        XCTAssertEqual(store.savedConversations.first?.events, ["stopped"])
     }
 
     func testMarkConversationReadPersistsWithoutChangingUpdatedAt() {
@@ -116,12 +141,19 @@ final class ConversationStoreTests: XCTestCase {
         let store = MemoryConversationStore()
         let workspace = KishOSWorkspace(store: store)
 
-        let conversation = workspace.queueConversation(firstMessage: "offline")
+        let conversation = workspace.queueConversation(
+            firstMessage: "offline",
+            projectPath: "/Users/kishparikh/Code/kish-agent",
+            projectName: "kish-agent"
+        )
 
         XCTAssertEqual(conversation.messages.first?.deliveryState, .queued)
+        XCTAssertEqual(conversation.projectPath, "/Users/kishparikh/Code/kish-agent")
+        XCTAssertEqual(conversation.projectName, "kish-agent")
         XCTAssertFalse(conversation.isRunning)
         XCTAssertEqual(workspace.queuedMessageCount, 1)
         XCTAssertEqual(store.savedConversations.first?.messages.first?.deliveryState, .queued)
+        XCTAssertEqual(store.savedConversations.first?.projectName, "kish-agent")
     }
 
     func testNextQueuedMessageReturnsOldestAndPrepareMarksSending() {

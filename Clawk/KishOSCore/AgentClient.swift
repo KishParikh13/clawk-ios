@@ -114,7 +114,12 @@ final class KishAgentClient: ObservableObject {
         }
     }
 
-    func send(_ message: String, threadId: String, attachments: [ChatRequestAttachment] = []) async throws -> ChatResult {
+    func send(
+        _ message: String,
+        threadId: String,
+        attachments: [ChatRequestAttachment] = [],
+        projectPath: String? = nil
+    ) async throws -> ChatResult {
         isSending = true
         status = "Sending"
         chatStatus = "Sending"
@@ -125,7 +130,7 @@ final class KishAgentClient: ObservableObject {
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.timeoutInterval = 180
-            request.httpBody = try JSONEncoder().encode(ChatRequest(threadId: threadId, message: message, conversationId: nil, attachments: attachments))
+            request.httpBody = try JSONEncoder().encode(ChatRequest(threadId: threadId, message: message, conversationId: nil, attachments: attachments, projectPath: projectPath))
 
             let (data, response) = try await session.data(for: request)
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
@@ -167,6 +172,7 @@ final class KishAgentClient: ObservableObject {
         threadId: String,
         conversationId: UUID? = nil,
         attachments: [ChatRequestAttachment] = [],
+        projectPath: String? = nil,
         onEvent: @escaping (AgentStreamEvent) async -> Void
     ) async throws -> ChatResult {
         isSending = true
@@ -179,7 +185,7 @@ final class KishAgentClient: ObservableObject {
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.timeoutInterval = 180
-            request.httpBody = try JSONEncoder().encode(ChatRequest(threadId: threadId, message: message, conversationId: conversationId, attachments: attachments))
+            request.httpBody = try JSONEncoder().encode(ChatRequest(threadId: threadId, message: message, conversationId: conversationId, attachments: attachments, projectPath: projectPath))
 
             let (bytes, response) = try await session.bytes(for: request)
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
@@ -196,7 +202,12 @@ final class KishAgentClient: ObservableObject {
                 await onEvent(event)
 
                 if event.type == "final" {
-                    if event.ok == true, let text = event.text {
+                    if event.cancelled == true {
+                        status = "Ready"
+                        chatStatus = "Ready"
+                        detail = "Stopped"
+                        throw AgentClientError.cancelled
+                    } else if event.ok == true, let text = event.text {
                         final = ChatResult(
                             text: text,
                             engine: event.engine ?? "claude",
@@ -222,7 +233,18 @@ final class KishAgentClient: ObservableObject {
             chatStatus = "Ready"
             detail = "Reply received"
             return final
+        } catch AgentClientError.cancelled {
+            status = "Ready"
+            chatStatus = "Ready"
+            detail = "Stopped"
+            throw AgentClientError.cancelled
         } catch let error as URLError {
+            if error.code == .cancelled {
+                status = "Ready"
+                chatStatus = "Ready"
+                detail = "Stopped"
+                throw AgentClientError.cancelled
+            }
             markNetworkError(error)
             let mapped = AgentClientError.network(error)
             throw mapped
@@ -231,6 +253,28 @@ final class KishAgentClient: ObservableObject {
             chatStatus = "Error"
             detail = error.localizedDescription
             throw error
+        }
+    }
+
+    func cancel(threadId: String) async throws {
+        var request = URLRequest(url: baseURL.appendingPathComponent("cancel"))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 12
+        request.httpBody = try JSONEncoder().encode(CancelRequest(threadId: threadId))
+
+        do {
+            let (data, response) = try await session.data(for: request)
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            let decoded = try JSONDecoder().decode(BasicResponse.self, from: data)
+            guard statusCode == 200, decoded.ok else {
+                throw AgentClientError.requestFailed(decoded.error ?? "Cancel returned HTTP \(statusCode)")
+            }
+            status = "Ready"
+            chatStatus = "Ready"
+            detail = "Stopped"
+        } catch let error as URLError {
+            throw AgentClientError.network(error)
         }
     }
 
@@ -293,6 +337,22 @@ final class KishAgentClient: ObservableObject {
             throw AgentClientError.requestFailed(decoded.error ?? "Conversation sync returned HTTP \(statusCode)")
         }
         return decoded.conversations
+    }
+
+    func fetchProjects(all: Bool = false) async throws -> [Project] {
+        var components = URLComponents(url: baseURL.appendingPathComponent("projects"), resolvingAgainstBaseURL: false)!
+        if all {
+            components.queryItems = [URLQueryItem(name: "all", value: "1")]
+        }
+        var request = URLRequest(url: components.url!)
+        request.timeoutInterval = 12
+        let (data, response) = try await session.data(for: request)
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+        let decoded = try Self.decoder.decode(ProjectListResponse.self, from: data)
+        guard statusCode == 200 && decoded.ok else {
+            throw AgentClientError.requestFailed(decoded.error ?? "Project list returned HTTP \(statusCode)")
+        }
+        return decoded.projects ?? []
     }
 
     func deleteConversation(_ id: UUID) async throws {
@@ -562,12 +622,14 @@ private struct ChatRequest: Encodable {
     let message: String
     let conversationId: UUID?
     let attachments: [ChatRequestAttachment]
+    let projectPath: String?
 
     enum CodingKeys: String, CodingKey {
         case threadId
         case message
         case conversationId
         case attachments
+        case projectPath
     }
 
     func encode(to encoder: Encoder) throws {
@@ -575,10 +637,15 @@ private struct ChatRequest: Encodable {
         try container.encode(threadId, forKey: .threadId)
         try container.encode(message, forKey: .message)
         try container.encodeIfPresent(conversationId, forKey: .conversationId)
+        try container.encodeIfPresent(projectPath, forKey: .projectPath)
         if !attachments.isEmpty {
             try container.encode(attachments, forKey: .attachments)
         }
     }
+}
+
+private struct CancelRequest: Encodable {
+    let threadId: String
 }
 
 private struct ConversationListResponse: Decodable {
@@ -667,6 +734,7 @@ struct AgentStreamEvent: Decodable, Equatable {
     let elapsedMs: Int?
     let events: [String]?
     let approvals: [ApprovalRequest]?
+    let cancelled: Bool?
 
     enum CodingKeys: String, CodingKey {
         case type
@@ -684,6 +752,7 @@ struct AgentStreamEvent: Decodable, Equatable {
         case elapsedMs
         case events
         case approvals
+        case cancelled
     }
 }
 
@@ -710,6 +779,7 @@ struct AgentToolEvent: Decodable, Equatable {
 enum AgentClientError: LocalizedError {
     case requestFailed(String)
     case network(URLError)
+    case cancelled
 
     var errorDescription: String? {
         switch self {
@@ -724,6 +794,8 @@ enum AgentClientError: LocalizedError {
             default:
                 return error.localizedDescription
             }
+        case .cancelled:
+            return "Stopped."
         }
     }
 }

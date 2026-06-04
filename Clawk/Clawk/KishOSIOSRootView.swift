@@ -25,11 +25,16 @@ struct KishOSIOSRootView: View {
     @StateObject private var voice = VoiceController()
     @StateObject private var audio = AudioRouteMonitor()
     @StateObject private var wake = WakePhraseController()
+    @StateObject private var projectCatalog = ProjectCatalog()
+    @StateObject private var projectStore = ProjectStore()
 
     @State private var selection: IOSChatSelection = .newChat
     @State private var showingConversations = false
     @State private var isDrainingQueuedMessages = false
     @State private var liveCallSession: LiveCallSession?
+    @State private var pendingProject: Project?
+    @State private var showingProjectPicker = false
+    @State private var activeSendTasks: [UUID: Task<Void, Never>] = [:]
 
     var body: some View {
         GeometryReader { geometry in
@@ -43,9 +48,14 @@ struct KishOSIOSRootView: View {
                         agentStatus: selectedConversation?.agentStatusSummary,
                         queuedMessageCount: selectedConversation?.queuedUserMessageCount ?? workspace.queuedMessageCount,
                         approvals: selectedConversation?.approvals ?? [],
+                        projectName: activeProjectName,
+                        projectBranch: activeProjectBranch,
+                        projectLocked: activeProjectIsLocked,
                         voice: voice,
                         audio: audio,
                         onSend: send,
+                        onStop: stopSelectedConversation,
+                        onPickProject: { showingProjectPicker = true },
                         onRetry: retrySelectedConversation,
                         onQuestionAnswer: answerQuestion,
                         onQuestionCancel: cancelQuestion
@@ -194,6 +204,16 @@ struct KishOSIOSRootView: View {
                 }
             )
         }
+        .sheet(isPresented: $showingProjectPicker) {
+            ProjectPickerSheet(
+                client: client,
+                catalog: projectCatalog,
+                pinned: projectStore,
+                onSelect: { project in
+                    pendingProject = project
+                }
+            )
+        }
     }
 
     private var selectedConversation: Conversation? {
@@ -212,8 +232,21 @@ struct KishOSIOSRootView: View {
         selectedConversation?.isRunning ?? client.isSending
     }
 
+    private var activeProjectName: String {
+        selectedConversation?.displayProjectName ?? pendingProject?.name ?? "Home"
+    }
+
+    private var activeProjectBranch: String? {
+        selectedConversation?.branch ?? pendingProject?.branch
+    }
+
+    private var activeProjectIsLocked: Bool {
+        selectedConversation != nil
+    }
+
     private func startNewChat() {
         selection = .newChat
+        pendingProject = nil
     }
 
     private func startLiveCall() {
@@ -272,8 +305,14 @@ struct KishOSIOSRootView: View {
            let existing = workspace.appendUserMessage(outgoingText, to: selectedConversationID, attachments: attachments) {
             conversation = existing
         } else {
-            conversation = workspace.createConversation(firstMessage: outgoingText, attachments: attachments)
+            conversation = workspace.createConversation(
+                firstMessage: outgoingText,
+                attachments: attachments,
+                projectPath: pendingProject?.path,
+                projectName: pendingProject?.name
+            )
             selection = .conversation(conversation.id)
+            pendingProject = nil
         }
 
         sendPreparedMessage(
@@ -285,27 +324,52 @@ struct KishOSIOSRootView: View {
     }
 
     private func sendPreparedMessage(_ text: String, attachments: [ChatRequestAttachment], in conversation: Conversation, messageID: UUID?) {
-        Task {
+        let conversationID = conversation.id
+        activeSendTasks[conversationID]?.cancel()
+        let task = Task {
+            defer {
+                activeSendTasks[conversationID] = nil
+            }
             do {
-                workspace.beginAgentResponse(in: conversation.id)
+                workspace.beginAgentResponse(in: conversationID)
                 let result = try await client.sendStreaming(
                     text,
                     threadId: conversation.threadId,
-                    conversationId: conversation.id,
-                    attachments: attachments
+                    conversationId: conversationID,
+                    attachments: attachments,
+                    projectPath: conversation.projectPath
                 ) { event in
-                    handleStreamEvent(event, conversationId: conversation.id)
+                    handleStreamEvent(event, conversationId: conversationID)
                 }
-                workspace.apply(result, to: conversation.id)
+                workspace.apply(result, to: conversationID)
                 await syncSharedConversations()
             } catch {
-                if isOfflineError(error),
-                   let messageID,
-                   workspace.requeueMessageAfterOfflineFailure(conversationID: conversation.id, messageID: messageID) {
+                if isCancellation(error) {
                     return
                 }
-                workspace.applyFailure(error, to: conversation.id)
+                if isOfflineError(error),
+                   let messageID,
+                   workspace.requeueMessageAfterOfflineFailure(conversationID: conversationID, messageID: messageID) {
+                    return
+                }
+                workspace.applyFailure(error, to: conversationID)
             }
+        }
+        activeSendTasks[conversationID] = task
+    }
+
+    private func stopSelectedConversation() {
+        guard let conversation = selectedConversation, conversation.isRunning else { return }
+        stop(conversation)
+    }
+
+    private func stop(_ conversation: Conversation) {
+        activeSendTasks[conversation.id]?.cancel()
+        activeSendTasks[conversation.id] = nil
+        workspace.cancelActiveResponse(in: conversation.id)
+        Task {
+            try? await client.cancel(threadId: conversation.threadId)
+            await syncSharedConversations()
         }
     }
 
@@ -315,7 +379,13 @@ struct KishOSIOSRootView: View {
            let existing = workspace.queueUserMessage(text, to: selectedConversationID, attachments: attachments) {
             conversation = existing
         } else {
-            conversation = workspace.queueConversation(firstMessage: text, attachments: attachments)
+            conversation = workspace.queueConversation(
+                firstMessage: text,
+                attachments: attachments,
+                projectPath: pendingProject?.path,
+                projectName: pendingProject?.name
+            )
+            pendingProject = nil
         }
         selection = .conversation(conversation.id)
     }
@@ -335,7 +405,8 @@ struct KishOSIOSRootView: View {
                     retry.message,
                     threadId: retry.conversation.threadId,
                     conversationId: retry.conversation.id,
-                    attachments: retry.attachments
+                    attachments: retry.attachments,
+                    projectPath: retry.conversation.projectPath
                 ) { event in
                     handleStreamEvent(event, conversationId: retry.conversation.id)
                 }
@@ -471,7 +542,8 @@ struct KishOSIOSRootView: View {
                     prepared.message,
                     threadId: prepared.conversation.threadId,
                     conversationId: prepared.conversation.id,
-                    attachments: prepared.attachments
+                    attachments: prepared.attachments,
+                    projectPath: prepared.conversation.projectPath
                 ) { event in
                     handleStreamEvent(event, conversationId: prepared.conversation.id)
                 }
@@ -494,6 +566,16 @@ struct KishOSIOSRootView: View {
         }
         return false
     }
+
+    private func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError {
+            return true
+        }
+        if let agentError = error as? AgentClientError, case .cancelled = agentError {
+            return true
+        }
+        return false
+    }
 }
 
 private struct ChatScreen: View {
@@ -504,9 +586,14 @@ private struct ChatScreen: View {
     let agentStatus: AgentStatusSummary?
     let queuedMessageCount: Int
     let approvals: [ApprovalRequest]
+    let projectName: String
+    let projectBranch: String?
+    let projectLocked: Bool
     @ObservedObject var voice: VoiceController
     @ObservedObject var audio: AudioRouteMonitor
     let onSend: (String, [ChatAttachment]) -> Void
+    let onStop: () -> Void
+    let onPickProject: () -> Void
     let onRetry: (() -> Void)?
     let onQuestionAnswer: (ApprovalRequest, String) -> Void
     let onQuestionCancel: (ApprovalRequest) -> Void
@@ -584,8 +671,13 @@ private struct ChatScreen: View {
                     isSending: client.isSending,
                     isDisabled: client.isSending || isSending,
                     runState: runState,
+                    projectName: projectName,
+                    projectBranch: projectBranch,
+                    projectLocked: projectLocked,
                     voice: voice,
-                    onSend: sendDraft
+                    onSend: sendDraft,
+                    onStop: onStop,
+                    onPickProject: onPickProject
                 )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -714,7 +806,7 @@ private struct IOSMessageTurn: View {
         case .queued:
             return "Saved locally"
         case .sending:
-            return "Sending"
+            return nil
         case .failed:
             return "Failed"
         case .sent:
@@ -778,17 +870,10 @@ private struct IOSActivityBlock: View {
                     VStack(alignment: .leading, spacing: 7) {
                         ForEach(Array(visibleEvents.suffix(8).enumerated()), id: \.offset) { _, event in
                             HStack(alignment: .top, spacing: 8) {
-                                if isRunning && event == visibleEvents.last {
-                                    ProgressView()
-                                        .controlSize(.small)
-                                        .frame(width: 10, height: 10)
-                                        .padding(.top, 3)
-                                } else {
-                                    Circle()
-                                        .fill(Color.secondary.opacity(0.55))
-                                        .frame(width: 5, height: 5)
-                                        .padding(.top, 7)
-                                }
+                                Circle()
+                                    .fill(Color.secondary.opacity(0.55))
+                                    .frame(width: 5, height: 5)
+                                    .padding(.top, 7)
 
                                 IOSMarkdownText(text: displayEvent(event), isUser: false, font: .caption, color: .secondary)
                                     .lineLimit(3)
@@ -892,8 +977,13 @@ private struct IOSComposer: View {
     let isSending: Bool
     let isDisabled: Bool
     let runState: ConversationRunState?
+    let projectName: String
+    let projectBranch: String?
+    let projectLocked: Bool
     @ObservedObject var voice: VoiceController
     let onSend: () -> Void
+    let onStop: () -> Void
+    let onPickProject: () -> Void
 
     @State private var showingTextCapture = false
     @State private var showingPhotoPicker = false
@@ -972,6 +1062,14 @@ private struct IOSComposer: View {
                     .accessibilityLabel("Add")
                 }
 
+                IOSProjectChip(
+                    name: projectName,
+                    branch: projectBranch,
+                    isLocked: projectLocked,
+                    isDisabled: isDisabled || voice.isRecording,
+                    onTap: onPickProject
+                )
+
                 HStack(alignment: .bottom, spacing: 8) {
                     Group {
                         if voice.isRecording {
@@ -992,12 +1090,8 @@ private struct IOSComposer: View {
                     }
                     .frame(maxWidth: .infinity, minHeight: 46, alignment: .leading)
 
-                    if let runState, runState.isActive {
-                        IOSRunStatePill(runState: runState)
-                    }
-
                     Button(action: trailingAction) {
-                        if isSending || hasUploadingAttachment {
+                        if hasUploadingAttachment && !isWorking {
                             ProgressView()
                                 .frame(width: 18, height: 18)
                         } else {
@@ -1069,7 +1163,14 @@ private struct IOSComposer: View {
             ?? "Attachment needs upload."
     }
 
+    private var isWorking: Bool {
+        runState?.isActive == true
+    }
+
     private var trailingIconName: String {
+        if isWorking {
+            return "stop.fill"
+        }
         if voice.isRecording {
             return "checkmark"
         }
@@ -1080,6 +1181,9 @@ private struct IOSComposer: View {
         if trailingButtonDisabled {
             return Color(uiColor: .systemGray4)
         }
+        if isWorking {
+            return Color(uiColor: .systemRed)
+        }
         if voice.isRecording {
             return Color(uiColor: .label)
         }
@@ -1087,6 +1191,9 @@ private struct IOSComposer: View {
     }
 
     private var trailingButtonDisabled: Bool {
+        if isWorking {
+            return false
+        }
         if voice.isRecording {
             return false
         }
@@ -1097,6 +1204,9 @@ private struct IOSComposer: View {
     }
 
     private var trailingAccessibilityLabel: String {
+        if isWorking {
+            return "Stop"
+        }
         if voice.isRecording {
             return "Accept dictation"
         }
@@ -1104,7 +1214,9 @@ private struct IOSComposer: View {
     }
 
     private func trailingAction() {
-        if voice.isRecording {
+        if isWorking {
+            onStop()
+        } else if voice.isRecording {
             acceptDictation()
         } else if hasSendableContent {
             onSend()
@@ -1228,6 +1340,41 @@ private struct IOSComposerCircleButton: View {
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)
+    }
+}
+
+private struct IOSProjectChip: View {
+    let name: String
+    let branch: String?
+    let isLocked: Bool
+    let isDisabled: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 5) {
+                Image(systemName: name == "Home" ? "house" : "folder")
+                    .font(.caption.weight(.semibold))
+                Text(label)
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 10)
+            .frame(height: 46)
+            .background(IOSTheme.elevatedBackground, in: Capsule())
+            .overlay(Capsule().stroke(IOSTheme.hairline))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(isDisabled || isLocked)
+        .opacity(isLocked ? 0.74 : 1)
+        .accessibilityLabel("Project \(label)")
+    }
+
+    private var label: String {
+        let cleanBranch = (branch ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return cleanBranch.isEmpty ? name : "\(name) \(cleanBranch)"
     }
 }
 
@@ -2131,9 +2278,9 @@ private struct ConversationPickerRow: View {
 
     private var rowDetail: String {
         if conversation.runState.isActive {
-            return "\(conversation.runState.label) - \(conversation.updatedTimestampText)"
+            return "\(conversation.projectBadgeText) - \(conversation.runState.label) - \(conversation.updatedTimestampText)"
         }
-        return conversation.updatedDetailText
+        return "\(conversation.projectBadgeText) - \(conversation.updatedDetailText)"
     }
 }
 

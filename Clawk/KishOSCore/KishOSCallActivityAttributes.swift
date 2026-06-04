@@ -8,8 +8,13 @@ struct KishOSCallActivityAttributes: ActivityAttributes {
         var title: String
         var status: String
         var detail: String
+        var runningTitles: [String]
         var sessionTitles: [String]
         var reviewTitles: [String]
+        var runningCount: Int
+        var unreadCount: Int
+        var reviewCount: Int
+        var sessionCount: Int
         var startedAt: Date
         var updatedAt: Date
     }

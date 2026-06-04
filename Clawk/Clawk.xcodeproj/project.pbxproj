@@ -11,6 +11,7 @@
 		04F144AAB362A6236543697B /* GatewayConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BF9B02D88EDF9A8620601CA /* GatewayConnection.swift */; };
 		05611179C1434EA208CEF157 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 641664BF743F7453554BF316 /* ContentView.swift */; };
 		07ECBC7DBE333CC10DB84502 /* WakePhraseController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D141A3B5C138ABA7F09EB3 /* WakePhraseController.swift */; };
+		0A1ED870A9A13443207F4CE4 /* Project.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38C9E838432B8DF4680F2236 /* Project.swift */; };
 		13D989FEDC813BC32D37A770 /* SharedViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62E583E96D8734B6045457C9 /* SharedViews.swift */; };
 		14D0013ECE6E7348671AB8E1 /* AudioRouteMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B96F6934906F6A77BBB59125 /* AudioRouteMonitor.swift */; };
 		1692CD406B2399800935424F /* GatewayChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A89B98F7C06E05A590381E2 /* GatewayChatView.swift */; };
@@ -20,11 +21,13 @@
 		25CAA09F895BFE70FB427FE6 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9BBBBEE778FA330FC6B2E92 /* SettingsView.swift */; };
 		2808C6EC9F10FBF1D766B1E0 /* MessageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB9ECBC77D8360B0E33A59D8 /* MessageStore.swift */; };
 		308209664CE7C20106C3362B /* FileTextPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FD04F5548C04F8DD34D6D50 /* FileTextPickerView.swift */; };
+		343EF98CC7F86AA397A05B39 /* ProjectPickerPopover.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD5ACACFC3A919EE97C9392D /* ProjectPickerPopover.swift */; };
 		406B8FE4F7E6B617DF8742F4 /* ClawkApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A7C72458B614B76F4F4240A /* ClawkApp.swift */; };
 		4086A8FB27F7D6AD5FB77BFF /* LiveCallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53E846F62D3AD85A7F290A3A /* LiveCallView.swift */; };
 		4DF47FC10F47C2C8D771C0BF /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A733B461015C5FBC8DD9322E /* DashboardView.swift */; };
 		520D1CD0D409E1F4E2F2256B /* CostsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 493A6B6CB1096E8BA7B489A8 /* CostsView.swift */; };
 		544FE18D516A26C1E3093F9D /* ChatListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8E4765E74CC787BC5A5D4C7 /* ChatListView.swift */; };
+		5588A38DFB55167BA7AAE15F /* ProjectPickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9C695097D8B1B6E3834D7C7 /* ProjectPickerSheet.swift */; };
 		5693E81908F23485ACF4340B /* KishOSIOSRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D387D95D0B541A46D648E1C0 /* KishOSIOSRootView.swift */; };
 		57022D80604899DEC98B40DB /* AgentLogsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D479C595005207FF75F951E6 /* AgentLogsView.swift */; };
 		57EEDF2278D52EF23C2B1A38 /* KishOSWidgetsExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 7FF44E68ED45E7EEF8CCBB51 /* KishOSWidgetsExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -49,7 +52,9 @@
 		9FFAF5F0C740BC711E743240 /* CameraTextCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FB7BD6F07C94FA433856EFD /* CameraTextCaptureView.swift */; };
 		A910280A5CEBEB328812E732 /* MoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BC007C150922B621095A597 /* MoreView.swift */; };
 		AF059C6FC928B2316266DA4A /* AgentClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A57A732EA4AFC2B553AF70A /* AgentClient.swift */; };
+		B37123DFEC2CEF33BEAA92C0 /* ProjectStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D6A4231FB3898169E2AD1AE /* ProjectStore.swift */; };
 		B8036E2296F7628A5C0572CE /* AgentClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A57A732EA4AFC2B553AF70A /* AgentClient.swift */; };
+		BC6317C19C95851E6AB379FC /* Project.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38C9E838432B8DF4680F2236 /* Project.swift */; };
 		BDEEDBE68E3D64469C36508C /* KishOSLiveActivityController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FE1FF29E9B858E390CE9933 /* KishOSLiveActivityController.swift */; };
 		BEA296B530D3EE0B1A1037F2 /* LiveDashboardTabs.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC24015FE274E4F772DA97DD /* LiveDashboardTabs.swift */; };
 		CC774E2820437531FBB8D8EE /* KishOSWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = F873185D94B16907C1073B00 /* KishOSWorkspace.swift */; };
@@ -61,7 +66,9 @@
 		E987A5A657F8E60CD3D6D53C /* ChatHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29F2E674D7271CB505C361DF /* ChatHistoryStore.swift */; };
 		ECD45AB1DC169FB9AF51B23D /* Conversation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D66F48AF324D00EE65E801F /* Conversation.swift */; };
 		F49790AC7650ECEAB5D6A053 /* KishOSCallActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7EAB08A2E3A0A5C69507E33 /* KishOSCallActivityAttributes.swift */; };
+		F54C662780149393EA220455 /* ProjectStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D6A4231FB3898169E2AD1AE /* ProjectStore.swift */; };
 		F94BAA3974D909D010154B90 /* ThinkingStepsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 716ADB4A08C625A0CEDDD715 /* ThinkingStepsView.swift */; };
+		FF2D59CFBA3D08E48F8466DE /* ProjectStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65378C85FE1C24B32C67E9EA /* ProjectStoreTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -102,6 +109,8 @@
 		1FA8028A0517DF1195BA7854 /* SessionChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionChatView.swift; sourceTree = "<group>"; };
 		227D7EAA8BA576629153DE13 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		29F2E674D7271CB505C361DF /* ChatHistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatHistoryStore.swift; sourceTree = "<group>"; };
+		2D6A4231FB3898169E2AD1AE /* ProjectStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectStore.swift; sourceTree = "<group>"; };
+		38C9E838432B8DF4680F2236 /* Project.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Project.swift; sourceTree = "<group>"; };
 		3BC007C150922B621095A597 /* MoreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoreView.swift; sourceTree = "<group>"; };
 		3BF9B02D88EDF9A8620601CA /* GatewayConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayConnection.swift; sourceTree = "<group>"; };
 		47CE52D6F6C3B3791B2874BF /* KishOSFeaturePlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KishOSFeaturePlan.swift; sourceTree = "<group>"; };
@@ -116,6 +125,7 @@
 		62E583E96D8734B6045457C9 /* SharedViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedViews.swift; sourceTree = "<group>"; };
 		641664BF743F7453554BF316 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		645A6F0E142A68BB46D021FB /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		65378C85FE1C24B32C67E9EA /* ProjectStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectStoreTests.swift; sourceTree = "<group>"; };
 		67B095715EC6D0657B8EF344 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
 		6D66F48AF324D00EE65E801F /* Conversation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Conversation.swift; sourceTree = "<group>"; };
 		716ADB4A08C625A0CEDDD715 /* ThinkingStepsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThinkingStepsView.swift; sourceTree = "<group>"; };
@@ -129,12 +139,14 @@
 		9FE1FF29E9B858E390CE9933 /* KishOSLiveActivityController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KishOSLiveActivityController.swift; sourceTree = "<group>"; };
 		A733B461015C5FBC8DD9322E /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		AB9ECBC77D8360B0E33A59D8 /* MessageStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageStore.swift; sourceTree = "<group>"; };
+		AD5ACACFC3A919EE97C9392D /* ProjectPickerPopover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectPickerPopover.swift; sourceTree = "<group>"; };
 		AD712A5FAAB152C8254982BC /* KishOSMacTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = KishOSMacTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B8E4765E74CC787BC5A5D4C7 /* ChatListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatListView.swift; sourceTree = "<group>"; };
 		B96F6934906F6A77BBB59125 /* AudioRouteMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRouteMonitor.swift; sourceTree = "<group>"; };
 		C2D141A3B5C138ABA7F09EB3 /* WakePhraseController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WakePhraseController.swift; sourceTree = "<group>"; };
 		C6FCA3DA8BE4B76E2A75DD23 /* VoiceController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceController.swift; sourceTree = "<group>"; };
 		C8A11F3E2CC0EFED534C022B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		C9C695097D8B1B6E3834D7C7 /* ProjectPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectPickerSheet.swift; sourceTree = "<group>"; };
 		CA864BCB8E5CB4DC707F8304 /* GatewayProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayProtocol.swift; sourceTree = "<group>"; };
 		CD2B0BD8253B85A1A695E980 /* CronManagementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CronManagementView.swift; sourceTree = "<group>"; };
 		CF4A758449B0DDC52CA5EC66 /* KishOSWidgetsBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KishOSWidgetsBundle.swift; sourceTree = "<group>"; };
@@ -161,6 +173,8 @@
 				D7EAB08A2E3A0A5C69507E33 /* KishOSCallActivityAttributes.swift */,
 				47CE52D6F6C3B3791B2874BF /* KishOSFeaturePlan.swift */,
 				F873185D94B16907C1073B00 /* KishOSWorkspace.swift */,
+				38C9E838432B8DF4680F2236 /* Project.swift */,
+				2D6A4231FB3898169E2AD1AE /* ProjectStore.swift */,
 				C6FCA3DA8BE4B76E2A75DD23 /* VoiceController.swift */,
 			);
 			path = KishOSCore;
@@ -196,6 +210,7 @@
 				E59A447B777F28AAE47C8346 /* MemoryView.swift */,
 				AB9ECBC77D8360B0E33A59D8 /* MessageStore.swift */,
 				3BC007C150922B621095A597 /* MoreView.swift */,
+				C9C695097D8B1B6E3834D7C7 /* ProjectPickerSheet.swift */,
 				1FA8028A0517DF1195BA7854 /* SessionChatView.swift */,
 				F9BBBBEE778FA330FC6B2E92 /* SettingsView.swift */,
 				62E583E96D8734B6045457C9 /* SharedViews.swift */,
@@ -211,6 +226,7 @@
 				04F0A10E61286CFABA0ACA0C /* AgentClientTests.swift */,
 				57945B542C95784AEA518EA7 /* ConversationStoreTests.swift */,
 				75E96526AACAAE4CF7DDFF93 /* ConversationTests.swift */,
+				65378C85FE1C24B32C67E9EA /* ProjectStoreTests.swift */,
 			);
 			path = KishOSMacTests;
 			sourceTree = "<group>";
@@ -220,6 +236,7 @@
 			children = (
 				D2D7F8370605F68579B5D56D /* Info.plist */,
 				61D254F493783576AAF3D410 /* KishOSMacApp.swift */,
+				AD5ACACFC3A919EE97C9392D /* ProjectPickerPopover.swift */,
 			);
 			path = KishOSMac;
 			sourceTree = "<group>";
@@ -414,6 +431,9 @@
 				948B83E8BA1F40E0036CA590 /* MemoryView.swift in Sources */,
 				2808C6EC9F10FBF1D766B1E0 /* MessageStore.swift in Sources */,
 				A910280A5CEBEB328812E732 /* MoreView.swift in Sources */,
+				BC6317C19C95851E6AB379FC /* Project.swift in Sources */,
+				5588A38DFB55167BA7AAE15F /* ProjectPickerSheet.swift in Sources */,
+				B37123DFEC2CEF33BEAA92C0 /* ProjectStore.swift in Sources */,
 				D5E0FA06E527E6EE4F6524CE /* SessionChatView.swift in Sources */,
 				25CAA09F895BFE70FB427FE6 /* SettingsView.swift in Sources */,
 				13D989FEDC813BC32D37A770 /* SharedViews.swift in Sources */,
@@ -430,6 +450,7 @@
 				9F2ABD0D551D1F7292C5A5F9 /* AgentClientTests.swift in Sources */,
 				5867E09D19864EF00D3856F9 /* ConversationStoreTests.swift in Sources */,
 				71970BDF43769ECE44DC4FED /* ConversationTests.swift in Sources */,
+				FF2D59CFBA3D08E48F8466DE /* ProjectStoreTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -455,6 +476,9 @@
 				D8B63FA9F24AA1FF0F35754C /* KishOSFeaturePlan.swift in Sources */,
 				8EA0D1D5917487AA69C3C978 /* KishOSMacApp.swift in Sources */,
 				CC774E2820437531FBB8D8EE /* KishOSWorkspace.swift in Sources */,
+				0A1ED870A9A13443207F4CE4 /* Project.swift in Sources */,
+				343EF98CC7F86AA397A05B39 /* ProjectPickerPopover.swift in Sources */,
+				F54C662780149393EA220455 /* ProjectStore.swift in Sources */,
 				74447BD79F9DC75DD521D7A0 /* VoiceController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

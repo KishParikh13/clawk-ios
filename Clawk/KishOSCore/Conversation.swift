@@ -12,6 +12,9 @@ struct Conversation: Identifiable, Codable, Equatable {
     var isRunning: Bool
     var updatedAt: Date
     var lastReadAt: Date?
+    var projectPath: String?
+    var projectName: String?
+    var branch: String?
     var lastError: String?
     var approvals: [ApprovalRequest]
 
@@ -27,6 +30,9 @@ struct Conversation: Identifiable, Codable, Equatable {
         case isRunning
         case updatedAt
         case lastReadAt
+        case projectPath
+        case projectName
+        case branch
         case lastError
         case approvals
     }
@@ -35,7 +41,9 @@ struct Conversation: Identifiable, Codable, Equatable {
         id: UUID = UUID(),
         threadId: String? = nil,
         firstMessage: String,
-        now: Date = Date()
+        now: Date = Date(),
+        projectPath: String? = nil,
+        projectName: String? = nil
     ) {
         let generatedId = id
         self.id = generatedId
@@ -49,6 +57,9 @@ struct Conversation: Identifiable, Codable, Equatable {
         self.isRunning = false
         self.updatedAt = now
         self.lastReadAt = now
+        self.projectPath = projectPath
+        self.projectName = projectName
+        self.branch = nil
         self.lastError = nil
         self.approvals = []
     }
@@ -66,6 +77,9 @@ struct Conversation: Identifiable, Codable, Equatable {
         isRunning = try container.decode(Bool.self, forKey: .isRunning)
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)
         lastReadAt = try container.decodeIfPresent(Date.self, forKey: .lastReadAt)
+        projectPath = try container.decodeIfPresent(String.self, forKey: .projectPath)
+        projectName = try container.decodeIfPresent(String.self, forKey: .projectName)
+        branch = try container.decodeIfPresent(String.self, forKey: .branch)
         lastError = try container.decodeIfPresent(String.self, forKey: .lastError)
         approvals = try container.decodeIfPresent([ApprovalRequest].self, forKey: .approvals) ?? []
     }
@@ -87,6 +101,16 @@ struct Conversation: Identifiable, Codable, Equatable {
 
     var updatedDetailText: String {
         "Updated \(updatedTimestampText)"
+    }
+
+    var displayProjectName: String {
+        let clean = (projectName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return clean.isEmpty ? "Home" : clean
+    }
+
+    var projectBadgeText: String {
+        let cleanBranch = (branch ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return cleanBranch.isEmpty ? displayProjectName : "\(displayProjectName) \(cleanBranch)"
     }
 
     var transcriptText: String {

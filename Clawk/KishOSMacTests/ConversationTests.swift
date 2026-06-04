@@ -22,6 +22,44 @@ final class ConversationTests: XCTestCase {
         XCTAssertEqual(conversation.messages.first?.text, "hello")
     }
 
+    func testConversationDefaultsToHomeProject() {
+        let conversation = Conversation(firstMessage: "hello")
+
+        XCTAssertNil(conversation.projectPath)
+        XCTAssertNil(conversation.projectName)
+        XCTAssertNil(conversation.branch)
+        XCTAssertEqual(conversation.displayProjectName, "Home")
+    }
+
+    func testConversationStoresProjectFields() {
+        let conversation = Conversation(
+            firstMessage: "hello",
+            projectPath: "/Users/kishparikh/Code/clawk-ios",
+            projectName: "clawk-ios"
+        )
+
+        XCTAssertEqual(conversation.projectPath, "/Users/kishparikh/Code/clawk-ios")
+        XCTAssertEqual(conversation.projectName, "clawk-ios")
+        XCTAssertEqual(conversation.displayProjectName, "clawk-ios")
+    }
+
+    func testConversationProjectFieldsRoundTrip() throws {
+        var conversation = Conversation(
+            firstMessage: "hello",
+            projectPath: "/Users/kishparikh/Code/clawk-ios",
+            projectName: "clawk-ios"
+        )
+        conversation.branch = "main"
+
+        let data = try JSONEncoder().encode(conversation)
+        let decoded = try JSONDecoder().decode(Conversation.self, from: data)
+
+        XCTAssertEqual(decoded.projectPath, "/Users/kishparikh/Code/clawk-ios")
+        XCTAssertEqual(decoded.projectName, "clawk-ios")
+        XCTAssertEqual(decoded.branch, "main")
+        XCTAssertEqual(decoded.projectBadgeText, "clawk-ios main")
+    }
+
     func testConversationReadStateTracksUnreadUpdates() {
         let createdAt = Date(timeIntervalSince1970: 100)
         var conversation = Conversation(firstMessage: "hello", now: createdAt)
@@ -61,6 +99,8 @@ final class ConversationTests: XCTestCase {
         let conversation = try decoder.decode(Conversation.self, from: json)
 
         XCTAssertNil(conversation.lastReadAt)
+        XCTAssertNil(conversation.projectPath)
+        XCTAssertNil(conversation.projectName)
         XCTAssertTrue(conversation.isUnread)
         XCTAssertTrue(conversation.needsReview)
     }
