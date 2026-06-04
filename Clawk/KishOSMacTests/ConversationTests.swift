@@ -60,6 +60,29 @@ final class ConversationTests: XCTestCase {
         XCTAssertEqual(decoded.projectBadgeText, "clawk-ios main")
     }
 
+    func testConversationSearchMatchesProjectMessagesAndReferences() {
+        var conversation = Conversation(
+            firstMessage: "debug launch services",
+            projectPath: "/Users/kishparikh/Code/kish-agent",
+            projectName: "kish-agent"
+        )
+        conversation.branch = "native-bridge"
+        conversation.messages.append(
+            ChatMessage(
+                sender: .user,
+                text: "check the attachment",
+                attachments: [ChatAttachment.textContext("notes", title: "Launch Notes")],
+                references: [ChatReference(kind: .folder, title: "listener", path: "/Users/kishparikh/Code/kish-agent/listener")]
+            )
+        )
+
+        XCTAssertTrue(conversation.matchesSearch("kish-agent"))
+        XCTAssertTrue(conversation.matchesSearch("native"))
+        XCTAssertTrue(conversation.matchesSearch("launch notes"))
+        XCTAssertTrue(conversation.matchesSearch("listener"))
+        XCTAssertFalse(conversation.matchesSearch("calendar"))
+    }
+
     func testConversationReadStateTracksUnreadUpdates() {
         let createdAt = Date(timeIntervalSince1970: 100)
         var conversation = Conversation(firstMessage: "hello", now: createdAt)

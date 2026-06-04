@@ -2021,6 +2021,7 @@ private struct ConversationPicker: View {
     let onClose: () -> Void
 
     @State private var agentURLDraft = ""
+    @State private var searchQuery = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -2078,6 +2079,35 @@ private struct ConversationPicker: View {
                 )
             }
             .buttonStyle(.plain)
+            .padding(.horizontal, 18)
+            .padding(.bottom, 12)
+
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                TextField("Search chats", text: $searchQuery)
+                    .textFieldStyle(.plain)
+                    .font(.callout)
+                    .submitLabel(.search)
+                if !searchQuery.isEmpty {
+                    Button {
+                        searchQuery = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.tertiary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Clear search")
+                }
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 42)
+            .background(IOSTheme.elevatedBackground.opacity(0.82), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    .stroke(IOSTheme.hairline)
+            )
             .padding(.horizontal, 18)
             .padding(.bottom, 12)
 
@@ -2146,10 +2176,23 @@ private struct ConversationPicker: View {
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, 24)
                 Spacer(minLength: 0)
+            } else if filteredConversations.isEmpty {
+                Spacer(minLength: 0)
+                VStack(spacing: 10) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 28, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    Text("No matches")
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(.primary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 24)
+                Spacer(minLength: 0)
             } else {
                 ScrollView {
                     LazyVStack(spacing: 6) {
-                        ForEach(sortedConversations) { conversation in
+                        ForEach(filteredConversations) { conversation in
                             ConversationPickerRow(
                                 conversation: conversation,
                                 isSelected: selectedID == conversation.id,
@@ -2191,8 +2234,12 @@ private struct ConversationPicker: View {
         conversations.sorted { $0.updatedAt > $1.updatedAt }
     }
 
+    private var filteredConversations: [Conversation] {
+        sortedConversations.filter { $0.matchesSearch(searchQuery) }
+    }
+
     private var pendingDecisionConversations: [Conversation] {
-        sortedConversations.filter { !$0.approvals.isEmpty }
+        filteredConversations.filter { !$0.approvals.isEmpty }
     }
 
     private var conversationCountText: String {

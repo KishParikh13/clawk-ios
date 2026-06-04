@@ -277,6 +277,27 @@ struct Conversation: Identifiable, Codable, Equatable {
             "waiting for answer"
         ]
     }
+
+    func matchesSearch(_ query: String) -> Bool {
+        let clean = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty else { return true }
+
+        let searchableParts: [String] = [
+            title,
+            idea,
+            threadId,
+            projectName ?? "",
+            projectPath ?? "",
+            branch ?? "",
+            messages.map(\.text).joined(separator: " "),
+            messages.flatMap { $0.attachments.map(\.title) }.joined(separator: " "),
+            messages.flatMap { $0.references.map { "\($0.title) \($0.path)" } }.joined(separator: " ")
+        ]
+
+        return searchableParts.contains { part in
+            part.localizedCaseInsensitiveContains(clean)
+        }
+    }
 }
 
 struct AgentStatusSummary: Equatable {

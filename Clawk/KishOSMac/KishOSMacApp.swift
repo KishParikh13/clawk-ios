@@ -40,6 +40,7 @@ private struct MacRootView: View {
     @State private var pendingProject: Project?
     @State private var showingProjectPicker = false
     @State private var activeSendTasks: [UUID: Task<Void, Never>] = [:]
+    @State private var conversationSearch = ""
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -60,13 +61,19 @@ private struct MacRootView: View {
                     }
 
                     Section("Conversations") {
-                        ForEach(workspace.conversations) { conversation in
-                            ConversationRow(
-                                conversation: conversation,
-                                onRename: { conversationToRename = conversation },
-                                onDelete: { deleteConversation(conversation.id) }
-                            )
-                                .tag(SidebarSelection.conversation(conversation.id))
+                        if filteredConversations.isEmpty {
+                            Text("No matching chats")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            ForEach(filteredConversations) { conversation in
+                                ConversationRow(
+                                    conversation: conversation,
+                                    onRename: { conversationToRename = conversation },
+                                    onDelete: { deleteConversation(conversation.id) }
+                                )
+                                    .tag(SidebarSelection.conversation(conversation.id))
+                            }
                         }
                     }
                 }
@@ -79,6 +86,7 @@ private struct MacRootView: View {
                 }
             }
             .navigationSplitViewColumnWidth(min: 220, ideal: 260)
+            .searchable(text: $conversationSearch, placement: .sidebar, prompt: "Search chats")
             .scrollContentBackground(.hidden)
             .background(KishOSTheme.sidebarBackground)
         } detail: {
@@ -212,7 +220,11 @@ private struct MacRootView: View {
     }
 
     private var pendingDecisionConversations: [Conversation] {
-        workspace.conversations.filter { !$0.approvals.isEmpty }
+        filteredConversations.filter { !$0.approvals.isEmpty }
+    }
+
+    private var filteredConversations: [Conversation] {
+        workspace.conversations.filter { $0.matchesSearch(conversationSearch) }
     }
 
     private var activeProjectName: String {

@@ -80,6 +80,21 @@
       "priority": 5,
       "passes": true,
       "notes": "Renamed the camera/photo picker path to attachment-first semantics, removed Vision/OCR and No text found failure behavior from image picking, and added a core test proving image context does not require extracted text. Verified with .ralph/verify.sh."
+    },
+    {
+      "id": "US-006",
+      "title": "Search conversations",
+      "description": "Add minimal conversation search on Mac and iOS using shared matching across titles, project metadata, messages, attachments, and references.",
+      "acceptanceCriteria": [
+        "Mac sidebar has a native search field",
+        "iOS conversation overlay has a compact search field",
+        "Search matches conversation title, idea, project, branch, thread id, message text, attachment titles, and reference titles/paths",
+        "Question and conversation sections filter consistently",
+        "Verification command passes"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": "Added shared conversation search matching across title, idea, project, branch, thread id, message text, attachment names/text, and file/folder references. Added Mac sidebar search and iOS overlay search with compact no-match states. Verified with .ralph/verify.sh."
     }
   ]
 }
