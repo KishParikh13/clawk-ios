@@ -16,49 +16,72 @@ struct KishOSIOSRootView: View {
 
     var body: some View {
         NavigationStack {
-            ChatScreen(
-                client: client,
-                conversation: selectedConversation,
-                isSending: currentIsRunning,
-                approvals: selectedConversation?.approvals ?? [],
-                voice: voice,
-                onSend: send,
-                onQuestionAnswer: answerQuestion
-            )
-            .navigationTitle(selectedConversation?.title ?? "KishOS")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        showingConversations = true
-                    } label: {
-                        Image(systemName: "sidebar.left")
-                    }
-                    .accessibilityLabel("Conversations")
-                }
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    ChatScreen(
+                        client: client,
+                        conversation: selectedConversation,
+                        isSending: currentIsRunning,
+                        approvals: selectedConversation?.approvals ?? [],
+                        voice: voice,
+                        onSend: send,
+                        onQuestionAnswer: answerQuestion
+                    )
+                    .navigationTitle(selectedConversation?.title ?? "KishOS")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.22)) {
+                                    showingConversations = true
+                                }
+                            } label: {
+                                Image(systemName: "sidebar.left")
+                            }
+                            .accessibilityLabel("Conversations")
+                        }
 
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(action: startNewChat) {
-                        Image(systemName: "square.and.pencil")
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button(action: startNewChat) {
+                                Image(systemName: "square.and.pencil")
+                            }
+                            .accessibilityLabel("New chat")
+                        }
                     }
-                    .accessibilityLabel("New chat")
+
+                    if showingConversations {
+                        Color.black.opacity(0.22)
+                            .ignoresSafeArea()
+                            .onTapGesture {
+                                closeConversations()
+                            }
+                            .transition(.opacity)
+
+                        ConversationPicker(
+                            conversations: workspace.conversations,
+                            selectedID: selectedConversationID,
+                            onSelect: { id in
+                                selectedConversationID = id
+                                closeConversations()
+                            },
+                            onNewChat: {
+                                startNewChat()
+                                closeConversations()
+                            },
+                            onDelete: deleteConversation,
+                            onClose: closeConversations
+                        )
+                        .frame(width: sidebarWidth(for: geometry.size.width))
+                        .frame(maxHeight: .infinity)
+                        .background(IOSTheme.background)
+                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .shadow(color: .black.opacity(0.18), radius: 24, x: 10, y: 0)
+                        .padding(.vertical, 8)
+                        .padding(.leading, 8)
+                        .transition(.move(edge: .leading).combined(with: .opacity))
+                    }
                 }
-            }
-            .sheet(isPresented: $showingConversations) {
-                ConversationPicker(
-                    conversations: workspace.conversations,
-                    selectedID: selectedConversationID,
-                    onSelect: { id in
-                        selectedConversationID = id
-                        showingConversations = false
-                    },
-                    onNewChat: {
-                        startNewChat()
-                        showingConversations = false
-                    },
-                    onDelete: deleteConversation
-                )
-                .presentationDetents([.medium, .large])
+                .animation(.easeInOut(duration: 0.22), value: showingConversations)
             }
             .task {
                 await client.startHealthPolling()
@@ -83,6 +106,16 @@ struct KishOSIOSRootView: View {
 
     private func startNewChat() {
         selectedConversationID = nil
+    }
+
+    private func closeConversations() {
+        withAnimation(.easeInOut(duration: 0.22)) {
+            showingConversations = false
+        }
+    }
+
+    private func sidebarWidth(for containerWidth: CGFloat) -> CGFloat {
+        min(340, max(292, containerWidth * 0.86))
     }
 
     private func send(_ text: String) {
@@ -639,10 +672,10 @@ private struct IOSConnectionBar: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            StatusChip(title: "Mini", value: short(client.miniStatus), online: client.miniStatus == "Online")
-            StatusChip(title: "Agent", value: short(client.agentStatus), online: client.agentStatus == "Online")
-            StatusChip(title: "Chat", value: short(client.chatStatus), online: client.chatStatus == "Ready")
-            StatusChip(title: "Mic", value: voice.isRecording ? "On" : "Off", online: voice.isRecording)
+            StatusChip(title: "Mini", online: client.miniStatus == "Online")
+            StatusChip(title: "Agent", online: client.agentStatus == "Online")
+            StatusChip(title: "Chat", online: client.chatStatus == "Ready")
+            StatusChip(title: "Mic", online: voice.isRecording)
         }
         .lineLimit(1)
         .minimumScaleFactor(0.82)
@@ -652,21 +685,10 @@ private struct IOSConnectionBar: View {
         .background(.bar)
     }
 
-    private func short(_ value: String) -> String {
-        switch value {
-        case "Online":
-            return "On"
-        case "Offline":
-            return "Off"
-        default:
-            return value
-        }
-    }
 }
 
 private struct StatusChip: View {
     let title: String
-    let value: String
     let online: Bool
 
     var body: some View {
@@ -676,10 +698,10 @@ private struct StatusChip: View {
                 .frame(width: 7, height: 7)
             Text(title)
                 .foregroundStyle(.secondary)
-            Text(value)
-                .fontWeight(.semibold)
         }
         .font(.caption2)
+        .accessibilityLabel(title)
+        .accessibilityValue(online ? "On" : "Off")
     }
 }
 
@@ -689,6 +711,7 @@ private struct ConversationPicker: View {
     let onSelect: (UUID) -> Void
     let onNewChat: () -> Void
     let onDelete: (UUID) -> Void
+    let onClose: () -> Void
 
     var body: some View {
         NavigationStack {
@@ -728,6 +751,14 @@ private struct ConversationPicker: View {
             }
             .navigationTitle("Chats")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(action: onClose) {
+                        Image(systemName: "xmark")
+                    }
+                    .accessibilityLabel("Close conversations")
+                }
+            }
         }
     }
 }

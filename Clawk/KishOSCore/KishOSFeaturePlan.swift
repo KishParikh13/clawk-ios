@@ -85,12 +85,14 @@ enum KishOSMilestone: String, CaseIterable, Identifiable, Codable {
         case .glassesAudio:
             return [
                 "Pair glasses.",
-                "Confirm mic input route.",
-                "Confirm glasses audio route."
+                "Confirm the app reports the active input and output routes.",
+                "Capture dictation through the selected route.",
+                "Confirm the transcript lands in the composer before sending."
             ]
         case .glassesVision:
             return [
                 "Capture one explicit snapshot.",
+                "Review the image before sending.",
                 "Ask about the image.",
                 "Confirm nothing sends without action."
             ]
@@ -107,8 +109,12 @@ enum KishOSFeature: String, CaseIterable, Identifiable, Codable {
     case toolInventory
     case pushToTalk
     case iOSSharedShell
+    case audioRouteAwareness
     case audioRoutePicker
+    case glassesCaptureMode
+    case spokenReplies
     case explicitSnapshot
+    case snapshotReview
 
     var id: String { rawValue }
 
@@ -124,9 +130,9 @@ enum KishOSFeature: String, CaseIterable, Identifiable, Codable {
             return .macVoice
         case .iOSSharedShell:
             return .iOSParity
-        case .audioRoutePicker:
+        case .audioRouteAwareness, .audioRoutePicker, .glassesCaptureMode, .spokenReplies:
             return .glassesAudio
-        case .explicitSnapshot:
+        case .explicitSnapshot, .snapshotReview:
             return .glassesVision
         }
     }
@@ -149,10 +155,18 @@ enum KishOSFeature: String, CaseIterable, Identifiable, Codable {
             return "Dictation"
         case .iOSSharedShell:
             return "iOS shared shell"
+        case .audioRouteAwareness:
+            return "Audio route awareness"
         case .audioRoutePicker:
             return "Audio route picker"
+        case .glassesCaptureMode:
+            return "Glasses capture mode"
+        case .spokenReplies:
+            return "Spoken replies"
         case .explicitSnapshot:
             return "Explicit snapshot"
+        case .snapshotReview:
+            return "Snapshot review"
         }
     }
 }
@@ -180,7 +194,7 @@ enum KishOSFactoryPlan {
             state = .available
         case .connectionRecovery:
             state = .inProgress
-        case .audioRoutePicker, .explicitSnapshot:
+        case .audioRouteAwareness, .audioRoutePicker, .glassesCaptureMode, .spokenReplies, .explicitSnapshot, .snapshotReview:
             state = .planned
         }
         return KishOSCapability(id: feature, state: state)

@@ -17,7 +17,7 @@ struct KishOSMacApp: App {
         WindowGroup {
             MacRootView()
         }
-        .windowStyle(.titleBar)
+        .windowStyle(.hiddenTitleBar)
         .commands {
             SidebarCommands()
         }
@@ -28,11 +28,12 @@ private struct MacRootView: View {
     @StateObject private var client = KishAgentClient()
     @StateObject private var workspace = KishOSWorkspace()
     @StateObject private var voice = VoiceController()
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var selection: SidebarSelection? = .newChat
     @State private var conversationToRename: Conversation?
 
     var body: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
             List(selection: $selection) {
                 Section("Home") {
                     Label("New Chat", systemImage: "plus.bubble")
@@ -65,6 +66,7 @@ private struct MacRootView: View {
         } detail: {
             content
                 .frame(minWidth: 720, minHeight: 520)
+                .ignoresSafeArea(.container, edges: .top)
                 .task {
                     await client.startHealthPolling()
                 }
@@ -96,7 +98,8 @@ private struct MacRootView: View {
                 onRename: nil,
                 onDelete: nil,
                 onQuestionAnswer: nil,
-                voice: voice
+                voice: voice,
+                reservesTitleControlSpace: isSidebarCollapsed
             )
         case .conversation(let id):
             if let conversation = workspace.conversation(id: id) {
@@ -113,7 +116,8 @@ private struct MacRootView: View {
                     onRename: { conversationToRename = conversation },
                     onDelete: { deleteConversation(conversation.id) },
                     onQuestionAnswer: { approval, answer in answerQuestion(approval, answer: answer, in: conversation.id) },
-                    voice: voice
+                    voice: voice,
+                    reservesTitleControlSpace: isSidebarCollapsed
                 )
             } else {
                 EmptySelectionView()
@@ -123,6 +127,10 @@ private struct MacRootView: View {
         case .settings:
             SettingsView(client: client, voice: voice, storeError: workspace.storeError)
         }
+    }
+
+    private var isSidebarCollapsed: Bool {
+        columnVisibility == .detailOnly
     }
 
     private func retry(_ conversationId: UUID) {
@@ -291,6 +299,7 @@ private struct ChatView: View {
     let onDelete: (() -> Void)?
     let onQuestionAnswer: ((ApprovalRequest, String) -> Void)?
     @ObservedObject var voice: VoiceController
+    let reservesTitleControlSpace: Bool
 
     @State private var draft = ""
 
@@ -300,7 +309,8 @@ private struct ChatView: View {
                 title: title,
                 subtitle: subtitle,
                 onRename: onRename,
-                onDelete: onDelete
+                onDelete: onDelete,
+                reservesTitleControlSpace: reservesTitleControlSpace
             )
 
             ScrollViewReader { proxy in
@@ -382,6 +392,7 @@ private struct ChatHeader: View {
     let subtitle: String
     let onRename: (() -> Void)?
     let onDelete: (() -> Void)?
+    let reservesTitleControlSpace: Bool
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
@@ -414,7 +425,8 @@ private struct ChatHeader: View {
                 .menuStyle(.borderlessButton)
             }
         }
-        .padding(.horizontal, 28)
+        .padding(.leading, reservesTitleControlSpace ? 160 : 28)
+        .padding(.trailing, 28)
         .padding(.vertical, 16)
         .background(.bar)
     }
@@ -1153,10 +1165,9 @@ private struct ConnectionStatusBar: View {
     var body: some View {
         HStack(spacing: 12) {
             MiniStatusChip(title: "Mini", value: client.miniStatus)
-            MiniStatusChip(title: "HTTP", value: client.httpStatus)
             MiniStatusChip(title: "Agent", value: client.agentStatus)
             MiniStatusChip(title: "Chat", value: client.chatStatus)
-            MiniStatusChip(title: "Voice", value: voice.isRecording ? "Listening" : voice.status)
+            MiniStatusChip(title: "Mic", value: voice.isRecording ? "Listening" : voice.status)
             Spacer()
         }
         .font(.caption)
@@ -1177,8 +1188,6 @@ private struct MiniStatusChip: View {
                 .frame(width: 7, height: 7)
             Text(title)
                 .foregroundStyle(.secondary)
-            Text(value)
-                .foregroundStyle(.primary)
         }
     }
 
