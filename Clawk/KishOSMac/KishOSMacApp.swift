@@ -1787,93 +1787,84 @@ private struct RoadmapView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                Header(title: "Roadmap", subtitle: "Build order and test checkpoints")
+            VStack(alignment: .leading, spacing: 22) {
+                Header(title: "Roadmap", subtitle: "Done first. Next work at the bottom.")
 
-                ForEach(milestones) { milestone in
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack(spacing: 8) {
-                            Text(milestone.rawValue)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text(milestone.title)
-                                .font(.headline)
-                            Spacer()
-                            Text(milestone.goal)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
+                roadmapSection(
+                    title: "Done",
+                    capabilities: capabilities.filter { $0.state == .available },
+                    isDone: true
+                )
 
-                        let milestoneCapabilities = capabilities.filter { $0.milestone == milestone }
-                        if !milestoneCapabilities.isEmpty {
-                            LazyVGrid(
-                                columns: [GridItem(.adaptive(minimum: 150), spacing: 8, alignment: .leading)],
-                                alignment: .leading,
-                                spacing: 8
-                            ) {
-                                ForEach(milestoneCapabilities) { capability in
-                                    CapabilityPill(capability: capability)
-                                }
-                            }
-                        }
-
-                        VStack(alignment: .leading, spacing: 6) {
-                            ForEach(milestone.userCheckpoint, id: \.self) { checkpoint in
-                                HStack(alignment: .top, spacing: 7) {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .font(.caption2)
-                                        .foregroundStyle(.green)
-                                        .padding(.top, 3)
-                                    Text(checkpoint)
-                                        .font(.callout)
-                                }
-                            }
-                        }
-                    }
-                    .padding(14)
-                    .background(Color(nsColor: .windowBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(.quaternary)
-                    )
-                }
+                roadmapSection(
+                    title: "Not done",
+                    capabilities: capabilities.filter { $0.state != .available },
+                    isDone: false
+                )
             }
             .padding(22)
         }
         .background(Color(nsColor: .controlBackgroundColor))
     }
-}
 
-private struct CapabilityPill: View {
-    let capability: KishOSCapability
+    private func roadmapSection(title: String, capabilities: [KishOSCapability], isDone: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(title)
+                .font(.title3.weight(.semibold))
 
-    var body: some View {
-        HStack(spacing: 5) {
-            Circle()
-                .fill(tint)
-                .frame(width: 6, height: 6)
-            Text(capability.title)
-            Text(capability.state.rawValue)
-                .foregroundStyle(.secondary)
+            ForEach(milestones) { milestone in
+                let items = capabilities.filter { $0.milestone == milestone }
+                if !items.isEmpty {
+                    VStack(alignment: .leading, spacing: 7) {
+                        Text("\(milestone.rawValue) \(milestone.title)")
+                            .font(.headline.weight(.bold))
+
+                        ForEach(items) { capability in
+                            RoadmapChecklistRow(
+                                title: capability.title,
+                                detail: isDone ? nil : notDoneDetail(for: capability),
+                                isDone: isDone
+                            )
+                        }
+                    }
+                }
+            }
         }
-        .font(.caption)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
-        .background(.background, in: Capsule())
-        .overlay(Capsule().stroke(.quaternary))
     }
 
-    private var tint: Color {
+    private func notDoneDetail(for capability: KishOSCapability) -> String {
         switch capability.state {
-        case .available:
-            return .green
         case .inProgress:
-            return .orange
+            return "In progress"
         case .planned:
-            return .secondary
+            return "Planned"
         case .off:
-            return .red
+            return "Off"
+        case .available:
+            return ""
+        }
+    }
+}
+
+private struct RoadmapChecklistRow: View {
+    let title: String
+    let detail: String?
+    let isDone: Bool
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: isDone ? "checkmark.circle.fill" : "circle")
+                .font(.caption)
+                .foregroundStyle(isDone ? .green : .secondary)
+
+            Text(title)
+                .font(.callout)
+
+            if let detail, !detail.isEmpty {
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 }
