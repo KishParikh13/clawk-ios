@@ -24,6 +24,7 @@ struct KishOSIOSRootView: View {
     @StateObject private var workspace = KishOSWorkspace()
     @StateObject private var voice = VoiceController()
     @StateObject private var audio = AudioRouteMonitor()
+    @StateObject private var wake = WakePhraseController()
 
     @State private var selection: IOSChatSelection = .newChat
     @State private var showingConversations = false
@@ -90,8 +91,22 @@ struct KishOSIOSRootView: View {
                     .task {
                         audio.start()
                     }
+                    .task {
+                        refreshWakeSuppression()
+                    }
                     .onChange(of: voice.isRecording) { _, isRecording in
                         audio.refresh(isRecording: isRecording)
+                        refreshWakeSuppression()
+                    }
+                    .onChange(of: currentIsRunning) {
+                        refreshWakeSuppression()
+                    }
+                    .onChange(of: liveCallSession?.id) {
+                        refreshWakeSuppression()
+                    }
+                    .onChange(of: wake.detectionCount) { oldValue, newValue in
+                        guard newValue > oldValue else { return }
+                        handleWakeDetected()
                     }
                 }
                 .disabled(showingConversations)
@@ -110,6 +125,7 @@ struct KishOSIOSRootView: View {
                         selectedID: selectedConversationID,
                         client: client,
                         audio: audio,
+                        wake: wake,
                         onSelect: { id in
                             selection = .conversation(id)
                             closeConversations()
@@ -175,7 +191,20 @@ struct KishOSIOSRootView: View {
     }
 
     private func startLiveCall() {
+        guard liveCallSession == nil else { return }
         liveCallSession = LiveCallSession(conversationID: selectedConversationID)
+    }
+
+    private func handleWakeDetected() {
+        guard !currentIsRunning else { return }
+        if showingConversations {
+            closeConversations()
+        }
+        startLiveCall()
+    }
+
+    private func refreshWakeSuppression() {
+        wake.updateSuppression(voice.isRecording || currentIsRunning || liveCallSession != nil)
     }
 
     private func closeConversations() {
@@ -1105,6 +1134,7 @@ private struct ConversationPicker: View {
     let selectedID: UUID?
     @ObservedObject var client: KishAgentClient
     @ObservedObject var audio: AudioRouteMonitor
+    @ObservedObject var wake: WakePhraseController
     let onSelect: (UUID) -> Void
     let onNewChat: () -> Void
     let onDelete: (UUID) -> Void
@@ -1174,6 +1204,7 @@ private struct ConversationPicker: View {
             IOSConnectionPanel(
                 client: client,
                 audio: audio,
+                wake: wake,
                 agentURLDraft: $agentURLDraft,
                 onReconnect: reconnect,
                 onReset: resetAgentURL
@@ -1309,6 +1340,7 @@ private struct ConversationPicker: View {
 private struct IOSConnectionPanel: View {
     @ObservedObject var client: KishAgentClient
     @ObservedObject var audio: AudioRouteMonitor
+    @ObservedObject var wake: WakePhraseController
     @Binding var agentURLDraft: String
     let onReconnect: () -> Void
     let onReset: () -> Void
@@ -1369,6 +1401,28 @@ private struct IOSConnectionPanel: View {
                 }
                 .buttonStyle(.plain)
 
+                Button {
+                    wake.setEnabled(!wake.isEnabled)
+                } label: {
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(wakeTint)
+                            .frame(width: 7, height: 7)
+                        Text("Wake")
+                            .font(.caption.weight(.medium))
+                    }
+                    .padding(.horizontal, 10)
+                    .frame(height: 30)
+                    .background(IOSTheme.secondaryBackground, in: Capsule())
+                    .overlay(Capsule().stroke(IOSTheme.hairline))
+                }
+                .buttonStyle(.plain)
+
+                Text(wake.statusLabel)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+
                 Text(audio.routeDetail)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -1380,6 +1434,13 @@ private struct IOSConnectionPanel: View {
         .padding(10)
         .background(IOSTheme.elevatedBackground.opacity(0.74), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(IOSTheme.hairline))
+    }
+
+    private var wakeTint: Color {
+        if wake.isListening {
+            return .green
+        }
+        return wake.isEnabled ? .orange : .secondary
     }
 }
 

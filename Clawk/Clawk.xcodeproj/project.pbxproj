@@ -34,6 +34,7 @@
 		74447BD79F9DC75DD521D7A0 /* VoiceController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6FCA3DA8BE4B76E2A75DD23 /* VoiceController.swift */; };
 		7666D67DF6BC6148AD3BF7EC /* KishOSFeaturePlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47CE52D6F6C3B3791B2874BF /* KishOSFeaturePlan.swift */; };
 		796D01F37B7326029545C9CC /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67B095715EC6D0657B8EF344 /* Config.swift */; };
+		7C1A4E540A1E4F4C8D242101 /* WakePhraseController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C1A4E530A1E4F4C8D242101 /* WakePhraseController.swift */; };
 		81647F15B3A011B04AB5F3D2 /* ConversationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9440A6471F2F63111CB49B46 /* ConversationStore.swift */; };
 		89D3E7F8286D9CCF88978618 /* VoiceController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6FCA3DA8BE4B76E2A75DD23 /* VoiceController.swift */; };
 		8EA0D1D5917487AA69C3C978 /* KishOSMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61D254F493783576AAF3D410 /* KishOSMacApp.swift */; };
@@ -90,6 +91,7 @@
 		6D66F48AF324D00EE65E801F /* Conversation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Conversation.swift; sourceTree = "<group>"; };
 		716ADB4A08C625A0CEDDD715 /* ThinkingStepsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThinkingStepsView.swift; sourceTree = "<group>"; };
 		75E96526AACAAE4CF7DDFF93 /* ConversationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationTests.swift; sourceTree = "<group>"; };
+		7C1A4E530A1E4F4C8D242101 /* WakePhraseController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WakePhraseController.swift; sourceTree = "<group>"; };
 		7A7C72458B614B76F4F4240A /* ClawkApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClawkApp.swift; sourceTree = "<group>"; };
 		9440A6471F2F63111CB49B46 /* ConversationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationStore.swift; sourceTree = "<group>"; };
 		A733B461015C5FBC8DD9322E /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
@@ -156,6 +158,7 @@
 				F9BBBBEE778FA330FC6B2E92 /* SettingsView.swift */,
 				62E583E96D8734B6045457C9 /* SharedViews.swift */,
 				716ADB4A08C625A0CEDDD715 /* ThinkingStepsView.swift */,
+				7C1A4E530A1E4F4C8D242101 /* WakePhraseController.swift */,
 			);
 			path = Clawk;
 			sourceTree = "<group>";
@@ -333,6 +336,7 @@
 				25CAA09F895BFE70FB427FE6 /* SettingsView.swift in Sources */,
 				13D989FEDC813BC32D37A770 /* SharedViews.swift in Sources */,
 				F94BAA3974D909D010154B90 /* ThinkingStepsView.swift in Sources */,
+				7C1A4E540A1E4F4C8D242101 /* WakePhraseController.swift in Sources */,
 				89D3E7F8286D9CCF88978618 /* VoiceController.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
