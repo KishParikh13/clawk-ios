@@ -1,0 +1,47 @@
+# Fastlane configuration for Clawk iOS
+# This file contains the fastlane.tools configuration
+# Documentation: https://docs.fastlane.tools
+
+default_platform(:ios)
+
+platform :ios do
+  desc "Build and upload to TestFlight"
+  lane :beta do
+    # Ensure we have the latest certificates
+    sync_code_signing(type: "appstore")
+    
+    # Build the app
+    build_app(
+      scheme: "Clawk",
+      export_method: "app-store"
+    )
+    
+    # Upload to TestFlight
+    upload_to_testflight(
+      skip_waiting_for_build_processing: true,
+      notify_external_testers: false
+    )
+  end
+  
+  desc "Build for testing (no upload)"
+  lane :build do
+    build_app(
+      scheme: "Clawk",
+      export_method: "development",
+      skip_package_pkg: true
+    )
+  end
+  
+  desc "Register devices and sync provisioning"
+  lane :register_device do
+    device_name = prompt(text: "Device name: ")
+    device_udid = prompt(text: "Device UDID: ")
+    
+    register_device(
+      name: device_name,
+      udid: device_udid
+    )
+    
+    sync_code_signing(type: "development", force: true)
+  end
+end
