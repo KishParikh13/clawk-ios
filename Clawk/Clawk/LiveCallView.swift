@@ -67,10 +67,7 @@ struct LiveCallView: View {
                                 .id("active-user")
                         }
 
-                        if !controller.activeAgentText.isEmpty {
-                            LiveCallPartialRow(title: "KishOS", text: controller.activeAgentText)
-                                .id("active-agent")
-                        } else if controller.state == .agentThinking || controller.state == .sendingTurn {
+                        if shouldShowThinkingRow {
                             LiveCallThinkingRow()
                                 .id("thinking")
                         }
@@ -138,16 +135,23 @@ struct LiveCallView: View {
 
     private func scrollToBottom(_ proxy: ScrollViewProxy) {
         withAnimation(.easeOut(duration: 0.18)) {
-            if !controller.activeAgentText.isEmpty {
-                proxy.scrollTo("active-agent", anchor: .bottom)
-            } else if !controller.activeUserPartial.isEmpty {
+            if !controller.activeUserPartial.isEmpty {
                 proxy.scrollTo("active-user", anchor: .bottom)
             } else if let last = conversation?.messages.last {
                 proxy.scrollTo(last.id, anchor: .bottom)
-            } else {
+            } else if shouldShowThinkingRow {
                 proxy.scrollTo("thinking", anchor: .bottom)
             }
         }
+    }
+
+    private var shouldShowThinkingRow: Bool {
+        guard controller.state == .agentThinking || controller.state == .sendingTurn else { return false }
+        let activeAssistantMessage = conversation?.messages.last {
+            $0.sender == .agent && $0.deliveryState == .sending
+        }
+        let activeText = activeAssistantMessage?.text.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return activeText.isEmpty
     }
 }
 

@@ -110,6 +110,21 @@
       "priority": 7,
       "passes": true,
       "notes": "Updated LiveCallController so interrupt/end cancels the local stream, clears the running assistant placeholder, sends /cancel to kish-agent for the active thread, and treats cancelled streams as neutral instead of a failure banner. Verified with .ralph/verify.sh."
+    },
+    {
+      "id": "US-008",
+      "title": "Remove duplicate live-call assistant text",
+      "description": "Use the saved conversation transcript as the only visible source for streamed assistant text in live call mode.",
+      "acceptanceCriteria": [
+        "Live call mode does not render a separate duplicate KishOS partial row while the assistant message is already streaming in the transcript",
+        "The thinking spinner appears only before assistant text starts",
+        "Scroll-to-bottom still tracks user partials, streaming assistant messages, and thinking state",
+        "Active assistant text can still drive speech and Live Activity detail internally",
+        "Verification command passes"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": "Removed the duplicate live-call KishOS partial row. The saved transcript row is now the only visible assistant stream, while activeAgentText remains internal for speech and Live Activity. The thinking spinner only appears before active assistant text starts. Verified with .ralph/verify.sh."
     }
   ]
 }
