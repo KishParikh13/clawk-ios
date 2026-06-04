@@ -176,8 +176,12 @@ final class KishOSWorkspace: ObservableObject {
     func mergeRemoteConversations(_ remote: [Conversation]) {
         guard !remote.isEmpty else { return }
         var byId = Dictionary(uniqueKeysWithValues: conversations.map { ($0.id, $0) })
-        for conversation in remote {
-            byId[conversation.id] = conversation
+        for remoteConversation in remote {
+            if let localConversation = byId[remoteConversation.id],
+               localConversation.updatedAt >= remoteConversation.updatedAt {
+                continue
+            }
+            byId[remoteConversation.id] = remoteConversation
         }
         conversations = byId.values.sorted { $0.updatedAt > $1.updatedAt }
         persist()

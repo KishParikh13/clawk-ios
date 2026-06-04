@@ -71,6 +71,71 @@ final class ConversationStoreTests: XCTestCase {
         XCTAssertTrue(store.savedConversations.isEmpty)
     }
 
+    func testRemoteMergeKeepsNewerLocalConversation() {
+        let store = MemoryConversationStore()
+        let workspace = KishOSWorkspace(store: store)
+        let id = UUID(uuidString: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")!
+        let older = Date(timeIntervalSince1970: 100)
+        let newer = Date(timeIntervalSince1970: 200)
+        var local = Conversation(id: id, firstMessage: "local", now: older)
+        local.updatedAt = newer
+        var remote = Conversation(id: id, firstMessage: "remote", now: older)
+        remote.updatedAt = older
+
+        workspace.mergeRemoteConversations([local])
+        workspace.mergeRemoteConversations([remote])
+
+        let merged = workspace.conversation(id: id)
+        XCTAssertEqual(merged?.title, "local")
+        XCTAssertEqual(merged?.updatedAt, newer)
+        XCTAssertEqual(store.savedConversations.first?.title, "local")
+    }
+
+    func testRemoteMergeAppliesNewerRemoteConversation() {
+        let store = MemoryConversationStore()
+        let workspace = KishOSWorkspace(store: store)
+        let id = UUID(uuidString: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")!
+        let older = Date(timeIntervalSince1970: 100)
+        let newer = Date(timeIntervalSince1970: 200)
+        var local = Conversation(id: id, firstMessage: "local", now: older)
+        local.updatedAt = older
+        var remote = Conversation(id: id, firstMessage: "remote", now: older)
+        remote.updatedAt = newer
+
+        workspace.mergeRemoteConversations([local])
+        workspace.mergeRemoteConversations([remote])
+
+        let merged = workspace.conversation(id: id)
+        XCTAssertEqual(merged?.title, "remote")
+        XCTAssertEqual(merged?.updatedAt, newer)
+        XCTAssertEqual(store.savedConversations.first?.title, "remote")
+    }
+
+    func testRemoteMergeAddsNewConversationAndSortsByUpdatedAt() {
+        let store = MemoryConversationStore()
+        let workspace = KishOSWorkspace(store: store)
+        let older = Date(timeIntervalSince1970: 100)
+        let newer = Date(timeIntervalSince1970: 200)
+        var oldConversation = Conversation(
+            id: UUID(uuidString: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")!,
+            firstMessage: "old",
+            now: older
+        )
+        oldConversation.updatedAt = older
+        var newConversation = Conversation(
+            id: UUID(uuidString: "11111111-2222-3333-4444-555555555555")!,
+            firstMessage: "new",
+            now: newer
+        )
+        newConversation.updatedAt = newer
+
+        workspace.mergeRemoteConversations([oldConversation])
+        workspace.mergeRemoteConversations([newConversation])
+
+        XCTAssertEqual(workspace.conversations.map(\.title), ["new", "old"])
+        XCTAssertEqual(store.savedConversations.map(\.title), ["new", "old"])
+    }
+
     private func temporaryFileURL() -> URL {
         FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
