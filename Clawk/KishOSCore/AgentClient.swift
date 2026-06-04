@@ -517,6 +517,11 @@ final class AttachmentPayloadCache {
         try? fileManager.removeItem(at: directory)
     }
 
+    func cachedFileURL(for attachment: ChatAttachment) -> URL? {
+        guard let localFilename = attachment.localFilename else { return nil }
+        return try? resolvedURL(for: localFilename)
+    }
+
     private func resolvedURL(for localFilename: String) throws -> URL {
         let parts = localFilename.split(separator: "/", omittingEmptySubsequences: true).map(String.init)
         guard parts.count == 2,

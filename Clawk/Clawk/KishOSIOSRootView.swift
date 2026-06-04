@@ -1123,13 +1123,18 @@ private struct IOSComposer: View {
             do {
                 let payload = try AttachmentPayloadCache.shared.payload(for: attachment)
                 let uploaded = try await client.uploadAttachment(payload)
-                AttachmentPayloadCache.shared.removePayload(for: attachment)
+                let shouldKeepLocalPreview = attachment.kind == .image || uploaded.kind == ChatAttachment.Kind.image.rawValue
+                if !shouldKeepLocalPreview {
+                    AttachmentPayloadCache.shared.removePayload(for: attachment)
+                }
                 updateAttachment(attachmentId) { current in
                     current.title = uploaded.filename
                     current.mimeType = uploaded.mimeType ?? current.mimeType
                     current.byteCount = uploaded.byteCount ?? current.byteCount
                     current.uploadId = uploaded.id
-                    current.localFilename = nil
+                    if !shouldKeepLocalPreview {
+                        current.localFilename = nil
+                    }
                     current.uploadState = .ready
                     current.uploadError = nil
                     if uploaded.kind == ChatAttachment.Kind.image.rawValue {
@@ -1474,6 +1479,14 @@ private struct IOSContextChip: View {
     var onRetry: (() -> Void)?
 
     var body: some View {
+        if attachment.kind == .image, let previewImage {
+            imagePreview(previewImage)
+        } else {
+            fallbackChip
+        }
+    }
+
+    private var fallbackChip: some View {
         HStack(spacing: 6) {
             Image(systemName: iconName)
                 .font(.caption2.weight(.semibold))
@@ -1512,6 +1525,91 @@ private struct IOSContextChip: View {
         .padding(.vertical, 5)
         .background(IOSTheme.elevatedBackground, in: Capsule())
         .overlay(Capsule().stroke(strokeTint))
+    }
+
+    private func imagePreview(_ image: UIImage) -> some View {
+        ZStack(alignment: .topTrailing) {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+                .frame(width: previewWidth, height: previewHeight)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(strokeTint, lineWidth: attachment.uploadState == .failed ? 1.2 : 0.8)
+                )
+                .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+            if let onRemove {
+                Button(action: onRemove) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 24, height: 24)
+                        .background(.black.opacity(0.62), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .padding(5)
+                .accessibilityLabel("Remove \(attachment.title)")
+            }
+
+            if attachment.uploadState == .uploading {
+                previewStatusOverlay {
+                    ProgressView()
+                        .tint(.white)
+                        .controlSize(.small)
+                    Text("Uploading")
+                        .font(.caption2.weight(.semibold))
+                }
+            } else if attachment.uploadState == .failed {
+                previewStatusOverlay {
+                    if let onRetry {
+                        Button(action: onRetry) {
+                            Label("Retry", systemImage: "arrow.clockwise")
+                                .font(.caption2.weight(.bold))
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.white)
+                        .accessibilityLabel("Retry \(attachment.title)")
+                    } else {
+                        Text("Failed")
+                            .font(.caption2.weight(.bold))
+                    }
+                }
+            }
+        }
+        .frame(width: previewWidth, height: previewHeight)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(attachment.title)
+        .accessibilityValue(stateText ?? "Ready")
+    }
+
+    private func previewStatusOverlay<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        VStack {
+            Spacer()
+            HStack(spacing: 5) {
+                content()
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(.black.opacity(0.62), in: Capsule())
+            .padding(6)
+        }
+        .frame(width: previewWidth, height: previewHeight)
+    }
+
+    private var previewImage: UIImage? {
+        guard let url = AttachmentPayloadCache.shared.cachedFileURL(for: attachment) else { return nil }
+        return UIImage(contentsOfFile: url.path)
+    }
+
+    private var previewWidth: CGFloat {
+        onRemove == nil ? 220 : 118
+    }
+
+    private var previewHeight: CGFloat {
+        onRemove == nil ? 150 : 88
     }
 
     private var iconName: String {
