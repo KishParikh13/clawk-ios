@@ -98,6 +98,7 @@ private struct MacRootView: View {
                 onRename: nil,
                 onDelete: nil,
                 onQuestionAnswer: nil,
+                onQuestionCancel: nil,
                 voice: voice,
                 reservesTitleControlSpace: isSidebarCollapsed
             )
@@ -116,6 +117,7 @@ private struct MacRootView: View {
                     onRename: { conversationToRename = conversation },
                     onDelete: { deleteConversation(conversation.id) },
                     onQuestionAnswer: { approval, answer in answerQuestion(approval, answer: answer, in: conversation.id) },
+                    onQuestionCancel: { approval in cancelQuestion(approval, in: conversation.id) },
                     voice: voice,
                     reservesTitleControlSpace: isSidebarCollapsed
                 )
@@ -157,6 +159,17 @@ private struct MacRootView: View {
             do {
                 try await client.answerApproval(approval.id, approved: true, answer: trimmed)
                 workspace.recordApprovalAnswerAccepted(approval.id, in: conversationId)
+            } catch {
+                workspace.recordApprovalAnswerFailure(error.localizedDescription, in: conversationId)
+            }
+        }
+    }
+
+    private func cancelQuestion(_ approval: ApprovalRequest, in conversationId: UUID) {
+        Task {
+            do {
+                try await client.answerApproval(approval.id, approved: false)
+                workspace.recordApprovalAnswerRejected(approval.id, in: conversationId)
             } catch {
                 workspace.recordApprovalAnswerFailure(error.localizedDescription, in: conversationId)
             }
@@ -297,6 +310,7 @@ private struct ChatView: View {
     let onRename: (() -> Void)?
     let onDelete: (() -> Void)?
     let onQuestionAnswer: ((ApprovalRequest, String) -> Void)?
+    let onQuestionCancel: ((ApprovalRequest) -> Void)?
     @ObservedObject var voice: VoiceController
     let reservesTitleControlSpace: Bool
 
@@ -351,9 +365,15 @@ private struct ChatView: View {
             }
 
             if let pendingQuestion = approvals.first {
-                QuestionComposer(approval: pendingQuestion) { answer in
-                    onQuestionAnswer?(pendingQuestion, answer)
-                }
+                QuestionComposer(
+                    approval: pendingQuestion,
+                    onAnswer: { answer in
+                        onQuestionAnswer?(pendingQuestion, answer)
+                    },
+                    onCancel: {
+                        onQuestionCancel?(pendingQuestion)
+                    }
+                )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             } else {
                 ChatComposer(
@@ -774,6 +794,7 @@ private enum MarkdownNormalizer {
 private struct QuestionComposer: View {
     let approval: ApprovalRequest
     let onAnswer: (String) -> Void
+    let onCancel: () -> Void
 
     @State private var selectedOptions: Set<String> = []
     @State private var otherAnswer = ""
@@ -843,10 +864,26 @@ private struct QuestionComposer: View {
             }
 
             if allowsMultiple && !selectedOptions.isEmpty {
-                Button("Send selected") {
-                    onAnswer(selectedOptions.sorted().joined(separator: ", "))
+                HStack {
+                    Button("Cancel", role: .cancel, action: onCancel)
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+
+                    Spacer()
+
+                    Button("Send selected") {
+                        onAnswer(selectedOptions.sorted().joined(separator: ", "))
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
-                .buttonStyle(.borderedProminent)
+            } else {
+                HStack {
+                    Button("Cancel", role: .cancel, action: onCancel)
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+
+                    Spacer()
+                }
             }
         }
         .padding(12)

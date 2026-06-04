@@ -171,6 +171,15 @@ final class KishOSWorkspace: ObservableObject {
         }
     }
 
+    func recordApprovalAnswerRejected(_ approvalId: String, in id: UUID, now: Date = Date()) {
+        updateConversation(id) { conversation in
+            conversation.approvals.removeAll { $0.id == approvalId }
+            conversation.events.append("cancelled question")
+            conversation.events = Array(conversation.events.suffix(30))
+            conversation.updatedAt = now
+        }
+    }
+
     func recordApprovalAnswerFailure(_ message: String, in id: UUID, now: Date = Date()) {
         guard !message.isEmpty else { return }
         updateConversation(id) { conversation in

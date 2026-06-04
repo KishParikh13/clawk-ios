@@ -181,6 +181,21 @@ final class ConversationStoreTests: XCTestCase {
         XCTAssertEqual(store.savedConversations.first?.approvals, [])
     }
 
+    func testApprovalAnswerRejectedClearsPendingApproval() {
+        let store = MemoryConversationStore()
+        let workspace = KishOSWorkspace(store: store)
+        let conversation = workspace.createConversation(firstMessage: "first")
+        let approval = makeApproval(id: "approval-1", threadId: conversation.threadId)
+
+        workspace.setApprovals([approval], for: conversation.id)
+        workspace.recordApprovalAnswerRejected(approval.id, in: conversation.id)
+
+        let updated = workspace.conversation(id: conversation.id)
+        XCTAssertEqual(updated?.approvals, [])
+        XCTAssertTrue(updated?.events.contains("cancelled question") == true)
+        XCTAssertEqual(store.savedConversations.first?.approvals, [])
+    }
+
     func testApprovalAnswerFailureKeepsPendingApproval() {
         let store = MemoryConversationStore()
         let workspace = KishOSWorkspace(store: store)

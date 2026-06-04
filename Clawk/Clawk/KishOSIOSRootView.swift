@@ -31,7 +31,8 @@ struct KishOSIOSRootView: View {
                         voice: voice,
                         onSend: send,
                         onRetry: retrySelectedConversation,
-                        onQuestionAnswer: answerQuestion
+                        onQuestionAnswer: answerQuestion,
+                        onQuestionCancel: cancelQuestion
                     )
                     .navigationTitle(selectedConversation?.title ?? "KishOS")
                     .navigationBarTitleDisplayMode(.inline)
@@ -225,6 +226,19 @@ struct KishOSIOSRootView: View {
         }
     }
 
+    private func cancelQuestion(_ approval: ApprovalRequest) {
+        guard let selectedConversationID else { return }
+
+        Task {
+            do {
+                try await client.answerApproval(approval.id, approved: false)
+                workspace.recordApprovalAnswerRejected(approval.id, in: selectedConversationID)
+            } catch {
+                workspace.recordApprovalAnswerFailure(error.localizedDescription, in: selectedConversationID)
+            }
+        }
+    }
+
     private func deleteConversation(_ id: UUID) {
         workspace.deleteConversation(id)
         if selectedConversationID == id {
@@ -266,6 +280,7 @@ private struct ChatScreen: View {
     let onSend: (String) -> Void
     let onRetry: (() -> Void)?
     let onQuestionAnswer: (ApprovalRequest, String) -> Void
+    let onQuestionCancel: (ApprovalRequest) -> Void
 
     @State private var draft = ""
 
@@ -308,9 +323,15 @@ private struct ChatScreen: View {
             }
 
             if let pendingQuestion = approvals.first {
-                IOSQuestionComposer(approval: pendingQuestion) { answer in
-                    onQuestionAnswer(pendingQuestion, answer)
-                }
+                IOSQuestionComposer(
+                    approval: pendingQuestion,
+                    onAnswer: { answer in
+                        onQuestionAnswer(pendingQuestion, answer)
+                    },
+                    onCancel: {
+                        onQuestionCancel(pendingQuestion)
+                    }
+                )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             } else {
                 IOSComposer(
@@ -587,6 +608,7 @@ private struct IOSComposer: View {
 private struct IOSQuestionComposer: View {
     let approval: ApprovalRequest
     let onAnswer: (String) -> Void
+    let onCancel: () -> Void
 
     @State private var selectedOptions: Set<String> = []
     @State private var otherAnswer = ""
@@ -662,10 +684,26 @@ private struct IOSQuestionComposer: View {
             }
 
             if allowsMultiple && !selectedOptions.isEmpty {
-                Button("Send selected") {
-                    onAnswer(selectedOptions.sorted().joined(separator: ", "))
+                HStack {
+                    Button("Cancel", role: .cancel, action: onCancel)
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+
+                    Spacer()
+
+                    Button("Send selected") {
+                        onAnswer(selectedOptions.sorted().joined(separator: ", "))
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
-                .buttonStyle(.borderedProminent)
+            } else {
+                HStack {
+                    Button("Cancel", role: .cancel, action: onCancel)
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+
+                    Spacer()
+                }
             }
         }
         .padding(12)
