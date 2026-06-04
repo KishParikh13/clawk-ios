@@ -4,6 +4,8 @@ backend/node_modules/
 # Build
 *.xcuserstate
 *.xcworkspace/xcuserdata/
+**/*.xcodeproj/xcuserdata/
+*.sync-conflict-*
 DerivedData/
 build/
 
