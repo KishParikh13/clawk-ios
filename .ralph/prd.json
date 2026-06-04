@@ -170,6 +170,22 @@
       "priority": 11,
       "passes": true,
       "notes": "Live-call header now hides healthy Ready/Online connection labels, keeps call state, elapsed time, and route visible, and only shows Mini/Chat labels when those statuses are degraded. Verified with .ralph/verify.sh."
+    },
+    {
+      "id": "US-012",
+      "title": "Preserve project selection in live calls",
+      "description": "Starting a live call from new chat should use the currently selected project/folder for the first spoken turn, matching text chat behavior.",
+      "acceptanceCriteria": [
+        "LiveCallSession carries the pending project when starting from new chat",
+        "LiveCallController creates or queues new call conversations with that project name/path",
+        "Live-call streaming sends the conversation projectPath to kish-agent",
+        "Starting a live call in an existing thread continues that thread's locked project",
+        "Pending project is cleared after the call creates a conversation",
+        "Verification command passes"
+      ],
+      "priority": 12,
+      "passes": true,
+      "notes": "LiveCallSession now carries the pending project for new-chat calls, LiveCallController creates/queues first call turns with that project name/path, streaming sends conversation.projectPath, and the pending project clears once the call creates a conversation. Existing-thread calls continue the locked conversation project. Verified with .ralph/verify.sh."
     }
   ]
 }

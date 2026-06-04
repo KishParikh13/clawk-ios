@@ -15,6 +15,7 @@ struct LiveCallView: View {
         voice: VoiceController,
         audio: AudioRouteMonitor,
         initialConversationID: UUID?,
+        initialProject: Project?,
         onConversationStarted: @escaping (UUID) -> Void,
         onDismiss: @escaping () -> Void
     ) {
@@ -29,6 +30,7 @@ struct LiveCallView: View {
                 workspace: workspace,
                 voice: voice,
                 initialConversationID: initialConversationID,
+                initialProject: initialProject,
                 onConversationStarted: onConversationStarted
             )
         )

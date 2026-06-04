@@ -50,6 +50,7 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
     private let client: KishAgentClient
     private let workspace: KishOSWorkspace
     private let voice: VoiceController
+    private let initialProject: Project?
     private let onConversationStarted: (UUID) -> Void
     private let speechSynthesizer = AVSpeechSynthesizer()
     private let liveActivity = KishOSLiveActivityController.shared
@@ -63,12 +64,14 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
         workspace: KishOSWorkspace,
         voice: VoiceController,
         initialConversationID: UUID?,
+        initialProject: Project?,
         onConversationStarted: @escaping (UUID) -> Void
     ) {
         self.client = client
         self.workspace = workspace
         self.voice = voice
         self.activeConversationID = initialConversationID
+        self.initialProject = initialConversationID == nil ? initialProject : nil
         self.onConversationStarted = onConversationStarted
         super.init()
         speechSynthesizer.delegate = self
@@ -258,7 +261,8 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
                 let result = try await self.client.sendStreaming(
                     payload,
                     threadId: conversation.threadId,
-                    conversationId: conversation.id
+                    conversationId: conversation.id,
+                    projectPath: conversation.projectPath
                 ) { event in
                     await self.handleStreamEvent(event, conversationId: conversation.id)
                 }
@@ -312,7 +316,11 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
            let existing = workspace.appendUserMessage(text, to: activeConversationID) {
             return existing
         }
-        return workspace.createConversation(firstMessage: text)
+        return workspace.createConversation(
+            firstMessage: text,
+            projectPath: initialProject?.path,
+            projectName: initialProject?.name
+        )
     }
 
     private func queueUserTurn(_ text: String) -> Conversation {
@@ -320,7 +328,11 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
            let existing = workspace.queueUserMessage(text, to: activeConversationID) {
             return existing
         }
-        return workspace.queueConversation(firstMessage: text)
+        return workspace.queueConversation(
+            firstMessage: text,
+            projectPath: initialProject?.path,
+            projectName: initialProject?.name
+        )
     }
 
     private func handleStreamEvent(_ event: AgentStreamEvent, conversationId: UUID) async {

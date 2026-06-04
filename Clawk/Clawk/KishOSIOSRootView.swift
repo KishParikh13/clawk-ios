@@ -18,6 +18,7 @@ private enum IOSChatSelection: Equatable {
 private struct LiveCallSession: Identifiable {
     let id = UUID()
     let conversationID: UUID?
+    let project: Project?
 }
 
 struct KishOSIOSRootView: View {
@@ -189,8 +190,10 @@ struct KishOSIOSRootView: View {
                 voice: voice,
                 audio: audio,
                 initialConversationID: session.conversationID,
+                initialProject: session.project,
                 onConversationStarted: { id in
                     selection = .conversation(id)
+                    pendingProject = nil
                 },
                 onDismiss: {
                     liveCallSession = nil
@@ -247,7 +250,7 @@ struct KishOSIOSRootView: View {
     private func startLiveCall() {
         guard liveCallSession == nil else { return }
         wake.updateSuppression(true)
-        liveCallSession = LiveCallSession(conversationID: selectedConversationID)
+        liveCallSession = LiveCallSession(conversationID: selectedConversationID, project: selectedConversationID == nil ? pendingProject : nil)
     }
 
     private func handleWakeDetected() {
