@@ -153,13 +153,12 @@ private struct MacRootView: View {
     private func answerQuestion(_ approval: ApprovalRequest, answer: String, in conversationId: UUID) {
         let trimmed = answer.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        workspace.appendActivity("answered question", to: conversationId)
-        workspace.removeApproval(approval.id, from: conversationId)
         Task {
             do {
                 try await client.answerApproval(approval.id, approved: true, answer: trimmed)
+                workspace.recordApprovalAnswerAccepted(approval.id, in: conversationId)
             } catch {
-                workspace.appendActivity(error.localizedDescription, to: conversationId)
+                workspace.recordApprovalAnswerFailure(error.localizedDescription, in: conversationId)
             }
         }
     }

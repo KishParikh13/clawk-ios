@@ -214,14 +214,13 @@ struct KishOSIOSRootView: View {
         guard let selectedConversationID else { return }
         let trimmed = answer.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        workspace.appendActivity("answered question", to: selectedConversationID)
-        workspace.removeApproval(approval.id, from: selectedConversationID)
 
         Task {
             do {
                 try await client.answerApproval(approval.id, approved: true, answer: trimmed)
+                workspace.recordApprovalAnswerAccepted(approval.id, in: selectedConversationID)
             } catch {
-                workspace.appendActivity(error.localizedDescription, to: selectedConversationID)
+                workspace.recordApprovalAnswerFailure(error.localizedDescription, in: selectedConversationID)
             }
         }
     }

@@ -136,10 +136,58 @@ final class ConversationStoreTests: XCTestCase {
         XCTAssertEqual(store.savedConversations.map(\.title), ["new", "old"])
     }
 
+    func testApprovalAnswerAcceptedClearsPendingApproval() {
+        let store = MemoryConversationStore()
+        let workspace = KishOSWorkspace(store: store)
+        let conversation = workspace.createConversation(firstMessage: "first")
+        let approval = makeApproval(id: "approval-1", threadId: conversation.threadId)
+
+        workspace.setApprovals([approval], for: conversation.id)
+        workspace.recordApprovalAnswerAccepted(approval.id, in: conversation.id)
+
+        let updated = workspace.conversation(id: conversation.id)
+        XCTAssertEqual(updated?.approvals, [])
+        XCTAssertTrue(updated?.events.contains("answered question") == true)
+        XCTAssertEqual(store.savedConversations.first?.approvals, [])
+    }
+
+    func testApprovalAnswerFailureKeepsPendingApproval() {
+        let store = MemoryConversationStore()
+        let workspace = KishOSWorkspace(store: store)
+        let conversation = workspace.createConversation(firstMessage: "first")
+        let approval = makeApproval(id: "approval-1", threadId: conversation.threadId)
+
+        workspace.setApprovals([approval], for: conversation.id)
+        workspace.recordApprovalAnswerFailure("approval not found", in: conversation.id)
+
+        let updated = workspace.conversation(id: conversation.id)
+        XCTAssertEqual(updated?.approvals, [approval])
+        XCTAssertTrue(updated?.events.contains("approval not found") == true)
+        XCTAssertEqual(store.savedConversations.first?.approvals, [approval])
+    }
+
     private func temporaryFileURL() -> URL {
         FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
             .appendingPathComponent("conversations.json")
+    }
+
+    private func makeApproval(id: String, threadId: String) -> ApprovalRequest {
+        ApprovalRequest(
+            id: id,
+            threadId: threadId,
+            questions: [
+                ApprovalQuestion(
+                    header: "Question",
+                    question: "Continue?",
+                    multiSelect: false,
+                    options: [ApprovalOption(label: "Yes", description: "Continue")]
+                )
+            ],
+            createdAt: 1760000000,
+            expiresAt: 1760000300,
+            summary: "Continue?"
+        )
     }
 }
 
