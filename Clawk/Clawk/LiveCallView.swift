@@ -175,7 +175,9 @@ private struct LiveCallHeader: View {
                     Text(state.label)
                     Text(Self.formatElapsed(elapsedSeconds))
                     Text(route)
-                    Text(chatStatus)
+                    ForEach(connectionLabels, id: \.self) { label in
+                        Text(label)
+                    }
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -202,6 +204,25 @@ private struct LiveCallHeader: View {
         let minutes = seconds / 60
         let remaining = seconds % 60
         return String(format: "%d:%02d", minutes, remaining)
+    }
+
+    private var connectionLabels: [String] {
+        var labels: [String] = []
+        if !Self.isHealthyMiniStatus(miniStatus) {
+            labels.append("Mini \(miniStatus)")
+        }
+        if !Self.isHealthyChatStatus(chatStatus) {
+            labels.append("Chat \(chatStatus)")
+        }
+        return labels
+    }
+
+    private static func isHealthyMiniStatus(_ status: String) -> Bool {
+        status == "Online" || status == "Checking"
+    }
+
+    private static func isHealthyChatStatus(_ status: String) -> Bool {
+        status == "Ready" || status == "Idle" || status == "Checking" || status == "Sending"
     }
 }
 

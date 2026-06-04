@@ -155,6 +155,21 @@
       "priority": 10,
       "passes": true,
       "notes": "Muting now cancels pending utterance finalization, stops recording, clears active user partial text, and prevents stale speech from remaining sendable. Unmute still resumes normal listening setup. Verified with .ralph/verify.sh."
+    },
+    {
+      "id": "US-011",
+      "title": "Simplify live-call header status",
+      "description": "Remove redundant healthy connection text from the live-call header while preserving degraded connection visibility.",
+      "acceptanceCriteria": [
+        "Live-call header no longer shows normal Ready/Online connection text",
+        "Degraded Mini or Chat connection labels still appear when not healthy",
+        "Call state, elapsed time, and active audio route remain visible",
+        "Header layout stays compact with no extra helper text",
+        "Verification command passes"
+      ],
+      "priority": 11,
+      "passes": true,
+      "notes": "Live-call header now hides healthy Ready/Online connection labels, keeps call state, elapsed time, and route visible, and only shows Mini/Chat labels when those statuses are degraded. Verified with .ralph/verify.sh."
     }
   ]
 }
