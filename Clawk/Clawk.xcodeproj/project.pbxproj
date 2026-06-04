@@ -14,6 +14,8 @@
 		05611179C1434EA208CEF157 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 641664BF743F7453554BF316 /* ContentView.swift */; };
 		13D989FEDC813BC32D37A770 /* SharedViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62E583E96D8734B6045457C9 /* SharedViews.swift */; };
 		1692CD406B2399800935424F /* GatewayChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A89B98F7C06E05A590381E2 /* GatewayChatView.swift */; };
+		16C0AA8B9F1D44F3A62F7C01 /* LiveCallController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16C0AA899F1D44F3A62F7C01 /* LiveCallController.swift */; };
+		16C0AA8C9F1D44F3A62F7C01 /* LiveCallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16C0AA8A9F1D44F3A62F7C01 /* LiveCallView.swift */; };
 		182D525333F502C00AAF063A /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 227D7EAA8BA576629153DE13 /* HomeView.swift */; };
 		1AFDFA4A2AC2CEE77CD4C856 /* ConversationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9440A6471F2F63111CB49B46 /* ConversationStore.swift */; };
 		1CDB7EBBF886F63BA1460083 /* GatewayProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA864BCB8E5CB4DC707F8304 /* GatewayProtocol.swift */; };
@@ -68,6 +70,8 @@
 		185356541FC2C862D03FB7A2 /* KishOSMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KishOSMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		19D33F8BBD6020A9F8F43C0D /* DashboardAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardAPIClient.swift; sourceTree = "<group>"; };
 		1FA8028A0517DF1195BA7854 /* SessionChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionChatView.swift; sourceTree = "<group>"; };
+		16C0AA899F1D44F3A62F7C01 /* LiveCallController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveCallController.swift; sourceTree = "<group>"; };
+		16C0AA8A9F1D44F3A62F7C01 /* LiveCallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveCallView.swift; sourceTree = "<group>"; };
 		227D7EAA8BA576629153DE13 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		29F2E674D7271CB505C361DF /* ChatHistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatHistoryStore.swift; sourceTree = "<group>"; };
 		3BC007C150922B621095A597 /* MoreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoreView.swift; sourceTree = "<group>"; };
@@ -142,6 +146,8 @@
 				227D7EAA8BA576629153DE13 /* HomeView.swift */,
 				645A6F0E142A68BB46D021FB /* Info.plist */,
 				D387D95D0B541A46D648E1C0 /* KishOSIOSRootView.swift */,
+				16C0AA899F1D44F3A62F7C01 /* LiveCallController.swift */,
+				16C0AA8A9F1D44F3A62F7C01 /* LiveCallView.swift */,
 				DC24015FE274E4F772DA97DD /* LiveDashboardTabs.swift */,
 				E59A447B777F28AAE47C8346 /* MemoryView.swift */,
 				AB9ECBC77D8360B0E33A59D8 /* MessageStore.swift */,
@@ -317,6 +323,8 @@
 				7666D67DF6BC6148AD3BF7EC /* KishOSFeaturePlan.swift in Sources */,
 				5693E81908F23485ACF4340B /* KishOSIOSRootView.swift in Sources */,
 				E0764B563F6690479678CB27 /* KishOSWorkspace.swift in Sources */,
+				16C0AA8B9F1D44F3A62F7C01 /* LiveCallController.swift in Sources */,
+				16C0AA8C9F1D44F3A62F7C01 /* LiveCallView.swift in Sources */,
 				BEA296B530D3EE0B1A1037F2 /* LiveDashboardTabs.swift in Sources */,
 				948B83E8BA1F40E0036CA590 /* MemoryView.swift in Sources */,
 				2808C6EC9F10FBF1D766B1E0 /* MessageStore.swift in Sources */,

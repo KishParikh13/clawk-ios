@@ -14,6 +14,11 @@ private enum IOSChatSelection: Equatable {
     case conversation(UUID)
 }
 
+private struct LiveCallSession: Identifiable {
+    let id = UUID()
+    let conversationID: UUID?
+}
+
 struct KishOSIOSRootView: View {
     @StateObject private var client = KishAgentClient()
     @StateObject private var workspace = KishOSWorkspace()
@@ -23,6 +28,7 @@ struct KishOSIOSRootView: View {
     @State private var selection: IOSChatSelection = .newChat
     @State private var showingConversations = false
     @State private var isDrainingQueuedMessages = false
+    @State private var liveCallSession: LiveCallSession?
 
     var body: some View {
         GeometryReader { geometry in
@@ -57,10 +63,17 @@ struct KishOSIOSRootView: View {
                         }
 
                         ToolbarItem(placement: .topBarTrailing) {
-                            Button(action: startNewChat) {
-                                Image(systemName: "square.and.pencil")
+                            HStack(spacing: 14) {
+                                Button(action: startLiveCall) {
+                                    Image(systemName: "phone.fill")
+                                }
+                                .accessibilityLabel("Start call")
+
+                                Button(action: startNewChat) {
+                                    Image(systemName: "square.and.pencil")
+                                }
+                                .accessibilityLabel("New chat")
                             }
-                            .accessibilityLabel("New chat")
                         }
                     }
                     .toolbar(showingConversations ? .hidden : .visible, for: .navigationBar)
@@ -123,6 +136,21 @@ struct KishOSIOSRootView: View {
             }
             .animation(.easeInOut(duration: 0.22), value: showingConversations)
         }
+        .fullScreenCover(item: $liveCallSession) { session in
+            LiveCallView(
+                client: client,
+                workspace: workspace,
+                voice: voice,
+                audio: audio,
+                initialConversationID: session.conversationID,
+                onConversationStarted: { id in
+                    selection = .conversation(id)
+                },
+                onDismiss: {
+                    liveCallSession = nil
+                }
+            )
+        }
     }
 
     private var selectedConversation: Conversation? {
@@ -143,6 +171,10 @@ struct KishOSIOSRootView: View {
 
     private func startNewChat() {
         selection = .newChat
+    }
+
+    private func startLiveCall() {
+        liveCallSession = LiveCallSession(conversationID: selectedConversationID)
     }
 
     private func closeConversations() {
@@ -579,19 +611,21 @@ private struct IOSActivityBlock: View {
     let previousUserText: String
     let isRunning: Bool
     @State private var isExpanded = true
+    private let disclosureAnimation = Animation.spring(response: 0.32, dampingFraction: 0.86)
 
     var body: some View {
         if !visibleEvents.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 7) {
                 Button {
-                    withAnimation(.easeInOut(duration: 0.18)) {
+                    withAnimation(disclosureAnimation) {
                         isExpanded.toggle()
                     }
                 } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        Image(systemName: "chevron.right")
                             .font(.caption2.weight(.semibold))
                             .frame(width: 10)
+                            .rotationEffect(.degrees(isExpanded ? 90 : 0))
                         Text("\(visibleEvents.count) Steps")
                             .font(.caption.weight(.semibold))
                         if isRunning {
@@ -606,7 +640,7 @@ private struct IOSActivityBlock: View {
                 .buttonStyle(.plain)
 
                 if isExpanded {
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 7) {
                         ForEach(Array(visibleEvents.suffix(8).enumerated()), id: \.offset) { _, event in
                             HStack(alignment: .top, spacing: 8) {
                                 if isRunning && event == visibleEvents.last {
@@ -626,18 +660,19 @@ private struct IOSActivityBlock: View {
                             }
                         }
                     }
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .padding(.leading, 1)
+                    .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(IOSTheme.secondaryBackground, in: RoundedRectangle(cornerRadius: 13))
-            .overlay(RoundedRectangle(cornerRadius: 13).stroke(IOSTheme.hairline))
+            .padding(.vertical, 1)
+            .clipped()
+            .animation(disclosureAnimation, value: isExpanded)
+            .animation(disclosureAnimation, value: visibleEvents.count)
             .onAppear {
                 isExpanded = isRunning
             }
             .onChange(of: isRunning) { _, newValue in
-                withAnimation(.easeInOut(duration: 0.2)) {
+                withAnimation(disclosureAnimation) {
                     isExpanded = newValue
                 }
             }
