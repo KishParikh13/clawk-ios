@@ -837,7 +837,7 @@ private struct IOSActivityBlock: View {
     let messageText: String
     let previousUserText: String
     let isRunning: Bool
-    @State private var isExpanded = true
+    @State private var isExpanded = false
     private let disclosureAnimation = Animation.spring(response: 0.32, dampingFraction: 0.86)
 
     var body: some View {
@@ -888,14 +888,6 @@ private struct IOSActivityBlock: View {
             .clipped()
             .animation(disclosureAnimation, value: isExpanded)
             .animation(disclosureAnimation, value: visibleEvents.count)
-            .onAppear {
-                isExpanded = isRunning
-            }
-            .onChange(of: isRunning) { _, newValue in
-                withAnimation(disclosureAnimation) {
-                    isExpanded = newValue
-                }
-            }
         }
     }
 

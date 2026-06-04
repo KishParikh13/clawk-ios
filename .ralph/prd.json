@@ -17,8 +17,8 @@
         "Verification command passes"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented collapsed-by-default Steps disclosures for iOS and Mac activity blocks while preserving the running spinner in the collapsed header. Verified with .ralph/verify.sh."
     },
     {
       "id": "US-002",
