@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		008080B3368DE6AEA80E6807 /* ApprovalQueueView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE29A68B30630F58BCB47CF0 /* ApprovalQueueView.swift */; };
+		018A2D510D40E2F17AF8C201 /* AudioRouteMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 018A2D500D40E2F17AF8C201 /* AudioRouteMonitor.swift */; };
+		018A2D520D40E2F17AF8C201 /* AudioRouteMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 018A2D500D40E2F17AF8C201 /* AudioRouteMonitor.swift */; };
 		04F144AAB362A6236543697B /* GatewayConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BF9B02D88EDF9A8620601CA /* GatewayConnection.swift */; };
 		05611179C1434EA208CEF157 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 641664BF743F7453554BF316 /* ContentView.swift */; };
 		13D989FEDC813BC32D37A770 /* SharedViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62E583E96D8734B6045457C9 /* SharedViews.swift */; };
@@ -62,6 +64,7 @@
 
 /* Begin PBXFileReference section */
 		04F0A10E61286CFABA0ACA0C /* AgentClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentClientTests.swift; sourceTree = "<group>"; };
+		018A2D500D40E2F17AF8C201 /* AudioRouteMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRouteMonitor.swift; sourceTree = "<group>"; };
 		185356541FC2C862D03FB7A2 /* KishOSMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KishOSMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		19D33F8BBD6020A9F8F43C0D /* DashboardAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardAPIClient.swift; sourceTree = "<group>"; };
 		1FA8028A0517DF1195BA7854 /* SessionChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionChatView.swift; sourceTree = "<group>"; };
@@ -108,6 +111,7 @@
 			isa = PBXGroup;
 			children = (
 				4A57A732EA4AFC2B553AF70A /* AgentClient.swift */,
+				018A2D500D40E2F17AF8C201 /* AudioRouteMonitor.swift */,
 				6D66F48AF324D00EE65E801F /* Conversation.swift */,
 				9440A6471F2F63111CB49B46 /* ConversationStore.swift */,
 				47CE52D6F6C3B3791B2874BF /* KishOSFeaturePlan.swift */,
@@ -291,6 +295,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AF059C6FC928B2316266DA4A /* AgentClient.swift in Sources */,
+				018A2D510D40E2F17AF8C201 /* AudioRouteMonitor.swift in Sources */,
 				57022D80604899DEC98B40DB /* AgentLogsView.swift in Sources */,
 				008080B3368DE6AEA80E6807 /* ApprovalQueueView.swift in Sources */,
 				E5B9761377A5DDC85827D781 /* ChatDetailView.swift in Sources */,
@@ -339,6 +344,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				B8036E2296F7628A5C0572CE /* AgentClient.swift in Sources */,
+				018A2D520D40E2F17AF8C201 /* AudioRouteMonitor.swift in Sources */,
 				6B004850282B901FDC7DFBCF /* Conversation.swift in Sources */,
 				1AFDFA4A2AC2CEE77CD4C856 /* ConversationStore.swift in Sources */,
 				D8B63FA9F24AA1FF0F35754C /* KishOSFeaturePlan.swift in Sources */,

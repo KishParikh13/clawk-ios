@@ -38,9 +38,15 @@ final class KishOSWorkspace: ObservableObject {
         }
     }
 
-    func createConversation(firstMessage: String, now: Date = Date(), deliveryState: MessageDeliveryState = .sending) -> Conversation {
+    func createConversation(
+        firstMessage: String,
+        now: Date = Date(),
+        deliveryState: MessageDeliveryState = .sending,
+        attachments: [ChatAttachment] = []
+    ) -> Conversation {
         var conversation = Conversation(firstMessage: firstMessage, now: now)
         conversation.messages[0].deliveryState = deliveryState
+        conversation.messages[0].attachments = attachments
         conversation.isRunning = deliveryState == .sending
         if deliveryState == .queued {
             conversation.events = ["saved locally", "will send when connected"]
@@ -50,9 +56,15 @@ final class KishOSWorkspace: ObservableObject {
         return conversation
     }
 
-    func appendUserMessage(_ text: String, to id: UUID, now: Date = Date(), deliveryState: MessageDeliveryState = .sending) -> Conversation? {
+    func appendUserMessage(
+        _ text: String,
+        to id: UUID,
+        now: Date = Date(),
+        deliveryState: MessageDeliveryState = .sending,
+        attachments: [ChatAttachment] = []
+    ) -> Conversation? {
         guard let index = conversations.firstIndex(where: { $0.id == id }) else { return nil }
-        conversations[index].messages.append(ChatMessage(sender: .user, text: text, createdAt: now, deliveryState: deliveryState))
+        conversations[index].messages.append(ChatMessage(sender: .user, text: text, createdAt: now, deliveryState: deliveryState, attachments: attachments))
         conversations[index].events = deliveryState == .queued
             ? ["saved locally", "will send when connected"]
             : ["sent to kish-agent", "continuing \(conversations[index].threadId)"]
@@ -65,12 +77,12 @@ final class KishOSWorkspace: ObservableObject {
         return conversation
     }
 
-    func queueConversation(firstMessage: String, now: Date = Date()) -> Conversation {
-        createConversation(firstMessage: firstMessage, now: now, deliveryState: .queued)
+    func queueConversation(firstMessage: String, now: Date = Date(), attachments: [ChatAttachment] = []) -> Conversation {
+        createConversation(firstMessage: firstMessage, now: now, deliveryState: .queued, attachments: attachments)
     }
 
-    func queueUserMessage(_ text: String, to id: UUID, now: Date = Date()) -> Conversation? {
-        appendUserMessage(text, to: id, now: now, deliveryState: .queued)
+    func queueUserMessage(_ text: String, to id: UUID, now: Date = Date(), attachments: [ChatAttachment] = []) -> Conversation? {
+        appendUserMessage(text, to: id, now: now, deliveryState: .queued, attachments: attachments)
     }
 
     func prepareRetryLastFailedMessage(in id: UUID, now: Date = Date()) -> (conversation: Conversation, message: String)? {
@@ -80,7 +92,8 @@ final class KishOSWorkspace: ObservableObject {
             return nil
         }
 
-        let message = conversations[index].messages[messageIndex].text
+        let userMessage = conversations[index].messages[messageIndex]
+        let message = messageTextForAgent(userMessage.text, attachments: userMessage.attachments)
         conversations[index].messages[messageIndex].deliveryState = .sending
         conversations[index].events = ["retrying request", "continuing \(conversations[index].threadId)"]
         conversations[index].isRunning = true
@@ -110,7 +123,8 @@ final class KishOSWorkspace: ObservableObject {
             return nil
         }
 
-        let message = conversations[conversationIndex].messages[messageIndex].text
+        let userMessage = conversations[conversationIndex].messages[messageIndex]
+        let message = messageTextForAgent(userMessage.text, attachments: userMessage.attachments)
         conversations[conversationIndex].messages[messageIndex].deliveryState = .sending
         conversations[conversationIndex].events = ["sending queued message", "continuing \(conversations[conversationIndex].threadId)"]
         conversations[conversationIndex].isRunning = true

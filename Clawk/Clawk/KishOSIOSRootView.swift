@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 private enum IOSTheme {
     static let background = Color(uiColor: .systemBackground)
@@ -17,6 +18,7 @@ struct KishOSIOSRootView: View {
     @StateObject private var client = KishAgentClient()
     @StateObject private var workspace = KishOSWorkspace()
     @StateObject private var voice = VoiceController()
+    @StateObject private var audio = AudioRouteMonitor()
 
     @State private var selection: IOSChatSelection = .newChat
     @State private var showingConversations = false
@@ -30,9 +32,11 @@ struct KishOSIOSRootView: View {
                         client: client,
                         conversation: selectedConversation,
                         isSending: currentIsRunning,
+                        runState: selectedConversation?.runState,
                         queuedMessageCount: selectedConversation?.queuedUserMessageCount ?? workspace.queuedMessageCount,
                         approvals: selectedConversation?.approvals ?? [],
                         voice: voice,
+                        audio: audio,
                         onSend: send,
                         onRetry: retrySelectedConversation,
                         onQuestionAnswer: answerQuestion,
@@ -69,8 +73,15 @@ struct KishOSIOSRootView: View {
                     .task {
                         await startQueuedMessageLoop()
                     }
+                    .task {
+                        audio.start()
+                    }
+                    .onChange(of: voice.isRecording) { _, isRecording in
+                        audio.refresh(isRecording: isRecording)
+                    }
                 }
                 .disabled(showingConversations)
+                .accessibilityHidden(showingConversations)
 
                 if showingConversations {
                     Color.black.opacity(0.22)
@@ -83,6 +94,8 @@ struct KishOSIOSRootView: View {
                     ConversationPicker(
                         conversations: workspace.conversations,
                         selectedID: selectedConversationID,
+                        client: client,
+                        audio: audio,
                         onSelect: { id in
                             selection = .conversation(id)
                             closeConversations()
@@ -142,25 +155,25 @@ struct KishOSIOSRootView: View {
         min(356, max(304, containerWidth * 0.84))
     }
 
-    private func send(_ text: String) {
+    private func send(_ text: String, attachments: [ChatAttachment]) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
         if client.isDisconnected {
-            queue(trimmed)
+            queue(trimmed, attachments: attachments)
             return
         }
 
         let conversation: Conversation
         if let selectedConversationID,
-           let existing = workspace.appendUserMessage(trimmed, to: selectedConversationID) {
+           let existing = workspace.appendUserMessage(trimmed, to: selectedConversationID, attachments: attachments) {
             conversation = existing
         } else {
-            conversation = workspace.createConversation(firstMessage: trimmed)
+            conversation = workspace.createConversation(firstMessage: trimmed, attachments: attachments)
             selection = .conversation(conversation.id)
         }
 
-        sendPreparedMessage(trimmed, in: conversation, messageID: conversation.messages.last?.id)
+        sendPreparedMessage(messageTextForAgent(trimmed, attachments: attachments), in: conversation, messageID: conversation.messages.last?.id)
     }
 
     private func sendPreparedMessage(_ text: String, in conversation: Conversation, messageID: UUID?) {
@@ -183,13 +196,13 @@ struct KishOSIOSRootView: View {
         }
     }
 
-    private func queue(_ text: String) {
+    private func queue(_ text: String, attachments: [ChatAttachment]) {
         let conversation: Conversation
         if let selectedConversationID,
-           let existing = workspace.queueUserMessage(text, to: selectedConversationID) {
+           let existing = workspace.queueUserMessage(text, to: selectedConversationID, attachments: attachments) {
             conversation = existing
         } else {
-            conversation = workspace.queueConversation(firstMessage: text)
+            conversation = workspace.queueConversation(firstMessage: text, attachments: attachments)
         }
         selection = .conversation(conversation.id)
     }
@@ -364,15 +377,18 @@ private struct ChatScreen: View {
     @ObservedObject var client: KishAgentClient
     let conversation: Conversation?
     let isSending: Bool
+    let runState: ConversationRunState?
     let queuedMessageCount: Int
     let approvals: [ApprovalRequest]
     @ObservedObject var voice: VoiceController
-    let onSend: (String) -> Void
+    @ObservedObject var audio: AudioRouteMonitor
+    let onSend: (String, [ChatAttachment]) -> Void
     let onRetry: (() -> Void)?
     let onQuestionAnswer: (ApprovalRequest, String) -> Void
     let onQuestionCancel: (ApprovalRequest) -> Void
 
     @State private var draft = ""
+    @State private var pendingAttachments: [ChatAttachment] = []
 
     private var messages: [ChatMessage] {
         conversation?.messages ?? []
@@ -434,15 +450,17 @@ private struct ChatScreen: View {
             } else {
                 IOSComposer(
                     draft: $draft,
+                    attachments: $pendingAttachments,
                     isSending: client.isSending,
                     isDisabled: client.isSending || isSending,
+                    runState: runState,
                     voice: voice,
                     onSend: sendDraft
                 )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
-            IOSConnectionBar(client: client, voice: voice)
+            IOSConnectionBar(client: client, voice: voice, audio: audio)
         }
         .background(IOSTheme.background)
         .animation(.easeInOut(duration: 0.2), value: approvals.first?.id)
@@ -453,8 +471,10 @@ private struct ChatScreen: View {
     private func sendDraft() {
         let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !client.isSending, !isSending, approvals.isEmpty else { return }
+        let attachments = pendingAttachments
         draft = ""
-        onSend(trimmed)
+        pendingAttachments = []
+        onSend(trimmed, attachments)
     }
 
     private func scrollToBottom(_ proxy: ScrollViewProxy) {
@@ -492,6 +512,14 @@ private struct IOSMessageTurn: View {
                 }
 
                 VStack(alignment: message.sender == .user ? .trailing : .leading, spacing: 5) {
+                    if !message.attachments.isEmpty {
+                        VStack(alignment: message.sender == .user ? .trailing : .leading, spacing: 5) {
+                            ForEach(message.attachments) { attachment in
+                                IOSContextChip(attachment: attachment)
+                            }
+                        }
+                    }
+
                     IOSMarkdownText(text: message.text, isUser: message.sender == .user)
                         .padding(.horizontal, message.sender == .user ? 13 : 0)
                         .padding(.vertical, message.sender == .user ? 10 : 0)
@@ -689,34 +717,62 @@ private struct IOSActivityBlock: View {
 
 private struct IOSComposer: View {
     @Binding var draft: String
+    @Binding var attachments: [ChatAttachment]
     let isSending: Bool
     let isDisabled: Bool
+    let runState: ConversationRunState?
     @ObservedObject var voice: VoiceController
     let onSend: () -> Void
 
     var body: some View {
-        HStack(spacing: 10) {
-            Button(action: toggleDictation) {
-                Image(systemName: voice.isRecording ? "stop.circle.fill" : "mic")
-            }
-            .foregroundStyle(voice.isRecording ? .red : .secondary)
-            .disabled(isDisabled)
-
-            TextField(voice.isRecording ? "Listening" : "Ask KishOS", text: $draft, axis: .vertical)
-                .lineLimit(1...5)
-                .textFieldStyle(.plain)
-                .onSubmit(onSend)
-                .disabled(isDisabled)
-
-            Button(action: onSend) {
-                if isSending {
-                    ProgressView()
-                } else {
-                    Image(systemName: "paperplane.fill")
+        VStack(alignment: .leading, spacing: 8) {
+            if !attachments.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(attachments) { attachment in
+                            IOSContextChip(attachment: attachment) {
+                                attachments.removeAll { $0.id == attachment.id }
+                            }
+                        }
+                    }
                 }
             }
-            .buttonStyle(.borderedProminent)
-            .disabled(isDisabled || isSending || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+            HStack(spacing: 10) {
+                Button(action: toggleDictation) {
+                    Image(systemName: voice.isRecording ? "stop.circle.fill" : "mic")
+                }
+                .foregroundStyle(voice.isRecording ? .red : .secondary)
+                .disabled(isDisabled)
+                .accessibilityLabel(voice.isRecording ? "Stop dictation" : "Start dictation")
+
+                Button(action: attachClipboard) {
+                    Image(systemName: "paperclip")
+                }
+                .foregroundStyle(.secondary)
+                .disabled(isDisabled || clipboardText() == nil)
+                .accessibilityLabel("Attach clipboard")
+
+                TextField(voice.isRecording ? "Listening" : "Ask KishOS", text: $draft, axis: .vertical)
+                    .lineLimit(1...5)
+                    .textFieldStyle(.plain)
+                    .onSubmit(onSend)
+                    .disabled(isDisabled)
+
+                if let runState, runState.isActive {
+                    IOSRunStatePill(runState: runState)
+                }
+
+                Button(action: onSend) {
+                    if isSending {
+                        ProgressView()
+                    } else {
+                        Image(systemName: "paperplane.fill")
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(isDisabled || isSending || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
         }
         .opacity(isDisabled ? 0.62 : 1)
         .padding(10)
@@ -725,6 +781,17 @@ private struct IOSComposer: View {
         .padding(.horizontal, 12)
         .padding(.top, 8)
         .padding(.bottom, 8)
+    }
+
+    private func attachClipboard() {
+        guard let text = clipboardText() else { return }
+        attachments.append(.textContext(text, title: "Clipboard"))
+    }
+
+    private func clipboardText() -> String? {
+        let text = UIPasteboard.general.string?.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let text, !text.isEmpty else { return nil }
+        return text
     }
 
     private func toggleDictation() {
@@ -879,13 +946,14 @@ private struct IOSQuestionComposer: View {
 private struct IOSConnectionBar: View {
     @ObservedObject var client: KishAgentClient
     @ObservedObject var voice: VoiceController
+    @ObservedObject var audio: AudioRouteMonitor
 
     var body: some View {
         HStack(spacing: 8) {
             StatusChip(title: "Mini", value: client.miniStatus)
             StatusChip(title: "Agent", value: client.agentStatus)
             StatusChip(title: "Chat", value: client.chatStatus)
-            StatusChip(title: "Mic", value: voice.isRecording ? "Listening" : voice.status)
+            StatusChip(title: "Audio", value: voice.isRecording ? "Listening" : audio.statusLabel)
         }
         .lineLimit(1)
         .minimumScaleFactor(0.82)
@@ -916,7 +984,7 @@ private struct StatusChip: View {
 
     private var tint: Color {
         switch value {
-        case "Online", "Ready", "On":
+        case "Online", "Ready", "On", "System", "Bluetooth", "Glasses":
             return .green
         case "Sending", "Checking", "Listening", "Question":
             return .orange
@@ -928,19 +996,84 @@ private struct StatusChip: View {
     }
 }
 
+private struct IOSRunStatePill: View {
+    let runState: ConversationRunState
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Circle()
+                .fill(runState.isActive ? .orange : .green)
+                .frame(width: 6, height: 6)
+            Text(runState.label)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(IOSTheme.elevatedBackground, in: Capsule())
+        .overlay(Capsule().stroke(IOSTheme.hairline))
+    }
+}
+
+private struct IOSContextChip: View {
+    let attachment: ChatAttachment
+    var onRemove: (() -> Void)?
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: iconName)
+                .font(.caption2.weight(.semibold))
+            Text(attachment.title)
+                .font(.caption.weight(.medium))
+                .lineLimit(1)
+            if let onRemove {
+                Button(action: onRemove) {
+                    Image(systemName: "xmark")
+                        .font(.caption2.weight(.bold))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Remove \(attachment.title)")
+            }
+        }
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(IOSTheme.elevatedBackground, in: Capsule())
+        .overlay(Capsule().stroke(IOSTheme.hairline))
+    }
+
+    private var iconName: String {
+        switch attachment.kind {
+        case .text:
+            return "text.alignleft"
+        case .image:
+            return "photo"
+        case .file:
+            return "doc"
+        case .url:
+            return "link"
+        }
+    }
+}
+
 private struct ConversationPicker: View {
     let conversations: [Conversation]
     let selectedID: UUID?
+    @ObservedObject var client: KishAgentClient
+    @ObservedObject var audio: AudioRouteMonitor
     let onSelect: (UUID) -> Void
     let onNewChat: () -> Void
     let onDelete: (UUID) -> Void
     let onClose: () -> Void
 
+    @State private var agentURLDraft = ""
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Chats")
+                    Text("KishOS")
                         .font(.headline.weight(.semibold))
                         .foregroundStyle(.primary)
                     Text(conversationCountText)
@@ -962,24 +1095,46 @@ private struct ConversationPicker: View {
                 .accessibilityLabel("Close conversations")
             }
             .padding(.horizontal, 18)
-            .padding(.top, 22)
+            .padding(.top, 64)
             .padding(.bottom, 14)
 
             Button(action: onNewChat) {
-                HStack(spacing: 10) {
+                HStack(spacing: 12) {
                     Image(systemName: "plus.bubble")
-                        .font(.system(size: 17, weight: .semibold))
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 34, height: 34)
+                        .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+
                     Text("New chat")
                         .font(.callout.weight(.semibold))
+                        .foregroundStyle(.primary)
+
                     Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.tertiary)
                 }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 14)
-                .frame(height: 48)
-                .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .shadow(color: Color.accentColor.opacity(0.22), radius: 12, x: 0, y: 6)
+                .padding(.horizontal, 12)
+                .frame(height: 58)
+                .background(IOSTheme.elevatedBackground.opacity(0.82), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(IOSTheme.hairline)
+                )
             }
             .buttonStyle(.plain)
+            .padding(.horizontal, 18)
+            .padding(.bottom, 12)
+
+            IOSConnectionPanel(
+                client: client,
+                audio: audio,
+                agentURLDraft: $agentURLDraft,
+                onReconnect: reconnect,
+                onReset: resetAgentURL
+            )
             .padding(.horizontal, 18)
             .padding(.bottom, 18)
 
@@ -1037,6 +1192,10 @@ private struct ConversationPicker: View {
             }
         }
         .background(IOSTheme.groupedBackground.opacity(0.72))
+        .onAppear {
+            agentURLDraft = client.agentURLString
+            audio.refresh()
+        }
     }
 
     private var sortedConversations: [Conversation] {
@@ -1056,6 +1215,73 @@ private struct ConversationPicker: View {
         formatter.unitsStyle = .abbreviated
         return formatter
     }()
+
+    private func reconnect() {
+        _ = client.updateBaseURL(agentURLDraft)
+        Task {
+            await client.reconnect()
+            agentURLDraft = client.agentURLString
+        }
+    }
+
+    private func resetAgentURL() {
+        client.resetBaseURL()
+        agentURLDraft = client.agentURLString
+        Task {
+            await client.reconnect()
+        }
+    }
+}
+
+private struct IOSConnectionPanel: View {
+    @ObservedObject var client: KishAgentClient
+    @ObservedObject var audio: AudioRouteMonitor
+    @Binding var agentURLDraft: String
+    let onReconnect: () -> Void
+    let onReset: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                TextField("Agent URL", text: $agentURLDraft)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .keyboardType(.URL)
+                    .font(.caption)
+                    .textFieldStyle(.plain)
+                    .padding(.horizontal, 10)
+                    .frame(height: 34)
+                    .background(IOSTheme.secondaryBackground, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(IOSTheme.hairline))
+
+                Button(action: onReconnect) {
+                    Image(systemName: "arrow.clockwise")
+                        .frame(width: 32, height: 32)
+                }
+                .buttonStyle(.plain)
+                .background(IOSTheme.secondaryBackground, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .accessibilityLabel("Reconnect")
+
+                Button(action: onReset) {
+                    Image(systemName: "arrow.uturn.backward")
+                        .frame(width: 32, height: 32)
+                }
+                .buttonStyle(.plain)
+                .background(IOSTheme.secondaryBackground, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .accessibilityLabel("Reset agent URL")
+            }
+
+            HStack(spacing: 8) {
+                StatusChip(title: "Mini", value: client.miniStatus)
+                StatusChip(title: "Agent", value: client.agentStatus)
+                StatusChip(title: "Chat", value: client.chatStatus)
+                StatusChip(title: "Audio", value: audio.statusLabel)
+            }
+        }
+        .padding(10)
+        .background(IOSTheme.elevatedBackground.opacity(0.74), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(IOSTheme.hairline))
+    }
 }
 
 private struct ConversationPickerRow: View {
@@ -1084,10 +1310,8 @@ private struct ConversationPickerRow: View {
                             .lineLimit(1)
                             .truncationMode(.tail)
 
-                        if conversation.queuedUserMessageCount > 0 {
-                            Circle()
-                                .fill(.orange)
-                                .frame(width: 7, height: 7)
+                        if conversation.runState.isActive {
+                            IOSRunStatePill(runState: conversation.runState)
                         }
 
                         Spacer(minLength: 8)
@@ -1098,7 +1322,7 @@ private struct ConversationPickerRow: View {
                             .lineLimit(1)
                     }
 
-                    Text(conversation.queuedUserMessageCount > 0 ? "\(conversation.queuedUserMessageCount) queued" : conversation.idea)
+                    Text(rowDetail)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -1126,6 +1350,13 @@ private struct ConversationPickerRow: View {
 
     private var rowBackground: Color {
         isSelected ? Color.accentColor.opacity(0.10) : IOSTheme.elevatedBackground.opacity(0.74)
+    }
+
+    private var rowDetail: String {
+        if conversation.runState.isActive {
+            return conversation.runState.label
+        }
+        return conversation.idea
     }
 }
 

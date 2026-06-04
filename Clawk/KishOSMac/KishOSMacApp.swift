@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 import SwiftUI
 
 private enum KishOSTheme {
@@ -28,6 +29,7 @@ private struct MacRootView: View {
     @StateObject private var client = KishAgentClient()
     @StateObject private var workspace = KishOSWorkspace()
     @StateObject private var voice = VoiceController()
+    @StateObject private var audio = AudioRouteMonitor()
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var selection: SidebarSelection? = .newChat
     @State private var conversationToRename: Conversation?
@@ -77,6 +79,12 @@ private struct MacRootView: View {
                 .task {
                     await startQueuedMessageLoop()
                 }
+                .task {
+                    audio.start()
+                }
+                .onChange(of: voice.isRecording) { _, isRecording in
+                    audio.refresh(isRecording: isRecording)
+                }
         }
         .sheet(item: $conversationToRename) { conversation in
             RenameConversationSheet(conversation: conversation) { title in
@@ -96,15 +104,17 @@ private struct MacRootView: View {
                 messages: [],
                 isRunning: client.isSending,
                 lastError: nil,
+                runState: nil,
                 queuedMessageCount: workspace.queuedMessageCount,
                 approvals: [],
-                onSend: { send($0, in: nil) },
+                onSend: { send($0, attachments: $1, in: nil) },
                 onRetry: nil,
                 onRename: nil,
                 onDelete: nil,
                 onQuestionAnswer: nil,
                 onQuestionCancel: nil,
                 voice: voice,
+                audio: audio,
                 reservesTitleControlSpace: isSidebarCollapsed
             )
         case .conversation(let id):
@@ -116,15 +126,17 @@ private struct MacRootView: View {
                     messages: conversation.messages,
                     isRunning: conversation.isRunning,
                     lastError: conversation.lastError,
+                    runState: conversation.runState,
                     queuedMessageCount: conversation.queuedUserMessageCount,
                     approvals: conversation.approvals,
-                    onSend: { send($0, in: conversation.id) },
+                    onSend: { send($0, attachments: $1, in: conversation.id) },
                     onRetry: { retry(conversation.id) },
                     onRename: { conversationToRename = conversation },
                     onDelete: { deleteConversation(conversation.id) },
                     onQuestionAnswer: { approval, answer in answerQuestion(approval, answer: answer, in: conversation.id) },
                     onQuestionCancel: { approval in cancelQuestion(approval, in: conversation.id) },
                     voice: voice,
+                    audio: audio,
                     reservesTitleControlSpace: isSidebarCollapsed
                 )
             } else {
@@ -133,7 +145,7 @@ private struct MacRootView: View {
         case .roadmap:
             RoadmapView()
         case .settings:
-            SettingsView(client: client, voice: voice, storeError: workspace.storeError)
+            SettingsView(client: client, voice: voice, audio: audio, storeError: workspace.storeError)
         }
     }
 
@@ -192,24 +204,24 @@ private struct MacRootView: View {
         }
     }
 
-    private func send(_ text: String, in conversationId: UUID?) {
+    private func send(_ text: String, attachments: [ChatAttachment], in conversationId: UUID?) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
         if client.isDisconnected {
-            queue(trimmed, in: conversationId)
+            queue(trimmed, attachments: attachments, in: conversationId)
             return
         }
 
         let conversation: Conversation
-        if let conversationId, let existing = workspace.appendUserMessage(trimmed, to: conversationId) {
+        if let conversationId, let existing = workspace.appendUserMessage(trimmed, to: conversationId, attachments: attachments) {
             conversation = existing
         } else {
-            conversation = workspace.createConversation(firstMessage: trimmed)
+            conversation = workspace.createConversation(firstMessage: trimmed, attachments: attachments)
             selection = .conversation(conversation.id)
         }
 
-        sendPreparedMessage(trimmed, in: conversation, messageID: conversation.messages.last?.id)
+        sendPreparedMessage(messageTextForAgent(trimmed, attachments: attachments), in: conversation, messageID: conversation.messages.last?.id)
     }
 
     private func sendPreparedMessage(_ text: String, in conversation: Conversation, messageID: UUID?) {
@@ -232,12 +244,12 @@ private struct MacRootView: View {
         }
     }
 
-    private func queue(_ text: String, in conversationId: UUID?) {
+    private func queue(_ text: String, attachments: [ChatAttachment], in conversationId: UUID?) {
         let conversation: Conversation
-        if let conversationId, let existing = workspace.queueUserMessage(text, to: conversationId) {
+        if let conversationId, let existing = workspace.queueUserMessage(text, to: conversationId, attachments: attachments) {
             conversation = existing
         } else {
-            conversation = workspace.queueConversation(firstMessage: text)
+            conversation = workspace.queueConversation(firstMessage: text, attachments: attachments)
             selection = .conversation(conversation.id)
         }
         selection = .conversation(conversation.id)
@@ -369,7 +381,7 @@ private struct ConversationRow: View {
                 }
             }
 
-            Text(conversation.queuedUserMessageCount > 0 ? "\(conversation.queuedUserMessageCount) queued" : conversation.threadId)
+            Text(rowDetail)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
@@ -382,6 +394,16 @@ private struct ConversationRow: View {
             Button("Delete", role: .destructive, action: onDelete)
         }
     }
+
+    private var rowDetail: String {
+        if conversation.runState.isActive {
+            if conversation.queuedUserMessageCount > 0 {
+                return "\(conversation.queuedUserMessageCount) queued"
+            }
+            return conversation.runState.label
+        }
+        return conversation.threadId
+    }
 }
 
 private struct ChatView: View {
@@ -391,24 +413,28 @@ private struct ChatView: View {
     let messages: [ChatMessage]
     let isRunning: Bool
     let lastError: String?
+    let runState: ConversationRunState?
     let queuedMessageCount: Int
     let approvals: [ApprovalRequest]
-    let onSend: (String) -> Void
+    let onSend: (String, [ChatAttachment]) -> Void
     let onRetry: (() -> Void)?
     let onRename: (() -> Void)?
     let onDelete: (() -> Void)?
     let onQuestionAnswer: ((ApprovalRequest, String) -> Void)?
     let onQuestionCancel: ((ApprovalRequest) -> Void)?
     @ObservedObject var voice: VoiceController
+    @ObservedObject var audio: AudioRouteMonitor
     let reservesTitleControlSpace: Bool
 
     @State private var draft = ""
+    @State private var pendingAttachments: [ChatAttachment] = []
 
     var body: some View {
         VStack(spacing: 0) {
             ChatHeader(
                 title: title,
                 subtitle: subtitle,
+                runState: runState,
                 onRename: onRename,
                 onDelete: onDelete,
                 reservesTitleControlSpace: reservesTitleControlSpace
@@ -474,15 +500,17 @@ private struct ChatView: View {
             } else {
                 ChatComposer(
                     draft: $draft,
+                    attachments: $pendingAttachments,
                     isSending: client.isSending,
                     isDisabled: client.isSending || isRunning,
                     voice: voice,
+                    runState: runState,
                     onSend: sendDraft
                 )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
-            ConnectionStatusBar(client: client, voice: voice)
+            ConnectionStatusBar(client: client, voice: voice, audio: audio)
         }
         .background(KishOSTheme.chatBackground)
         .animation(.easeInOut(duration: 0.2), value: approvals.first?.id)
@@ -493,8 +521,10 @@ private struct ChatView: View {
     private func sendDraft() {
         let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !client.isSending, !isRunning, approvals.isEmpty else { return }
+        let attachments = pendingAttachments
         draft = ""
-        onSend(trimmed)
+        pendingAttachments = []
+        onSend(trimmed, attachments)
     }
 
     private func previousUserText(before index: Int) -> String {
@@ -506,6 +536,7 @@ private struct ChatView: View {
 private struct ChatHeader: View {
     let title: String
     let subtitle: String
+    let runState: ConversationRunState?
     let onRename: (() -> Void)?
     let onDelete: (() -> Void)?
     let reservesTitleControlSpace: Bool
@@ -523,6 +554,10 @@ private struct ChatHeader: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
+            }
+
+            if let runState, runState.isActive {
+                RunStatePill(runState: runState)
             }
 
             Spacer()
@@ -692,6 +727,14 @@ private struct ChatBubble: View {
             }
 
             VStack(alignment: message.sender == .user ? .trailing : .leading, spacing: 5) {
+                if !message.attachments.isEmpty {
+                    HStack(spacing: 6) {
+                        ForEach(message.attachments) { attachment in
+                            ContextChip(attachment: attachment)
+                        }
+                    }
+                }
+
                 MarkdownText(text: message.text, isUser: message.sender == .user)
                     .textSelection(.enabled)
                     .padding(.horizontal, message.sender == .user ? 13 : 0)
@@ -1094,46 +1137,72 @@ private struct QuestionComposer: View {
 
 private struct ChatComposer: View {
     @Binding var draft: String
+    @Binding var attachments: [ChatAttachment]
     let isSending: Bool
     let isDisabled: Bool
     @ObservedObject var voice: VoiceController
+    let runState: ConversationRunState?
     let onSend: () -> Void
 
     var body: some View {
-        HStack(spacing: 10) {
-            Button(action: toggleDictation) {
-                Image(systemName: voice.isRecording ? "stop.circle.fill" : "mic")
-            }
-            .buttonStyle(.borderless)
-            .foregroundStyle(voice.isRecording ? .red : .secondary)
-            .help(voice.isRecording ? "Stop dictation" : "Dictate")
-            .disabled(isDisabled)
-
-            VStack(alignment: .leading, spacing: 2) {
-                TextField(voice.isRecording ? "Listening" : "Ask KishOS", text: $draft)
-                    .textFieldStyle(.plain)
-                    .font(.body)
-                    .onSubmit(onSend)
-                    .disabled(isDisabled)
-
-                if voice.isRecording && !voice.transcript.isEmpty {
-                    Text(voice.transcript)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+        VStack(alignment: .leading, spacing: 8) {
+            if !attachments.isEmpty {
+                HStack(spacing: 6) {
+                    ForEach(attachments) { attachment in
+                        ContextChip(attachment: attachment) {
+                            attachments.removeAll { $0.id == attachment.id }
+                        }
+                    }
                 }
             }
 
-            Button(action: onSend) {
-                if isSending {
-                    ProgressView()
-                        .controlSize(.small)
-                } else {
-                    Image(systemName: "paperplane.fill")
+            HStack(spacing: 10) {
+                Button(action: toggleDictation) {
+                    Image(systemName: voice.isRecording ? "stop.circle.fill" : "mic")
                 }
+                .buttonStyle(.borderless)
+                .foregroundStyle(voice.isRecording ? .red : .secondary)
+                .help(voice.isRecording ? "Stop dictation" : "Dictate")
+                .disabled(isDisabled)
+
+                Button(action: attachClipboardText) {
+                    Image(systemName: "paperclip")
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.secondary)
+                .help("Attach clipboard text")
+                .disabled(isDisabled || clipboardText().isEmpty)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    TextField(voice.isRecording ? "Listening" : "Ask KishOS", text: $draft)
+                        .textFieldStyle(.plain)
+                        .font(.body)
+                        .onSubmit(onSend)
+                        .disabled(isDisabled)
+
+                    if voice.isRecording && !voice.transcript.isEmpty {
+                        Text(voice.transcript)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+
+                if let runState, runState.isActive {
+                    RunStatePill(runState: runState)
+                }
+
+                Button(action: onSend) {
+                    if isSending {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Image(systemName: "paperplane.fill")
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(isDisabled || isSending || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
-            .buttonStyle(.borderedProminent)
-            .disabled(isDisabled || isSending || draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
         .opacity(isDisabled ? 0.62 : 1)
         .padding(10)
@@ -1161,6 +1230,43 @@ private struct ChatComposer: View {
         guard !clean.isEmpty else { return }
         let existing = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         draft = existing.isEmpty ? clean : "\(existing) \(clean)"
+    }
+
+    private func attachClipboardText() {
+        let clean = clipboardText()
+        guard !clean.isEmpty else { return }
+        attachments = [ChatAttachment.textContext(clean)]
+    }
+
+    private func clipboardText() -> String {
+        NSPasteboard.general.string(forType: .string)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+}
+
+private struct ContextChip: View {
+    let attachment: ChatAttachment
+    var onRemove: (() -> Void)? = nil
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "doc.text")
+                .font(.caption)
+            Text(attachment.title)
+                .lineLimit(1)
+            if let onRemove {
+                Button(action: onRemove) {
+                    Image(systemName: "xmark")
+                        .font(.caption2.weight(.semibold))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(KishOSTheme.pillBackground, in: Capsule())
     }
 }
 
@@ -1261,11 +1367,35 @@ private struct CapabilityPill: View {
 private struct SettingsView: View {
     @ObservedObject var client: KishAgentClient
     @ObservedObject var voice: VoiceController
+    @ObservedObject var audio: AudioRouteMonitor
     let storeError: String?
+    @State private var agentURLDraft = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Header(title: "Settings", subtitle: client.status)
+
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Connection")
+                    .font(.headline)
+
+                HStack(spacing: 8) {
+                    TextField("Agent URL", text: $agentURLDraft)
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit(reconnect)
+                    Button("Reconnect", action: reconnect)
+                    Button("Reset") {
+                        client.resetBaseURL()
+                        agentURLDraft = client.agentURLString
+                        Task {
+                            await client.reconnect()
+                        }
+                    }
+                }
+            }
+            .padding(14)
+            .background(.background, in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(.quaternary))
 
             VStack(spacing: 10) {
                 StatusRow(title: "Mac mini", value: client.miniStatus, tint: client.miniStatus == "Online" ? .green : .secondary)
@@ -1274,6 +1404,23 @@ private struct SettingsView: View {
                 StatusRow(title: "History", value: storeError == nil ? "On" : "Error", tint: storeError == nil ? .green : .red)
                 StatusRow(title: "Tools", value: client.toolInventoryStatus, tint: client.toolInventoryStatus == "Ready" ? .green : .secondary)
             }
+
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("Audio")
+                        .font(.headline)
+                    Spacer()
+                    Button("Refresh") {
+                        audio.refresh(isRecording: voice.isRecording)
+                    }
+                }
+                StatusRow(title: "Input", value: audio.inputName, tint: audio.statusLabel == "Unavailable" ? .red : .green)
+                StatusRow(title: "Output", value: audio.outputName, tint: audio.statusLabel == "Unavailable" ? .red : .green)
+                StatusRow(title: "Route", value: audio.statusLabel, tint: audioTint)
+            }
+            .padding(14)
+            .background(.background, in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(.quaternary))
 
             ToolInventorySection(inventory: client.toolInventory)
 
@@ -1288,6 +1435,31 @@ private struct SettingsView: View {
         }
         .padding(22)
         .background(Color(nsColor: .controlBackgroundColor))
+        .onAppear {
+            agentURLDraft = client.agentURLString
+            audio.refresh(isRecording: voice.isRecording)
+        }
+    }
+
+    private var audioTint: Color {
+        switch audio.statusLabel {
+        case "Glasses", "Bluetooth", "System":
+            return .green
+        case "Listening":
+            return .orange
+        case "Unavailable":
+            return .red
+        default:
+            return .secondary
+        }
+    }
+
+    private func reconnect() {
+        guard client.updateBaseURL(agentURLDraft) else { return }
+        agentURLDraft = client.agentURLString
+        Task {
+            await client.reconnect()
+        }
     }
 }
 
@@ -1367,13 +1539,14 @@ private struct ToolLine: Identifiable {
 private struct ConnectionStatusBar: View {
     @ObservedObject var client: KishAgentClient
     @ObservedObject var voice: VoiceController
+    @ObservedObject var audio: AudioRouteMonitor
 
     var body: some View {
         HStack(spacing: 12) {
             MiniStatusChip(title: "Mini", value: client.miniStatus)
             MiniStatusChip(title: "Agent", value: client.agentStatus)
             MiniStatusChip(title: "Chat", value: client.chatStatus)
-            MiniStatusChip(title: "Mic", value: voice.isRecording ? "Listening" : voice.status)
+            MiniStatusChip(title: "Audio", value: voice.isRecording ? "Listening" : audio.statusLabel)
             Spacer()
         }
         .font(.caption)
@@ -1399,7 +1572,7 @@ private struct MiniStatusChip: View {
 
     private var tint: Color {
         switch value {
-        case "Online", "Ready", "On":
+        case "Online", "Ready", "On", "System", "Bluetooth", "Glasses":
             return .green
         case "Sending", "Checking", "Listening", "Question":
             return .orange
@@ -1407,6 +1580,35 @@ private struct MiniStatusChip: View {
             return .red
         default:
             return .secondary
+        }
+    }
+}
+
+private struct RunStatePill: View {
+    let runState: ConversationRunState
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Circle()
+                .fill(tint)
+                .frame(width: 6, height: 6)
+            Text(runState.label)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(KishOSTheme.pillBackground, in: Capsule())
+    }
+
+    private var tint: Color {
+        switch runState {
+        case .queued, .sending, .runningTools, .waitingForQuestion:
+            return .orange
+        case .failed:
+            return .red
+        case .done:
+            return .green
         }
     }
 }

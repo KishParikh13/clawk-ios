@@ -76,6 +76,28 @@ struct Conversation: Identifiable, Codable, Equatable {
     var queuedUserMessageCount: Int {
         messages.filter { $0.sender == .user && $0.deliveryState == .queued }.count
     }
+
+    var runState: ConversationRunState {
+        if !approvals.isEmpty {
+            return .waitingForQuestion
+        }
+        if queuedUserMessageCount > 0 {
+            return .queued
+        }
+        if lastError != nil {
+            return .failed
+        }
+        if isRunning {
+            let agentEvents = messages
+                .filter { $0.sender == .agent && $0.deliveryState == .sending }
+                .flatMap(\.activityEvents)
+            if agentEvents.contains(where: { $0.localizedCaseInsensitiveContains("tool:") }) {
+                return .runningTools
+            }
+            return .sending
+        }
+        return .done
+    }
 }
 
 struct ChatMessage: Identifiable, Codable, Equatable {
@@ -90,6 +112,7 @@ struct ChatMessage: Identifiable, Codable, Equatable {
     var createdAt: Date
     var deliveryState: MessageDeliveryState
     var activityEvents: [String]
+    var attachments: [ChatAttachment]
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -98,6 +121,7 @@ struct ChatMessage: Identifiable, Codable, Equatable {
         case createdAt
         case deliveryState
         case activityEvents
+        case attachments
     }
 
     init(
@@ -106,7 +130,8 @@ struct ChatMessage: Identifiable, Codable, Equatable {
         text: String,
         createdAt: Date = Date(),
         deliveryState: MessageDeliveryState = .sent,
-        activityEvents: [String] = []
+        activityEvents: [String] = [],
+        attachments: [ChatAttachment] = []
     ) {
         self.id = id
         self.sender = sender
@@ -114,6 +139,7 @@ struct ChatMessage: Identifiable, Codable, Equatable {
         self.createdAt = createdAt
         self.deliveryState = deliveryState
         self.activityEvents = activityEvents
+        self.attachments = attachments
     }
 
     init(from decoder: Decoder) throws {
@@ -124,6 +150,35 @@ struct ChatMessage: Identifiable, Codable, Equatable {
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         deliveryState = try container.decode(MessageDeliveryState.self, forKey: .deliveryState)
         activityEvents = try container.decodeIfPresent([String].self, forKey: .activityEvents) ?? []
+        attachments = try container.decodeIfPresent([ChatAttachment].self, forKey: .attachments) ?? []
+    }
+}
+
+struct ChatAttachment: Identifiable, Codable, Equatable {
+    enum Kind: String, Codable {
+        case text
+        case image
+        case file
+        case url
+    }
+
+    var id: UUID
+    var kind: Kind
+    var title: String
+    var text: String?
+    var createdAt: Date
+
+    init(id: UUID = UUID(), kind: Kind, title: String, text: String? = nil, createdAt: Date = Date()) {
+        self.id = id
+        self.kind = kind
+        self.title = title
+        self.text = text
+        self.createdAt = createdAt
+    }
+
+    static func textContext(_ text: String, title: String = "Clipboard") -> ChatAttachment {
+        let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return ChatAttachment(kind: .text, title: title, text: clean)
     }
 }
 
@@ -134,9 +189,63 @@ enum MessageDeliveryState: String, Codable {
     case failed
 }
 
+enum ConversationRunState: String, Codable {
+    case queued
+    case sending
+    case waitingForQuestion
+    case runningTools
+    case failed
+    case done
+
+    var label: String {
+        switch self {
+        case .queued:
+            return "Queued"
+        case .sending:
+            return "Sending"
+        case .waitingForQuestion:
+            return "Question"
+        case .runningTools:
+            return "Tools"
+        case .failed:
+            return "Failed"
+        case .done:
+            return "Done"
+        }
+    }
+
+    var isActive: Bool {
+        self != .done
+    }
+}
+
 struct QueuedMessage: Equatable {
     let conversation: Conversation
     let message: ChatMessage
+}
+
+func messageTextForAgent(_ text: String, attachments: [ChatAttachment]) -> String {
+    let cleanText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !attachments.isEmpty else { return cleanText }
+
+    let renderedAttachments = attachments.enumerated().compactMap { index, attachment -> String? in
+        switch attachment.kind {
+        case .text:
+            guard let text = attachment.text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else {
+                return nil
+            }
+            return """
+            [Context \(index + 1): \(attachment.title)]
+            \(text)
+            [/Context \(index + 1)]
+            """
+        case .image, .file, .url:
+            return "[Context \(index + 1): \(attachment.title)]"
+        }
+    }
+
+    guard !renderedAttachments.isEmpty else { return cleanText }
+    return "\(renderedAttachments.joined(separator: "\n\n"))\n\nUser message:\n\(cleanText)"
 }
 
 struct ChatResult: Equatable {

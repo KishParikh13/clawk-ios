@@ -2,6 +2,9 @@ import Foundation
 
 @MainActor
 final class KishAgentClient: ObservableObject {
+    static let defaultBaseURL = URL(string: "http://kishs-mac-mini-1:17891")!
+    private static let agentURLDefaultsKey = "KishOSAgentBaseURL"
+
     @Published var isSending = false
     @Published var status = "Checking"
     @Published var miniStatus = "Checking"
@@ -11,9 +14,11 @@ final class KishAgentClient: ObservableObject {
     @Published var detail = "Starting up"
     @Published var toolInventory = ToolInventory.empty
     @Published var toolInventoryStatus = "Checking"
+    @Published var agentURLString: String
 
-    private let baseURL: URL
+    private var baseURL: URL
     private let session: URLSession
+    private let userDefaults: UserDefaults
     private var pollingStarted = false
 
     var isDisconnected: Bool {
@@ -25,11 +30,46 @@ final class KishAgentClient: ObservableObject {
     }
 
     init(
-        baseURL: URL = URL(string: "http://kishs-mac-mini-1:17891")!,
-        session: URLSession = .shared
+        baseURL: URL? = nil,
+        session: URLSession = .shared,
+        userDefaults: UserDefaults = .standard
     ) {
-        self.baseURL = baseURL
+        self.userDefaults = userDefaults
+        let savedURL = userDefaults.string(forKey: Self.agentURLDefaultsKey).flatMap(URL.init(string:))
+        self.baseURL = baseURL ?? savedURL ?? Self.defaultBaseURL
+        self.agentURLString = Self.displayString(for: self.baseURL)
         self.session = session
+    }
+
+    @discardableResult
+    func updateBaseURL(_ rawValue: String) -> Bool {
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: trimmed),
+              let scheme = url.scheme,
+              ["http", "https"].contains(scheme.lowercased()),
+              url.host != nil
+        else {
+            detail = "Invalid agent URL"
+            status = "Error"
+            return false
+        }
+
+        baseURL = url
+        agentURLString = Self.displayString(for: url)
+        userDefaults.set(agentURLString, forKey: Self.agentURLDefaultsKey)
+        markChecking()
+        return true
+    }
+
+    func resetBaseURL() {
+        baseURL = Self.defaultBaseURL
+        agentURLString = Self.displayString(for: Self.defaultBaseURL)
+        userDefaults.removeObject(forKey: Self.agentURLDefaultsKey)
+        markChecking()
+    }
+
+    func reconnect() async {
+        await refreshHealth()
     }
 
     func startHealthPolling() async {
@@ -318,6 +358,14 @@ final class KishAgentClient: ObservableObject {
         decoder.dateDecodingStrategy = .iso8601
         return decoder
     }()
+
+    private static func displayString(for url: URL) -> String {
+        var output = url.absoluteString
+        if output.hasSuffix("/") {
+            output.removeLast()
+        }
+        return output
+    }
 }
 
 private struct ChatRequest: Encodable {

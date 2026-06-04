@@ -114,6 +114,32 @@ final class ConversationStoreTests: XCTestCase {
         XCTAssertEqual(workspace.conversation(id: newer.id)?.messages.first?.deliveryState, .queued)
     }
 
+    func testQueuedMessagePreservesAttachmentsAndPreparesContextPayload() {
+        let store = MemoryConversationStore()
+        let workspace = KishOSWorkspace(store: store)
+        let attachment = ChatAttachment.textContext("local note", title: "Clipboard")
+        let conversation = workspace.queueConversation(firstMessage: "use this", attachments: [attachment])
+        let messageID = conversation.messages[0].id
+
+        let prepared = workspace.prepareQueuedMessageForSending(
+            conversationID: conversation.id,
+            messageID: messageID
+        )
+
+        XCTAssertEqual(workspace.conversation(id: conversation.id)?.messages.first?.attachments, [attachment])
+        XCTAssertEqual(
+            prepared?.message,
+            """
+            [Context 1: Clipboard]
+            local note
+            [/Context 1]
+
+            User message:
+            use this
+            """
+        )
+    }
+
     func testOfflineFailureRequeuesMessageAndRemovesEmptyAgentPlaceholder() {
         let store = MemoryConversationStore()
         let workspace = KishOSWorkspace(store: store)
