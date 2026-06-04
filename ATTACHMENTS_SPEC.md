@@ -1,5 +1,19 @@
 # KishOS iOS Attachments Spec
 
+Status: implemented and tested.
+
+Preserved app commits:
+
+- `9da7f3a` attachment model/composer/client base
+- `f6fc2d0` attachment request tests
+- `959a9f2` iOS image previews
+- `af7d387` Mac file attachment uploads
+
+Verified backend commits on the Mac mini:
+
+- `979ec8f feat: add native KishOS app bridge`
+- `763f7a1 add native attachment uploads`
+
 ## Goal
 
 Make iOS and Mac chat attachments work like the existing Slack path: when Kish attaches an image, PDF, text file, or other document, the agent can actually inspect the file, not just see a filename or OCR fallback.
@@ -13,6 +27,9 @@ The first useful version should let Kish:
 - Continue using offline queueing without losing attachment intent.
 
 ## Current State
+
+This section captures the original baseline. It is retained for historical context;
+the implementation now exists in the commits listed above.
 
 ### iOS app
 
@@ -434,37 +451,35 @@ Add tests around:
 5. Cleanup removes stale uploads.
 6. Existing Slack behavior is not regressed.
 
-## Milestone Recommendation
+## Milestone Result
 
-Build this in two separate sessions:
+This was built across app and backend sessions.
 
 ### Session A - Backend Contract
 
-Find the HTTP bridge source for `http://kishs-mac-mini-1:17891`. Add:
+Completed on the Mac mini backend:
 
 - `POST /attachments`
 - attachment staging storage
 - `/chat-stream` attachment ids
 - prompt attachment note
 
-Test with `curl` before touching iOS.
+Verified backend commit: `763f7a1 add native attachment uploads`.
 
 ### Session B - iOS Client
 
-Add:
+Completed in the app:
 
 - real image/file attachment payloads
 - upload client
 - chip upload states
 - chat request attachment ids
 
-Test with the backend from Session A.
+Verified app commits: `9da7f3a`, `f6fc2d0`, `959a9f2`, `af7d387`.
 
 ## Open Questions
 
-- Where exactly is the HTTP bridge source for port `17891`?
 - Which engine should handle image files first: Codex image path support, Claude local file read, or both?
-- Should uploaded attachments be persisted across devices in shared conversation sync, or only attachment metadata/chips?
+- Should uploaded attachment binaries be persisted across devices in shared conversation sync, or only attachment metadata/chips?
 - Should we support agent-generated files back into iOS chat, matching Slack upload-back behavior?
 - What is the max file size for iOS upload? Slack code uses 25 MB friendly limit; use same unless there is a better reason.
-
