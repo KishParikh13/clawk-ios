@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import os
 import Speech
 
 @MainActor
@@ -9,10 +10,33 @@ final class VoiceController: ObservableObject {
     @Published var status = "Off"
     @Published var waveformLevels = Array(repeating: CGFloat(0.04), count: 32)
 
+    /// When `true` (default, dictation behavior), `startRecording()` configures the
+    /// audio session and `stopRecording()` deactivates it. When `false`, an external
+    /// owner (the live call) holds the session across listen/speak/listen turns, so
+    /// recording must NOT configure or tear down the session between turns.
+    var managesAudioSession = true
+
     private let recognizer = SFSpeechRecognizer()
     private let audioEngine = AVAudioEngine()
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
+
+    private let log = Logger(subsystem: "com.kishparikh.clawk", category: "livevoice")
+
+    /// Call mode: when `true`, the audio engine runs continuously for the whole
+    /// call. Each listen turn only swaps the recognition request in and out; the
+    /// engine and the Bluetooth link stay up so the app keeps running in the
+    /// background and spoken replies reach the glasses.
+    private var continuousEngine = false
+    private var interruptionObserver: NSObjectProtocol?
+
+    /// Thread-safe handle the audio tap reads on the realtime thread. Holds the
+    /// current recognition request only while a listen turn is active; nil means
+    /// the engine still runs (keeping audio alive) but mic input is discarded.
+    private final class RequestHolder: @unchecked Sendable {
+        var request: SFSpeechAudioBufferRecognitionRequest?
+    }
+    private let requestHolder = RequestHolder()
 
     func toggleRecording() async -> String? {
         if isRecording {
@@ -23,8 +47,147 @@ final class VoiceController: ObservableObject {
         return nil
     }
 
+    /// Start the continuous full-duplex engine for a live call. The session must
+    /// already be configured and active (the call owns it). The engine then runs
+    /// for the whole call so the app stays alive in the background and the glasses
+    /// link stays up. Returns false if speech/mic is unavailable.
+    func beginCallAudio() async -> Bool {
+        guard !continuousEngine else { return true }
+        guard recognizer?.isAvailable == true else {
+            status = "Speech unavailable"
+            return false
+        }
+        let authorized = await requestAuthorization()
+        guard authorized else {
+            status = "Mic blocked"
+            return false
+        }
+
+        let input = audioEngine.inputNode
+        let format = input.outputFormat(forBus: 0)
+        input.removeTap(onBus: 0)
+        input.installTap(onBus: 0, bufferSize: 1024, format: format) { [requestHolder, weak self] buffer, _ in
+            // Feed the recognizer and animate the waveform only while a listen
+            // turn is active. Between turns the engine keeps running (app stays
+            // alive, glasses link held) but mic input is discarded.
+            guard let activeRequest = requestHolder.request else { return }
+            activeRequest.append(buffer)
+            let level = Self.normalizedLevel(from: buffer)
+            Task { @MainActor [weak self] in
+                self?.appendWaveformLevel(level)
+            }
+        }
+
+        audioEngine.prepare()
+        do {
+            try audioEngine.start()
+            continuousEngine = true
+            startInterruptionObserver()
+            log.info("call audio engine started")
+            return true
+        } catch {
+            input.removeTap(onBus: 0)
+            status = "Mic error"
+            log.error("call audio engine failed to start: \(error.localizedDescription, privacy: .public)")
+            return false
+        }
+    }
+
+    /// Stop the continuous engine at call end. Does NOT deactivate the session;
+    /// the route monitor owns session lifecycle.
+    func endCallAudio() {
+        guard continuousEngine else { return }
+        requestHolder.request = nil
+        request?.endAudio()
+        recognitionTask?.cancel()
+        request = nil
+        recognitionTask = nil
+        audioEngine.stop()
+        audioEngine.inputNode.removeTap(onBus: 0)
+        continuousEngine = false
+        isRecording = false
+        waveformLevels = Array(repeating: CGFloat(0.04), count: 32)
+        stopInterruptionObserver()
+        log.info("call audio engine stopped")
+    }
+
+    private func startInterruptionObserver() {
+        #if os(iOS)
+        guard interruptionObserver == nil else { return }
+        interruptionObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.interruptionNotification,
+            object: AVAudioSession.sharedInstance(),
+            queue: .main
+        ) { [weak self] note in
+            Task { @MainActor in self?.handleInterruption(note) }
+        }
+        #endif
+    }
+
+    private func stopInterruptionObserver() {
+        if let interruptionObserver {
+            NotificationCenter.default.removeObserver(interruptionObserver)
+            self.interruptionObserver = nil
+        }
+    }
+
+    #if os(iOS)
+    private func handleInterruption(_ note: Notification) {
+        guard continuousEngine,
+              let info = note.userInfo,
+              let raw = info[AVAudioSessionInterruptionTypeKey] as? UInt,
+              let type = AVAudioSession.InterruptionType(rawValue: raw)
+        else { return }
+
+        switch type {
+        case .began:
+            log.info("audio interruption began")
+        case .ended:
+            log.info("audio interruption ended; reactivating engine")
+            try? AVAudioSession.sharedInstance().setActive(true, options: [])
+            if !audioEngine.isRunning {
+                audioEngine.prepare()
+                try? audioEngine.start()
+            }
+        @unknown default:
+            break
+        }
+    }
+    #endif
+
     func startRecording() async {
         guard !isRecording else { return }
+
+        if continuousEngine {
+            // Call mode: the engine is already running. Just open a fresh
+            // recognition turn; the tap starts feeding it via requestHolder.
+            recognitionTask?.cancel()
+            recognitionTask = nil
+            transcript = ""
+            waveformLevels = Array(repeating: CGFloat(0.04), count: 32)
+
+            let recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
+            recognitionRequest.shouldReportPartialResults = true
+            recognitionRequest.taskHint = .dictation
+            request = recognitionRequest
+            requestHolder.request = recognitionRequest
+
+            recognitionTask = recognizer?.recognitionTask(with: recognitionRequest) { [weak self] result, error in
+                Task { @MainActor in
+                    guard let self else { return }
+                    if let result {
+                        self.transcript = result.bestTranscription.formattedString
+                    }
+                    if error != nil {
+                        self.stopRecording()
+                    }
+                }
+            }
+            isRecording = true
+            status = "Listening"
+            return
+        }
+
         guard recognizer?.isAvailable == true else {
             status = "Speech unavailable"
             return
@@ -36,11 +199,13 @@ final class VoiceController: ObservableObject {
             return
         }
 
-        do {
-            try configureAudioSession()
-        } catch {
-            status = "Audio error"
-            return
+        if managesAudioSession {
+            do {
+                try configureAudioSession()
+            } catch {
+                status = "Audio error"
+                return
+            }
         }
 
         recognitionTask?.cancel()
@@ -70,7 +235,9 @@ final class VoiceController: ObservableObject {
             isRecording = true
             status = "Listening"
         } catch {
-            deactivateAudioSession()
+            if managesAudioSession {
+                deactivateAudioSession()
+            }
             status = "Mic error"
             return
         }
@@ -92,6 +259,22 @@ final class VoiceController: ObservableObject {
     func stopRecording() -> String? {
         guard isRecording else { return nil }
 
+        if continuousEngine {
+            // Call mode: end this listen turn but keep the engine and session
+            // alive so audio keeps flowing in the background between turns.
+            requestHolder.request = nil
+            request?.endAudio()
+            recognitionTask?.cancel()
+            request = nil
+            recognitionTask = nil
+            isRecording = false
+            status = "Ready"
+            waveformLevels = Array(repeating: CGFloat(0.04), count: 32)
+            let clean = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+            transcript = ""
+            return clean.isEmpty ? nil : clean
+        }
+
         audioEngine.stop()
         audioEngine.inputNode.removeTap(onBus: 0)
         request?.endAudio()
@@ -101,7 +284,9 @@ final class VoiceController: ObservableObject {
         isRecording = false
         status = "Ready"
         waveformLevels = Array(repeating: CGFloat(0.04), count: 32)
-        deactivateAudioSession()
+        if managesAudioSession {
+            deactivateAudioSession()
+        }
 
         let clean = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         transcript = ""

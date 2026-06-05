@@ -21,6 +21,18 @@ struct AudioRouteCandidate: Identifiable, Equatable, Codable {
     let isPreferredCandidate: Bool
 }
 
+/// The truthful audio route state for the live-call UI. Unlike `status` (which is
+/// overloaded with "Listening" for back-compat), this is the single source of truth
+/// for what the route is actually doing.
+enum RouteState: String, Codable {
+    case system
+    case externalAvailable
+    case externalActive
+    case switching
+    case lost
+    case blocked
+}
+
 struct AudioCapabilityLine: Identifiable, Equatable {
     var id: String { "\(title)-\(state)-\(detail)" }
     let title: String
@@ -40,6 +52,42 @@ final class AudioRouteMonitor: ObservableObject {
     @Published private(set) var activeRouteKind: AudioRouteKind = .system
     @Published private(set) var preferredRouteName: String?
     @Published var prefersHandsFreeRoute = false
+
+    /// True while a live call owns the audio session (begun by `beginCallSession`,
+    /// cleared by `endCallSession`). During this window the session is NOT torn down
+    /// between listen/speak turns.
+    @Published private(set) var isCallSessionActive = false
+    /// Whether an external (glasses/bluetooth/headset) route was seen at any point
+    /// during the current call session. Read by P0.3 to derive the "lost" route state.
+    @Published private(set) var wasExternalSeenInCallSession = false
+
+    /// Truthful route state, derived in `refresh()`. This is the source of truth for
+    /// the live-call UI (the route chip), not `status`.
+    @Published private(set) var routeState: RouteState = .system
+
+    /// True while a route activation attempt (`configureRouteSession` /
+    /// `waitForRouteActivation`) is in flight. Drives the `switching` route state.
+    private var isAttemptingRouteActivation = false
+
+    /// Dedicated source of truth for whether the audio route is unavailable
+    /// (a `setCategory` / `setActive` failure). Unlike `status` — which is
+    /// overloaded with "Listening" while recording — this flag is not masked by
+    /// the recording state, so a `blocked` route stays `blocked` across a
+    /// `refresh(isRecording: true)`. Set on a config failure, cleared once a
+    /// session activates cleanly or on `endCallSession`.
+    private var isRouteUnavailable = false
+
+    #if DEBUG
+    /// Test-only seam. The only production path that sets `isRouteUnavailable`
+    /// is the iOS-gated `configureRouteSession` catch, which the macOS test
+    /// target cannot reach. This lets a test mark the route unavailable and then
+    /// verify it survives a `refresh(isRecording: true)` (the real bug: the old
+    /// `status == "Unavailable"` derivation was masked by "Listening").
+    func setRouteUnavailableForTesting(_ unavailable: Bool) {
+        isRouteUnavailable = unavailable
+        refresh()
+    }
+    #endif
 
     private var isStarted = false
     private let userDefaults: UserDefaults
@@ -66,8 +114,100 @@ final class AudioRouteMonitor: ObservableObject {
         availableRoutes.contains { $0.isPreferredCandidate }
     }
 
+    var hasGlassesConnected: Bool {
+        Self.isGlassesConnected(activeKind: activeRouteKind, availableRoutes: availableRoutes)
+    }
+
     var isPreferredRouteActive: Bool {
         activeRouteKind == .glasses || activeRouteKind == .bluetooth || activeRouteKind == .headset
+    }
+
+    /// Pure, side-effect-free derivation of `RouteState`. Testable on macOS without
+    /// AVAudioSession. Rules are evaluated in strict priority order:
+    ///   1. blocked  — the route is unavailable.
+    ///   2. externalActive — an external route is currently active.
+    ///   3. lost — inside a call session, an external route was seen earlier this
+    ///      session, but it is now neither active nor available.
+    ///   4. switching — a route activation is in flight, OR an external route is
+    ///      available inside a call session but not yet active.
+    ///   5. externalAvailable — an external route is available (not active).
+    ///   6. system — otherwise.
+    static func deriveRouteState(
+        isUnavailable: Bool,
+        isExternalActive: Bool,
+        hasExternalAvailable: Bool,
+        isCallSessionActive: Bool,
+        wasExternalSeenInCallSession: Bool,
+        isAttempting: Bool
+    ) -> RouteState {
+        if isUnavailable {
+            return .blocked
+        }
+        if isExternalActive {
+            return .externalActive
+        }
+        if isCallSessionActive && wasExternalSeenInCallSession && !hasExternalAvailable {
+            return .lost
+        }
+        if isAttempting || (isCallSessionActive && hasExternalAvailable) {
+            return .switching
+        }
+        if hasExternalAvailable {
+            return .externalAvailable
+        }
+        return .system
+    }
+
+    /// Pure label mapping for general surfaces. Keyed on `RouteState` so tests can
+    /// exercise the real production switch for every state.
+    static func routeStateLabel(for state: RouteState, kind: AudioRouteKind) -> String {
+        switch state {
+        case .system:
+            return "Phone audio"
+        case .externalAvailable:
+            return "External available"
+        case .externalActive:
+            return kind.rawValue
+        case .switching:
+            return "Switching…"
+        case .lost:
+            return "Lost · phone audio"
+        case .blocked:
+            return "Audio blocked"
+        }
+    }
+
+    /// Human-truthful route label for general surfaces.
+    var routeStateLabel: String {
+        Self.routeStateLabel(for: routeState, kind: activeRouteKind)
+    }
+
+    /// Pure compact-chip label mapping for the in-call header. Keyed on `RouteState`
+    /// so tests can exercise the real production switch for every state.
+    static func callRouteLabel(for state: RouteState, kind: AudioRouteKind) -> String {
+        switch state {
+        case .system:
+            return "Phone"
+        case .externalAvailable:
+            return "External ready"
+        case .externalActive:
+            return kind.rawValue
+        case .switching:
+            return "Switching…"
+        case .lost:
+            return "Lost · phone"
+        case .blocked:
+            return "Blocked"
+        }
+    }
+
+    static func isGlassesConnected(activeKind: AudioRouteKind, availableRoutes: [AudioRouteCandidate]) -> Bool {
+        activeKind == .glasses || availableRoutes.contains { $0.kind == .glasses }
+    }
+
+    /// Compact chip text for the in-call header.
+    var callRouteLabel: String {
+        Self.callRouteLabel(for: routeState, kind: activeRouteKind)
     }
 
     var routeHealthLabel: String {
@@ -198,6 +338,19 @@ final class AudioRouteMonitor: ObservableObject {
         preferredRouteName = nil
         availableRoutes = []
         #endif
+
+        if isCallSessionActive, isPreferredRouteActive {
+            wasExternalSeenInCallSession = true
+        }
+
+        routeState = Self.deriveRouteState(
+            isUnavailable: isRouteUnavailable,
+            isExternalActive: isPreferredRouteActive,
+            hasExternalAvailable: hasExternalRouteAvailable,
+            isCallSessionActive: isCallSessionActive,
+            wasExternalSeenInCallSession: wasExternalSeenInCallSession,
+            isAttempting: isAttemptingRouteActivation
+        )
     }
 
     func setPrefersHandsFreeRoute(_ enabled: Bool) {
@@ -215,24 +368,90 @@ final class AudioRouteMonitor: ObservableObject {
     func activatePreferredHandsFreeRoute(timeout: TimeInterval = 2.0) async {
         #if os(iOS)
         guard prefersHandsFreeRoute else { return }
+        await configureRouteSession(defaultToSpeaker: true, refreshWhenNoExternalInput: true, timeout: timeout)
+        #else
+        refresh()
+        #endif
+    }
+
+    /// Begin a live-call audio session. The call owns the session for its full
+    /// duration. ALWAYS attempts the preferred external input regardless of
+    /// `prefersHandsFreeRoute` (force semantics). If no external input exists or
+    /// activation throws, the call still runs on phone audio — this never fails the
+    /// call. Note: call mode does NOT use `.defaultToSpeaker`.
+    func beginCallSession(timeout: TimeInterval = 2.0) async {
+        wasExternalSeenInCallSession = false
+        isCallSessionActive = true
+        #if os(iOS)
+        // Never fail the call: on throw, `configureRouteSession` marks route
+        // unavailable and we continue on phone audio. Call mode omits
+        // `.defaultToSpeaker` and does not refresh in the no-external branch
+        // (the trailing `refresh()` covers it).
+        await configureRouteSession(defaultToSpeaker: false, refreshWhenNoExternalInput: false, timeout: timeout)
+        #endif
+        refresh()
+    }
+
+    #if os(iOS)
+    /// Shared route-session setup: setCategory -> setActive -> setPreferredInput ->
+    /// waitForRouteActivation, with a catch that marks the route unavailable.
+    /// - Parameters:
+    ///   - defaultToSpeaker: Adds `.defaultToSpeaker` to the category options.
+    ///     Dictation passes true; call mode passes false.
+    ///   - refreshWhenNoExternalInput: Whether to `refresh()` in the no-external-input
+    ///     branch. Preserves the existing divergence between the two callers.
+    private func configureRouteSession(
+        defaultToSpeaker: Bool,
+        refreshWhenNoExternalInput: Bool,
+        timeout: TimeInterval
+    ) async {
+        isAttemptingRouteActivation = true
+        defer {
+            isAttemptingRouteActivation = false
+            refresh()
+        }
+        var options: AVAudioSession.CategoryOptions = [.allowBluetoothHFP, .allowBluetoothA2DP, .duckOthers]
+        if defaultToSpeaker {
+            options.insert(.defaultToSpeaker)
+        }
         let session = AVAudioSession.sharedInstance()
         do {
-            try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetoothHFP, .allowBluetoothA2DP, .defaultToSpeaker, .duckOthers])
+            try session.setCategory(.playAndRecord, mode: .voiceChat, options: options)
             try session.setActive(true, options: .notifyOthersOnDeactivation)
+            // The category/active calls succeeded — the route is healthy.
+            isRouteUnavailable = false
             if let preferredInput = preferredInput(from: session.availableInputs ?? []) {
                 try? session.setPreferredInput(preferredInput)
                 await waitForRouteActivation(preferredInput: preferredInput, timeout: timeout)
             } else {
                 activationDetail = "No external input"
-                refresh()
+                if refreshWhenNoExternalInput {
+                    refresh()
+                }
             }
         } catch {
+            isRouteUnavailable = true
             status = "Unavailable"
             activationDetail = error.localizedDescription
         }
-        #else
-        refresh()
+    }
+    #endif
+
+    /// End the live-call audio session: deactivate, clear the preferred input, and
+    /// reset call-session route context.
+    func endCallSession() {
+        isCallSessionActive = false
+        wasExternalSeenInCallSession = false
+        isRouteUnavailable = false
+        #if os(iOS)
+        clearPreferredInput()
+        do {
+            try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        } catch {
+            activationDetail = "Deactivate failed: \(error.localizedDescription)"
+        }
         #endif
+        refresh()
     }
 
     private func clearPreferredInput() {
@@ -240,6 +459,7 @@ final class AudioRouteMonitor: ObservableObject {
         do {
             try AVAudioSession.sharedInstance().setPreferredInput(nil)
         } catch {
+            isRouteUnavailable = true
             status = "Unavailable"
         }
         #endif
@@ -401,6 +621,17 @@ final class AudioRouteMonitor: ObservableObject {
     }
 
     private static func kind(forName name: String, fallback: AudioRouteKind) -> AudioRouteKind {
+        classifyRouteName(name, fallback: fallback)
+    }
+
+    /// Testable name-only classifier seam. Returns `.glasses` for glasses-like
+    /// names, `.bluetooth` for other external-like names, and `fallback`
+    /// otherwise. This is the single source of truth for name-based route
+    /// classification: it reuses the existing `isGlassesLikeName` /
+    /// `isExternalLikeName` patterns (no duplication) so hardware QA can tighten
+    /// one place. Pure and side-effect free, so the macOS test target can hit the
+    /// real production logic without an `AVAudioSession`.
+    static func classifyRouteName(_ name: String, fallback: AudioRouteKind = .unknown) -> AudioRouteKind {
         if isGlassesLikeName(name) {
             return .glasses
         }

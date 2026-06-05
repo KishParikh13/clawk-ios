@@ -1,13 +1,15 @@
 import AVFoundation
 import Foundation
+import os
 
 @MainActor
-final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
+final class LiveCallController: NSObject, ObservableObject {
     enum CallState: String {
         case connecting
         case listening
         case userSpeaking
         case sendingTurn
+        case capturingMedia
         case agentThinking
         case agentSpeaking
         case needsAnswer
@@ -20,6 +22,7 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
             case .listening: return "Listening"
             case .userSpeaking: return "Listening"
             case .sendingTurn: return "Sending"
+            case .capturingMedia: return "Capturing"
             case .agentThinking: return "Working"
             case .agentSpeaking: return "Speaking"
             case .needsAnswer: return "Question"
@@ -33,6 +36,7 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
         didSet {
             guard oldValue != state else { return }
             syncLiveActivity()
+            updateSoundscape(from: oldValue)
         }
     }
     @Published private(set) var activeConversationID: UUID? {
@@ -52,12 +56,25 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
     private let voice: VoiceController
     private let initialProject: Project?
     private let onConversationStarted: (UUID) -> Void
-    private let speechSynthesizer = AVSpeechSynthesizer()
+    private let captureMediaHandler: ((CaptureIntent, UUID?, String?) async throws -> [ChatAttachment])?
+    private let apple = AppleSpeaker()
+    private let gemini = GeminiSpeaker()
+    private let soundscape = CallSoundscape()
     private let liveActivity = KishOSLiveActivityController.shared
+    private let log = Logger(subsystem: "com.kishparikh.clawk", category: "livecall")
     private var elapsedTask: Task<Void, Never>?
     private var finalizeTask: Task<Void, Never>?
     private var activeSendTask: Task<Void, Never>?
+    private var speakTask: Task<Void, Never>?
+    private var narrateTask: Task<Void, Never>?
+    private var isVocalizing = false
     private var hasLiveActivitySession = false
+    /// Guards `finalizeCurrentUtterance` against a manual `submitCurrentUtterance`
+    /// tap racing the auto-finalize task. Both run on the @MainActor, but each
+    /// awaits inside the body, so without this a second entrant could run the
+    /// body twice (e.g. call `beginListening()` mid-send). Set on entry, reset on
+    /// every exit path.
+    private var isFinalizing = false
 
     init(
         client: KishAgentClient,
@@ -65,7 +82,8 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
         voice: VoiceController,
         initialConversationID: UUID?,
         initialProject: Project?,
-        onConversationStarted: @escaping (UUID) -> Void
+        onConversationStarted: @escaping (UUID) -> Void,
+        captureMediaHandler: ((CaptureIntent, UUID?, String?) async throws -> [ChatAttachment])? = nil
     ) {
         self.client = client
         self.workspace = workspace
@@ -73,8 +91,8 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
         self.activeConversationID = initialConversationID
         self.initialProject = initialConversationID == nil ? initialProject : nil
         self.onConversationStarted = onConversationStarted
+        self.captureMediaHandler = captureMediaHandler
         super.init()
-        speechSynthesizer.delegate = self
     }
 
     func start() async {
@@ -84,6 +102,13 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
         startElapsedTimer()
         syncLiveActivity()
         await client.refreshHealth()
+        let audioReady = await voice.beginCallAudio()
+        guard audioReady else {
+            failureMessage = voice.status
+            state = .failed
+            return
+        }
+        soundscape.play(.callStart)
         await beginListening()
     }
 
@@ -111,14 +136,11 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
     func toggleOutput() {
         isOutputEnabled.toggle()
         if !isOutputEnabled {
-            speechSynthesizer.stopSpeaking(at: .immediate)
-        }
-    }
-
-    func interruptAndListen() {
-        Task {
-            await stopActiveRun()
-            await beginListening()
+            let wasSpeaking = state == .agentSpeaking
+            stopSpeaking()
+            if wasSpeaking {
+                Task { await beginListening() }
+            }
         }
     }
 
@@ -169,7 +191,10 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
             workspace.cancelActiveResponse(in: activeConversationID)
         }
         _ = voice.stopRecording()
-        speechSynthesizer.stopSpeaking(at: .immediate)
+        voice.endCallAudio()
+        stopSpeaking()
+        soundscape.play(.callEnd)   // detached, survives the teardown below
+        soundscape.end()
         activeUserPartial = ""
         activeAgentText = ""
         state = .ended
@@ -191,9 +216,7 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
             return
         }
 
-        if speechSynthesizer.isSpeaking {
-            speechSynthesizer.stopSpeaking(at: .immediate)
-        }
+        stopSpeaking()
 
         await voice.startRecording()
         state = voice.isRecording ? .listening : .failed
@@ -203,11 +226,20 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
     }
 
     private func scheduleUtteranceFinalization(for transcript: String) {
+        // Only auto-finalize substantial utterances. One-letter or one-noise
+        // partials wait — when the user keeps speaking, handleTranscriptChange
+        // reschedules with the longer transcript, which eventually qualifies.
+        // Manual send (submitCurrentUtterance) is never gated by this.
+        guard LiveVoiceHeuristics.shouldAutoFinalizeUtterance(transcript) else {
+            finalizeTask?.cancel()
+            return
+        }
         finalizeTask?.cancel()
         finalizeTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(1.35))
             await MainActor.run {
                 guard let self,
+                      !self.isMuted,
                       self.activeUserPartial == transcript,
                       self.state == .userSpeaking
                 else { return }
@@ -217,7 +249,19 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
     }
 
     private func finalizeCurrentUtterance() async {
+        // A manual submitCurrentUtterance tap can race the auto-finalize task.
+        // Both run on the @MainActor, but the body awaits, so without this guard
+        // a second entrant could run the body twice (e.g. beginListening()
+        // mid-send). Reset on every exit path below.
+        guard !isFinalizing else { return }
+        isFinalizing = true
+        defer { isFinalizing = false }
+
         finalizeTask?.cancel()
+        // Never send a partial that the user has already abandoned by ending
+        // the call. (Mute/discard route through here too via manual send, where
+        // sending the captured text is the desired behavior.)
+        guard state != .ended else { return }
         let spokenText = voice.stopRecording() ?? activeUserPartial
         let clean = spokenText.trimmingCharacters(in: .whitespacesAndNewlines)
         activeUserPartial = ""
@@ -227,12 +271,63 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
             return
         }
 
-        await sendUserTurn(clean)
+        if let intent = CaptureIntentDetector.detect(in: clean) {
+            await captureAndSendUserTurn(originalText: clean, intent: intent)
+        } else {
+            await sendUserTurn(clean, attachments: [])
+        }
     }
 
-    private func sendUserTurn(_ text: String) async {
+    private func captureAndSendUserTurn(originalText: String, intent: CaptureIntent) async {
+        guard let captureMediaHandler else {
+            await sendUserTurn(originalText, attachments: [])
+            return
+        }
+
+        state = .capturingMedia
+        do {
+            let threadId = activeConversationID.flatMap { workspace.conversation(id: $0)?.threadId }
+            let attachments = try await captureMediaHandler(intent, activeConversationID, threadId)
+            guard !attachments.isEmpty else {
+                await beginListening()
+                return
+            }
+            let prompt = intent.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? originalText : intent.prompt
+            await sendUserTurn(prompt, attachments: attachments)
+        } catch is CancellationError {
+            await beginListening()
+        } catch {
+            await recoverFromCaptureFailure(error)
+        }
+    }
+
+    private func recoverFromCaptureFailure(_ error: Error) async {
+        failureMessage = error.localizedDescription
+        activeAgentText = ""
+        activeUserPartial = ""
+        stopSpeaking()
+
+        guard !isMuted else {
+            state = .listening
+            return
+        }
+
+        await voice.startRecording()
+        if !voice.isRecording {
+            _ = await voice.beginCallAudio()
+            await voice.startRecording()
+        }
+
+        state = .listening
+        if !voice.isRecording, !voice.status.isEmpty {
+            let status = voice.status
+            failureMessage = "\(error.localizedDescription) \(status)"
+        }
+    }
+
+    private func sendUserTurn(_ text: String, attachments: [ChatAttachment]) async {
         if client.isDisconnected {
-            let conversation = queueUserTurn(text)
+            let conversation = queueUserTurn(text, attachments: attachments)
             activeConversationID = conversation.id
             onConversationStarted(conversation.id)
             failureMessage = "Saved locally. Reconnect to send."
@@ -240,7 +335,7 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
             return
         }
 
-        guard let conversation = appendUserTurn(text) else {
+        guard let conversation = appendUserTurn(text, attachments: attachments) else {
             failureMessage = "Could not create call transcript."
             state = .failed
             return
@@ -249,7 +344,8 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
         activeConversationID = conversation.id
         onConversationStarted(conversation.id)
         let messageID = conversation.messages.last?.id
-        let payload = messageTextForAgent(text, attachments: [])
+        let payload = messageTextForAgent(text, attachments: attachments)
+        let requestAttachments = chatRequestAttachments(for: attachments)
 
         state = .sendingTurn
         activeAgentText = ""
@@ -262,6 +358,7 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
                     payload,
                     threadId: conversation.threadId,
                     conversationId: conversation.id,
+                    attachments: requestAttachments,
                     projectPath: conversation.projectPath
                 ) { event in
                     await self.handleStreamEvent(event, conversationId: conversation.id)
@@ -292,44 +389,27 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
         }
     }
 
-    private func stopActiveRun() async {
-        finalizeTask?.cancel()
-        activeSendTask?.cancel()
-        activeSendTask = nil
-        _ = voice.stopRecording()
-        speechSynthesizer.stopSpeaking(at: .immediate)
-        activeUserPartial = ""
-        activeAgentText = ""
-
-        guard let activeConversationID,
-              let conversation = workspace.conversation(id: activeConversationID)
-        else { return }
-
-        if conversation.isRunning {
-            workspace.cancelActiveResponse(in: activeConversationID)
-        }
-        try? await client.cancel(threadId: conversation.threadId)
-    }
-
-    private func appendUserTurn(_ text: String) -> Conversation? {
+    private func appendUserTurn(_ text: String, attachments: [ChatAttachment]) -> Conversation? {
         if let activeConversationID,
-           let existing = workspace.appendUserMessage(text, to: activeConversationID) {
+           let existing = workspace.appendUserMessage(text, to: activeConversationID, attachments: attachments) {
             return existing
         }
         return workspace.createConversation(
             firstMessage: text,
+            attachments: attachments,
             projectPath: initialProject?.path,
             projectName: initialProject?.name
         )
     }
 
-    private func queueUserTurn(_ text: String) -> Conversation {
+    private func queueUserTurn(_ text: String, attachments: [ChatAttachment]) -> Conversation {
         if let activeConversationID,
-           let existing = workspace.queueUserMessage(text, to: activeConversationID) {
+           let existing = workspace.queueUserMessage(text, to: activeConversationID, attachments: attachments) {
             return existing
         }
         return workspace.queueConversation(
             firstMessage: text,
+            attachments: attachments,
             projectPath: initialProject?.path,
             projectName: initialProject?.name
         )
@@ -347,6 +427,7 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
             if let text = event.text {
                 state = .agentThinking
                 workspace.appendActivity(text, to: conversationId)
+                narrateReasoning(text)
             }
         case "tool":
             if let tool = event.tool {
@@ -356,7 +437,8 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
         case "approval":
             if let approval = event.approval {
                 _ = voice.stopRecording()
-                speechSynthesizer.stopSpeaking(at: .immediate)
+                stopSpeaking()
+                soundscape.play(.question)
                 workspace.setApprovals([approval], for: conversationId)
                 workspace.appendActivity("question asked", to: conversationId)
                 state = .needsAnswer
@@ -379,36 +461,116 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
     }
 
     private func speak(_ text: String) {
+        // The agent's final answer is ready: interrupt any reasoning narration,
+        // chime, then read the final answer. Chime regardless of whether we end
+        // up speaking it (output may be off or the text trims to empty).
+        stopSpeaking()
+        soundscape.play(.replyReady)
+
         let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !clean.isEmpty else {
             Task { await beginListening() }
             return
         }
 
+        // Output toggle off OR a spoken-reply mode that produces nothing both
+        // mean "don't speak" — go back to listening like the empty path. The
+        // FULL reply is already recorded in chat via workspace.apply(...).
         guard isOutputEnabled else {
+            Task { await beginListening() }
+            return
+        }
+
+        let mode = LiveVoiceHeuristics.SpokenReplyMode.current
+        guard let spoken = LiveVoiceHeuristics.spokenText(from: clean, mode: mode) else {
             Task { await beginListening() }
             return
         }
 
         state = .agentSpeaking
         syncLiveActivity(detailOverride: "Replying")
-        let utterance = AVSpeechUtterance(string: clean)
-        utterance.rate = AVSpeechUtteranceDefaultSpeechRate
-        utterance.pitchMultiplier = 1.0
-        speechSynthesizer.speak(utterance)
-    }
+        soundscape.setAmbient(.none)   // duck the working bed for the spoken voice
 
-    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
-        Task { @MainActor in
-            guard self.state != .ended, self.state != .needsAnswer, self.state != .failed else { return }
-            await self.beginListening()
+        speakTask = Task { [weak self] in
+            guard let self else { return }
+            await self.vocalize(spoken)
+            if Task.isCancelled { return }
+            await self.advanceAfterSpeaking()
         }
     }
 
-    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
-        Task { @MainActor in
-            guard self.state == .agentSpeaking else { return }
-            await self.beginListening()
+    /// Read an intermediate reasoning/activity line aloud while the agent works,
+    /// so you hear it thinking. Drops lines that arrive while one is still being
+    /// spoken (stay live, do not back up). The final reply interrupts this via
+    /// `speak()`. Only runs during the working window, never over the reply.
+    private func narrateReasoning(_ text: String) {
+        guard isOutputEnabled, !isVocalizing else { return }
+        guard state == .agentThinking || state == .sendingTurn else { return }
+        // Only read natural-language thinking aloud. Tool/shell commands, code,
+        // and paths are dropped so the agent does not read bash at you.
+        guard let prose = LiveVoiceHeuristics.narratableThinking(from: text) else { return }
+
+        isVocalizing = true
+        narrateTask = Task { [weak self] in
+            guard let self else { return }
+            await self.vocalize(prose)
+            self.isVocalizing = false
+        }
+    }
+
+    /// Speak `text` once via the preferred voice: Gemini when a key is configured,
+    /// always falling back to Apple's on-device voice on any failure.
+    private func vocalize(_ text: String) async {
+        if gemini.isConfigured {
+            do {
+                try await gemini.play(text)
+            } catch {
+                if Task.isCancelled { return }
+                log.error("gemini tts failed, using apple voice: \(error.localizedDescription, privacy: .public)")
+                await apple.play(text)
+            }
+        } else {
+            await apple.play(text)
+        }
+    }
+
+    /// Stop any in-flight speech (final reply and reasoning narration) and cancel
+    /// their tasks.
+    private func stopSpeaking() {
+        speakTask?.cancel()
+        speakTask = nil
+        narrateTask?.cancel()
+        narrateTask = nil
+        isVocalizing = false
+        apple.stop()
+        gemini.stop()
+    }
+
+    /// After a reply finishes speaking, return to listening unless the call has
+    /// moved on (ended, asking a question, or failed).
+    private func advanceAfterSpeaking() async {
+        guard state != .ended, state != .needsAnswer, state != .failed else { return }
+        await beginListening()
+    }
+
+    /// Drive the ambient bed from each state change: a calm waiting pad while
+    /// listening, a working pad while the agent runs (the whole send/think/stream
+    /// window is grouped so the pad does not flutter as streaming flips state).
+    /// `speak()` ducks it to silence for the spoken reply. One-shot earcons fire
+    /// from semantic turn boundaries (see sendUserTurn/speak/approval), not here,
+    /// except the error tone, which only fires on a real transition into failure.
+    private func updateSoundscape(from old: CallState) {
+        switch state {
+        case .listening, .userSpeaking, .needsAnswer:
+            soundscape.setAmbient(.waiting)
+        case .sendingTurn, .capturingMedia, .agentThinking, .agentSpeaking:
+            soundscape.setAmbient(.working)
+        case .connecting, .failed, .ended:
+            soundscape.setAmbient(.none)
+        }
+
+        if state == .failed && old != .failed {
+            soundscape.play(.error)
         }
     }
 
@@ -474,6 +636,8 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
             return clipped(activeUserPartial)
         case .sendingTurn:
             return "Sending"
+        case .capturingMedia:
+            return "Taking a photo"
         case .agentThinking:
             return "kish-agent is working"
         case .agentSpeaking:

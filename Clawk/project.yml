@@ -1,4 +1,8 @@
 name: Clawk
+packages:
+  MetaWearablesDAT:
+    url: https://github.com/facebook/meta-wearables-dat-ios
+    from: "0.7.0"
 schemes:
   KishOSMac:
     build:
@@ -22,6 +26,12 @@ targets:
       - KishOSCore
     dependencies:
       - target: KishOSWidgetsExtension
+      - package: MetaWearablesDAT
+        product: MWDATCore
+      - package: MetaWearablesDAT
+        product: MWDATCamera
+      - package: MetaWearablesDAT
+        product: MWDATMockDevice
     settings:
       base:
         PRODUCT_NAME: KishOS
@@ -29,9 +39,14 @@ targets:
         INFOPLIST_FILE: Clawk/Info.plist
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: GN3TH9WD6W
+        # Gemini TTS key, injected at build time from the GEMINI_API_KEY env:
+        #   xcodebuild ... GEMINI_API_KEY="$GEMINI_API_KEY"
+        # Defaults empty so the app builds and falls back to the Apple voice.
+        GEMINI_API_KEY: ""
     info:
       path: Clawk/Info.plist
       properties:
+        GeminiAPIKey: $(GEMINI_API_KEY)
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         UILaunchStoryboardName: LaunchScreen
@@ -41,12 +56,32 @@ targets:
           NSAllowsArbitraryLoads: true
         NSLocalNetworkUsageDescription: "KishOS connects to kish-agent on your local network."
         NSCameraUsageDescription: "KishOS uses the camera to scan text into chat context."
+        NSBluetoothAlwaysUsageDescription: "KishOS connects to Meta Ray-Ban glasses for camera capture."
+        NSBluetoothPeripheralUsageDescription: "KishOS connects to Meta Ray-Ban glasses for camera capture."
         NSMicrophoneUsageDescription: "KishOS uses the microphone for push-to-talk messages."
         NSPhotoLibraryUsageDescription: "KishOS can scan text from selected photos into chat context."
         NSSpeechRecognitionUsageDescription: "KishOS uses speech recognition to turn voice into chat messages."
         NSSupportsLiveActivities: true
+        LSApplicationQueriesSchemes:
+          - fb-viewapp
+        CFBundleURLTypes:
+          - CFBundleTypeRole: Editor
+            CFBundleURLName: $(PRODUCT_BUNDLE_IDENTIFIER)
+            CFBundleURLSchemes:
+              - kishos
+        MWDAT:
+          AppLinkURLScheme: "kishos://"
+          MetaAppID: "0"
+          TeamID: "$(DEVELOPMENT_TEAM)"
+          Analytics:
+            OptOut: true
+        UISupportedExternalAccessoryProtocols:
+          - com.meta.ar.wearable
         UIBackgroundModes:
           - audio
+          - bluetooth-central
+          - bluetooth-peripheral
+          - external-accessory
   KishOSWidgetsExtension:
     type: app-extension
     platform: iOS
