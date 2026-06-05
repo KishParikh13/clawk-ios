@@ -662,7 +662,7 @@ private struct ChatScreen: View {
             if let callController {
                 IOSInlineCallHeader(
                     controller: callController,
-                    route: audio.statusLabel,
+                    audio: audio,
                     miniStatus: client.miniStatus,
                     chatStatus: client.chatStatus
                 )
@@ -678,7 +678,14 @@ private struct ChatScreen: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 18) {
                         if messages.isEmpty {
-                            if callController == nil {
+                            if let callController {
+                                IOSLiveVoiceHero(
+                                    state: callController.state,
+                                    routeState: audio.routeState,
+                                    routeLabel: audio.callRouteLabel,
+                                    routeKind: audio.activeRouteKind
+                                )
+                            } else {
                                 EmptyIOSChat()
                             }
                         } else {
@@ -865,7 +872,7 @@ private struct IOSChatHeaderTitle: View {
 
 private struct IOSInlineCallHeader: View {
     @ObservedObject var controller: LiveCallController
-    let route: String
+    @ObservedObject var audio: AudioRouteMonitor
     let miniStatus: String
     let chatStatus: String
 
@@ -873,22 +880,34 @@ private struct IOSInlineCallHeader: View {
         HStack(spacing: 9) {
             IOSInlineCallStatusDot(value: controller.state.label)
 
-            Text(controller.state.label)
-                .fontWeight(.semibold)
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Live voice")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                Text(controller.state.label)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(.primary)
+            }
 
             Text(Self.formatElapsed(controller.elapsedSeconds))
+                .font(.callout)
                 .monospacedDigit()
+                .foregroundStyle(.secondary)
 
-            Text(route)
+            Spacer(minLength: 8)
+
+            IOSRouteChip(
+                state: audio.routeState,
+                label: audio.callRouteLabel,
+                kind: audio.activeRouteKind
+            )
 
             ForEach(connectionLabels, id: \.self) { label in
                 Text(label)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-
-            Spacer(minLength: 0)
         }
-        .font(.callout)
-        .foregroundStyle(.secondary)
         .lineLimit(1)
         .minimumScaleFactor(0.78)
         .padding(.horizontal, 18)
@@ -942,6 +961,162 @@ private struct IOSInlineCallStatusDot: View {
             return .red
         default:
             return .secondary
+        }
+    }
+}
+
+/// View-layer presentation for the truthful `RouteState`. Single source for the
+/// color and glyph so the header chip and the idle hero never disagree.
+private enum IOSRoutePresentation {
+    static func tint(for state: RouteState) -> Color {
+        switch state {
+        case .externalActive: return .green
+        case .switching: return .orange
+        case .lost: return .orange
+        case .blocked: return .red
+        case .externalAvailable: return .secondary
+        case .system: return .secondary
+        }
+    }
+
+    static func glyph(for state: RouteState, kind: AudioRouteKind) -> String {
+        switch state {
+        case .externalActive:
+            switch kind {
+            case .glasses: return "eyeglasses"
+            case .headset: return "headphones"
+            default: return "dot.radiowaves.left.and.right"
+            }
+        case .switching: return "dot.radiowaves.left.and.right"
+        case .lost: return "exclamationmark.triangle.fill"
+        case .blocked: return "exclamationmark.octagon.fill"
+        case .externalAvailable: return "dot.radiowaves.left.and.right"
+        case .system: return "iphone"
+        }
+    }
+}
+
+/// Compact truthful route chip for the in-call header. Color and glyph come from
+/// `routeState`; the text is `callRouteLabel`. This is the single place route truth
+/// is shown in the header (call state stays separate, on the left).
+private struct IOSRouteChip: View {
+    let state: RouteState
+    let label: String
+    let kind: AudioRouteKind
+
+    @State private var pulse = false
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: IOSRoutePresentation.glyph(for: state, kind: kind))
+                .font(.system(size: 11, weight: .semibold))
+                .opacity(state == .switching && pulse ? 0.4 : 1)
+
+            Text(label)
+                .font(.caption.weight(.medium))
+                .lineLimit(1)
+        }
+        .foregroundStyle(tint)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 5)
+        .background(tint.opacity(0.14), in: Capsule())
+        .overlay(Capsule().strokeBorder(tint.opacity(0.22), lineWidth: 0.5))
+        .onAppear { startPulseIfNeeded() }
+        .onChange(of: state) { _, _ in startPulseIfNeeded() }
+    }
+
+    private var tint: Color {
+        IOSRoutePresentation.tint(for: state)
+    }
+
+    private func startPulseIfNeeded() {
+        guard state == .switching else {
+            pulse = false
+            return
+        }
+        withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) {
+            pulse = true
+        }
+    }
+}
+
+/// Calm hands-free idle state shown when a call is active but the chat is still
+/// empty. Replaces the blank screen with a centered live-voice surface: a breathing
+/// mic glyph, a short prompt, and the truthful route. Disappears once messages land.
+private struct IOSLiveVoiceHero: View {
+    let state: LiveCallController.CallState
+    let routeState: RouteState
+    let routeLabel: String
+    let routeKind: AudioRouteKind
+
+    @State private var breathe = false
+
+    var body: some View {
+        VStack(spacing: 20) {
+            ZStack {
+                Circle()
+                    .fill(Color.accentColor.opacity(0.10))
+                    .frame(width: 132, height: 132)
+                    .scaleEffect(breathe ? 1.06 : 0.94)
+
+                Circle()
+                    .fill(Color.accentColor.opacity(0.16))
+                    .frame(width: 92, height: 92)
+
+                Image(systemName: glyph)
+                    .font(.system(size: 34, weight: .medium))
+                    .foregroundStyle(Color.accentColor)
+                    .symbolRenderingMode(.hierarchical)
+            }
+            .animation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true), value: breathe)
+
+            VStack(spacing: 6) {
+                Text(headline)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.primary)
+
+                Text(subhead)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+
+            IOSRouteChip(state: routeState, label: routeLabel, kind: routeKind)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 96)
+        .padding(.horizontal, 24)
+        .onAppear { breathe = true }
+    }
+
+    private var glyph: String {
+        switch state {
+        case .agentSpeaking: return "waveform"
+        case .agentThinking, .sendingTurn: return "ellipsis"
+        case .failed: return "exclamationmark.triangle"
+        default: return "mic.fill"
+        }
+    }
+
+    private var headline: String {
+        switch state {
+        case .connecting: return "Connecting"
+        case .agentThinking, .sendingTurn: return "Working on it"
+        case .agentSpeaking: return "Speaking"
+        case .needsAnswer: return "Waiting on you"
+        case .failed: return "Call ended"
+        default: return "Live voice on"
+        }
+    }
+
+    private var subhead: String {
+        switch state {
+        case .connecting: return "Setting up the call."
+        case .agentThinking, .sendingTurn: return "Hold on, the reply is coming."
+        case .agentSpeaking: return "Reading the reply aloud."
+        case .needsAnswer: return "Answer to keep going."
+        case .failed: return "Tap end to close out."
+        default: return "Listening, just talk. Hands-free."
         }
     }
 }
@@ -2832,7 +3007,7 @@ private struct IOSSettingsPage: View {
                         set: { audio.setPrefersHandsFreeRoute($0) }
                     )) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Use glasses or headset")
+                            Text("Go hands-free")
                             Text(audio.glassesSummary)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)

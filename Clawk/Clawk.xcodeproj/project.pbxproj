@@ -26,7 +26,6 @@
 		308209664CE7C20106C3362B /* FileTextPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FD04F5548C04F8DD34D6D50 /* FileTextPickerView.swift */; };
 		343EF98CC7F86AA397A05B39 /* ProjectPickerPopover.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD5ACACFC3A919EE97C9392D /* ProjectPickerPopover.swift */; };
 		406B8FE4F7E6B617DF8742F4 /* ClawkApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A7C72458B614B76F4F4240A /* ClawkApp.swift */; };
-		4086A8FB27F7D6AD5FB77BFF /* LiveCallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53E846F62D3AD85A7F290A3A /* LiveCallView.swift */; };
 		4DF47FC10F47C2C8D771C0BF /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A733B461015C5FBC8DD9322E /* DashboardView.swift */; };
 		520D1CD0D409E1F4E2F2256B /* CostsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 493A6B6CB1096E8BA7B489A8 /* CostsView.swift */; };
 		544FE18D516A26C1E3093F9D /* ChatListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8E4765E74CC787BC5A5D4C7 /* ChatListView.swift */; };
@@ -121,7 +120,6 @@
 		493A6B6CB1096E8BA7B489A8 /* CostsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CostsView.swift; sourceTree = "<group>"; };
 		4A57A732EA4AFC2B553AF70A /* AgentClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentClient.swift; sourceTree = "<group>"; };
 		4F68684194B8B5DC79D73D38 /* ChatDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatDetailView.swift; sourceTree = "<group>"; };
-		53E846F62D3AD85A7F290A3A /* LiveCallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveCallView.swift; sourceTree = "<group>"; };
 		57945B542C95784AEA518EA7 /* ConversationStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationStoreTests.swift; sourceTree = "<group>"; };
 		5A89B98F7C06E05A590381E2 /* GatewayChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayChatView.swift; sourceTree = "<group>"; };
 		5FB7BD6F07C94FA433856EFD /* CameraTextCaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraTextCaptureView.swift; sourceTree = "<group>"; };
@@ -213,7 +211,6 @@
 				D387D95D0B541A46D648E1C0 /* KishOSIOSRootView.swift */,
 				9FE1FF29E9B858E390CE9933 /* KishOSLiveActivityController.swift */,
 				9CC1BF11D78A813E2D75B65E /* LiveCallController.swift */,
-				53E846F62D3AD85A7F290A3A /* LiveCallView.swift */,
 				DC24015FE274E4F772DA97DD /* LiveDashboardTabs.swift */,
 				E59A447B777F28AAE47C8346 /* MemoryView.swift */,
 				AB9ECBC77D8360B0E33A59D8 /* MessageStore.swift */,
@@ -436,7 +433,6 @@
 				BDEEDBE68E3D64469C36508C /* KishOSLiveActivityController.swift in Sources */,
 				E0764B563F6690479678CB27 /* KishOSWorkspace.swift in Sources */,
 				5A7AFF483B2ADF25FE7A563D /* LiveCallController.swift in Sources */,
-				4086A8FB27F7D6AD5FB77BFF /* LiveCallView.swift in Sources */,
 				BEA296B530D3EE0B1A1037F2 /* LiveDashboardTabs.swift in Sources */,
 				2A69B05F72FD85C8B56B8A5D /* LiveVoiceHeuristics.swift in Sources */,
 				948B83E8BA1F40E0036CA590 /* MemoryView.swift in Sources */,
