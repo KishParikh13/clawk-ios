@@ -99,4 +99,155 @@ final class LiveVoiceHeuristicsTests: XCTestCase {
     func testCollapsedMultipleSpacesStillTwoWords() {
         XCTAssertTrue(auto("yes    please"))
     }
+
+    // MARK: - SpokenReplyMode.spokenText
+
+    private typealias Mode = LiveVoiceHeuristics.SpokenReplyMode
+
+    private func spoken(_ reply: String, _ mode: Mode) -> String? {
+        LiveVoiceHeuristics.spokenText(from: reply, mode: mode)
+    }
+
+    func testOffAlwaysNil() {
+        XCTAssertNil(spoken("hello there", .off))
+        XCTAssertNil(spoken("", .off))
+        XCTAssertNil(spoken("```code```", .off))
+        XCTAssertNil(spoken("a much longer reply with several words", .off))
+    }
+
+    func testFullStripsCodeFenceKeepsProse() {
+        let reply = """
+        Here is the plan.
+        ```
+        let x = 1
+        print(x)
+        ```
+        That is all.
+        """
+        let result = spoken(reply, .full)
+        XCTAssertNotNil(result)
+        XCTAssertTrue(result!.contains("Here is the plan."))
+        XCTAssertTrue(result!.contains("That is all."))
+        XCTAssertFalse(result!.contains("let x = 1"))
+        XCTAssertFalse(result!.contains("```"))
+    }
+
+    func testFullPreservesPlainProse() {
+        let reply = "Just some normal prose with no code at all."
+        XCTAssertEqual(spoken(reply, .full), reply)
+    }
+
+    func testFullEmptyAfterTrimmingIsNil() {
+        XCTAssertNil(spoken("   \n  ", .full))
+        // A reply that is ONLY a code fence has no prose to speak.
+        XCTAssertNil(spoken("```\nlet x = 1\n```", .full))
+    }
+
+    func testConciseNormalProseIsNonNil() {
+        let reply = "Deployed the change and verified it works."
+        let result = spoken(reply, .concise)
+        XCTAssertNotNil(result)
+        XCTAssertEqual(result, reply)
+    }
+
+    func testConciseStripsCodeAndInlineCode() {
+        let reply = """
+        I updated `config.swift` and ran the build.
+        ```
+        swift build
+        ```
+        It passed.
+        """
+        let result = spoken(reply, .concise)
+        XCTAssertNotNil(result)
+        XCTAssertFalse(result!.contains("swift build"))
+        XCTAssertFalse(result!.contains("`"))
+        XCTAssertFalse(result!.contains("config.swift"))
+    }
+
+    func testConcisePrefersFirstParagraph() {
+        let reply = """
+        The fix is done.
+
+        Here are a bunch of additional details that should not be spoken aloud first.
+        """
+        let result = spoken(reply, .concise)
+        XCTAssertEqual(result, "The fix is done.")
+    }
+
+    func testConciseCapsLength() {
+        // Build a long multi-paragraph reply well over 280 chars in one paragraph.
+        let sentence = "This sentence has a number of words that add up over time. "
+        let longParagraph = String(repeating: sentence, count: 12) // ~700 chars
+        let reply = longParagraph + "\n\nSecond paragraph that should be ignored."
+        let result = spoken(reply, .concise)
+        XCTAssertNotNil(result)
+        // Cap is ~280 chars; ellipsis adds one. Allow a small boundary slack.
+        XCTAssertLessThanOrEqual(result!.count, 281)
+        // Ends sensibly: either on a sentence boundary or with a truncation mark.
+        let last = result!.last!
+        XCTAssertTrue(last == "." || last == "!" || last == "?" || last == "…")
+        // Did not bleed into the second paragraph.
+        XCTAssertFalse(result!.contains("Second paragraph"))
+    }
+
+    func testConciseMidSentenceTruncationAppendsEllipsis() {
+        // A single sentence with no internal punctuation, longer than the budget,
+        // must be cut on a word boundary and get an ellipsis.
+        let word = "alpha "
+        let oneLongSentence = String(repeating: word, count: 80) // ~480 chars, no period
+        let result = spoken(oneLongSentence, .concise)
+        XCTAssertNotNil(result)
+        XCTAssertLessThanOrEqual(result!.count, 281)
+        XCTAssertTrue(result!.hasSuffix("…"))
+        // Cut on a word boundary: the char before the ellipsis is a full word char,
+        // and there is no stray partial word fragment.
+        XCTAssertTrue(result!.hasSuffix("alpha…"))
+    }
+
+    func testConciseNoTruncationHasNoEllipsis() {
+        let reply = "Short enough to speak whole."
+        let result = spoken(reply, .concise)
+        XCTAssertEqual(result, reply)
+        XCTAssertFalse(result!.hasSuffix("…"))
+    }
+
+    func testConciseEmptyAfterStrippingIsNil() {
+        XCTAssertNil(spoken("```\nonly code here\n```", .concise))
+        XCTAssertNil(spoken("   ", .concise))
+    }
+
+    // MARK: - SpokenReplyMode.current
+
+    func testCurrentDefaultsToConcise() {
+        let key = Mode.storageKey
+        let saved = UserDefaults.standard.string(forKey: key)
+        UserDefaults.standard.removeObject(forKey: key)
+        defer {
+            if let saved { UserDefaults.standard.set(saved, forKey: key) }
+            else { UserDefaults.standard.removeObject(forKey: key) }
+        }
+        XCTAssertEqual(Mode.current, .concise)
+    }
+
+    func testCurrentReadsStoredValue() {
+        let key = Mode.storageKey
+        let saved = UserDefaults.standard.string(forKey: key)
+        defer {
+            if let saved { UserDefaults.standard.set(saved, forKey: key) }
+            else { UserDefaults.standard.removeObject(forKey: key) }
+        }
+        UserDefaults.standard.set(Mode.full.rawValue, forKey: key)
+        XCTAssertEqual(Mode.current, .full)
+        UserDefaults.standard.set(Mode.off.rawValue, forKey: key)
+        XCTAssertEqual(Mode.current, .off)
+    }
+
+    // MARK: - SpokenReplyMode.title
+
+    func testTitleMapping() {
+        XCTAssertEqual(Mode.concise.title, "Concise")
+        XCTAssertEqual(Mode.full.title, "Full")
+        XCTAssertEqual(Mode.off.title, "Off")
+    }
 }

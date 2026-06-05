@@ -2734,6 +2734,9 @@ private struct IOSSettingsPage: View {
     let agentURL: String
     let onReconnect: () -> Void
 
+    @AppStorage(LiveVoiceHeuristics.SpokenReplyMode.storageKey)
+    private var spokenReplyMode: LiveVoiceHeuristics.SpokenReplyMode = .concise
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
@@ -2804,6 +2807,24 @@ private struct IOSSettingsPage: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
+                    }
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("Spoken replies")
+                            Spacer()
+                            Picker("Spoken replies", selection: $spokenReplyMode) {
+                                ForEach(LiveVoiceHeuristics.SpokenReplyMode.allCases, id: \.self) { mode in
+                                    Text(mode.title).tag(mode)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                            .labelsHidden()
+                            .fixedSize()
+                        }
+                        Text("How replies are read aloud in live voice.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
 
                     Toggle(isOn: Binding(

@@ -398,14 +398,23 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
             return
         }
 
+        // Output toggle off OR a spoken-reply mode that produces nothing both
+        // mean "don't speak" — go back to listening like the empty path. The
+        // FULL reply is already recorded in chat via workspace.apply(...).
         guard isOutputEnabled else {
+            Task { await beginListening() }
+            return
+        }
+
+        let mode = LiveVoiceHeuristics.SpokenReplyMode.current
+        guard let spoken = LiveVoiceHeuristics.spokenText(from: clean, mode: mode) else {
             Task { await beginListening() }
             return
         }
 
         state = .agentSpeaking
         syncLiveActivity(detailOverride: "Replying")
-        let utterance = AVSpeechUtterance(string: clean)
+        let utterance = AVSpeechUtterance(string: spoken)
         utterance.rate = AVSpeechUtteranceDefaultSpeechRate
         utterance.pitchMultiplier = 1.0
         speechSynthesizer.speak(utterance)
