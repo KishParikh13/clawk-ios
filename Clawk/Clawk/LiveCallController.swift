@@ -203,11 +203,20 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
     }
 
     private func scheduleUtteranceFinalization(for transcript: String) {
+        // Only auto-finalize substantial utterances. One-letter or one-noise
+        // partials wait — when the user keeps speaking, handleTranscriptChange
+        // reschedules with the longer transcript, which eventually qualifies.
+        // Manual send (submitCurrentUtterance) is never gated by this.
+        guard LiveVoiceHeuristics.shouldAutoFinalizeUtterance(transcript) else {
+            finalizeTask?.cancel()
+            return
+        }
         finalizeTask?.cancel()
         finalizeTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(1.35))
             await MainActor.run {
                 guard let self,
+                      !self.isMuted,
                       self.activeUserPartial == transcript,
                       self.state == .userSpeaking
                 else { return }
@@ -218,6 +227,10 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
 
     private func finalizeCurrentUtterance() async {
         finalizeTask?.cancel()
+        // Never send a partial that the user has already abandoned by ending
+        // the call. (Mute/discard route through here too via manual send, where
+        // sending the captured text is the desired behavior.)
+        guard state != .ended else { return }
         let spokenText = voice.stopRecording() ?? activeUserPartial
         let clean = spokenText.trimmingCharacters(in: .whitespacesAndNewlines)
         activeUserPartial = ""
