@@ -1,6 +1,8 @@
 # KishOS iOS Attachments Spec
 
-Status: implemented and tested.
+Status: live. This doc is retained as the feature-specific implementation record.
+
+Current roadmap source of truth: `docs/ROADMAP.md`.
 
 Preserved app commits:
 
