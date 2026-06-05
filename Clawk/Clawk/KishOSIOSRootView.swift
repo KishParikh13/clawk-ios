@@ -3085,7 +3085,7 @@ private struct ConversationPicker: View {
                         Text("Autonomy")
                             .font(.callout.weight(.semibold))
                             .foregroundStyle(.primary)
-                        Text("Brief, review, memory, routines")
+                        Text("Brief, inbox, memory, routines")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)

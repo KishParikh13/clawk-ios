@@ -507,6 +507,38 @@ final class KishAgentClient: ObservableObject {
         return payload.routines
     }
 
+    func updateRoutine(
+        _ id: String,
+        name: String? = nil,
+        state: RoutineState? = nil,
+        trigger: RoutineDefinitionTrigger? = nil,
+        allowedContextSources: [ContextSource]? = nil,
+        allowedProjectPaths: [String]? = nil,
+        allowedActionClasses: [ActionClass]? = nil
+    ) async throws -> KishRoutine {
+        let payload: RoutineMutationPayload = try await autonomySend(
+            ["routines", id],
+            method: "PATCH",
+            body: RoutineUpdateRequest(
+                name: name,
+                state: state,
+                trigger: trigger,
+                allowedContextSources: allowedContextSources,
+                allowedProjectPaths: allowedProjectPaths,
+                allowedActionClasses: allowedActionClasses
+            )
+        )
+        return payload.routine
+    }
+
+    func deleteRoutine(_ id: String) async throws {
+        let _: EmptyAutonomyPayload = try await autonomySend(
+            ["routines", id],
+            method: "DELETE",
+            body: EmptyAutonomyRequest()
+        )
+    }
+
     func runRoutine(_ id: String, idempotencyKey: String, trigger: RoutineRunTrigger) async throws -> RoutineRunResult {
         try await autonomySend(
             ["routines", id, "run"],
@@ -1097,6 +1129,10 @@ private struct RoutineListPayload: Decodable {
     let routines: [KishRoutine]
 }
 
+private struct RoutineMutationPayload: Decodable {
+    let routine: KishRoutine
+}
+
 private struct RoutineRunsPayload: Decodable {
     let runs: [RoutineRun]
     let nextCursor: String?
@@ -1154,6 +1190,10 @@ private struct ReviewCardUpdateRequest: Encodable {
 private struct PoliciesPayload: Decodable {
     let policies: [RoutinePolicy]
 }
+
+private struct EmptyAutonomyRequest: Encodable {}
+
+private struct EmptyAutonomyPayload: Decodable {}
 
 private struct RoutineUpdateRequest: Encodable {
     let name: String?

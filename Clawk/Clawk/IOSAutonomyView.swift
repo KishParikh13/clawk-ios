@@ -4,7 +4,7 @@ struct IOSAutonomyView: View {
     @ObservedObject var client: KishAgentClient
     let onOpenConversation: (String?, String?) async -> Bool
 
-    @State private var selectedSection: IOSAutonomySection = .brief
+    @State private var selectedSection: IOSAutonomySection = .inbox
     @State private var didChooseInitialSection = false
     @State private var summary: AutonomySummary?
     @State private var reviewCards: [ReviewCard] = []
@@ -14,6 +14,8 @@ struct IOSAutonomyView: View {
     @State private var isLoading = false
     @State private var isRunningBrief = false
     @State private var updatingCardID: String?
+    @State private var routineActionID: String?
+    @State private var selectedRoutine: KishRoutine?
     @State private var errorMessage: String?
 
     var body: some View {
@@ -48,7 +50,7 @@ struct IOSAutonomyView: View {
                 } else if let errorMessage, summary == nil {
                     IOSAutonomyMessageView(
                         systemImage: "exclamationmark.triangle",
-                        title: "Autonomy unavailable",
+                        title: "Inbox unavailable",
                         message: errorMessage,
                         actionTitle: "Retry",
                         action: { Task { await refresh() } }
@@ -77,6 +79,21 @@ struct IOSAutonomyView: View {
         .task {
             await refresh()
         }
+        .sheet(item: $selectedRoutine) { routine in
+            IOSRoutineEditorSheet(
+                routine: routine,
+                isWorking: routineActionID == routine.id,
+                onSave: { name, state in
+                    Task { await saveRoutine(routine, name: name, state: state) }
+                },
+                onRun: {
+                    Task { await runRoutine(routine) }
+                },
+                onDelete: {
+                    Task { await deleteRoutine(routine) }
+                }
+            )
+        }
     }
 
     @ViewBuilder
@@ -84,14 +101,12 @@ struct IOSAutonomyView: View {
         switch selectedSection {
         case .brief:
             briefSection
-        case .review:
-            reviewSection
+        case .inbox:
+            inboxSection
         case .recentRuns:
             recentRunsSection
         case .memory:
             memorySection
-        case .routines:
-            routinesSection
         }
     }
 
@@ -171,13 +186,22 @@ struct IOSAutonomyView: View {
         }
     }
 
-    private var reviewSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+    private var inboxSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Inbox")
+                    .font(.headline)
+                Text("Routine output, approvals, and recurring work all land here.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             if reviewCards.isEmpty {
                 IOSAutonomyMessageView(
                     systemImage: "checkmark.circle",
-                    title: "No open review",
-                    message: "Open review cards will appear here."
+                    title: "No inbox items",
+                    message: "Routine approvals, generated briefs, and review cards will appear here."
                 )
             } else {
                 ForEach(reviewCards) { card in
@@ -187,6 +211,46 @@ struct IOSAutonomyView: View {
                         onPrimary: { Task { await primaryAction(for: card) } },
                         onDismiss: { Task { await update(card, decision: .dismiss) } }
                     )
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Routines")
+                            .font(.headline)
+                        Text("Tap a routine to edit, run, turn on or off, or delete it.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    IOSAutonomyPill(text: "\(routines.count)", tint: .blue)
+                }
+
+                if let counts = summary?.routineCounts {
+                    IOSAutonomyStatsRow(items: [
+                        .init(title: "Enabled", value: "\(counts.enabled)", tint: .green),
+                        .init(title: "Proposed", value: "\(counts.proposed)", tint: counts.proposed > 0 ? .orange : .secondary),
+                        .init(title: "Paused", value: "\(counts.paused)", tint: counts.paused > 0 ? .orange : .secondary),
+                        .init(title: "Disabled", value: "\(counts.disabled)", tint: .secondary)
+                    ])
+                }
+
+                if routines.isEmpty {
+                    IOSAutonomyMessageView(
+                        systemImage: "repeat",
+                        title: "No routines",
+                        message: "Approved recurring work will appear here."
+                    )
+                } else {
+                    ForEach(routines) { routine in
+                        Button {
+                            selectedRoutine = routine
+                        } label: {
+                            IOSRoutineInboxRow(routine: routine, tint: tint(for: routine.state))
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
         }
@@ -267,43 +331,6 @@ struct IOSAutonomyView: View {
         }
     }
 
-    private var routinesSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if let counts = summary?.routineCounts {
-                IOSAutonomyStatsRow(items: [
-                    .init(title: "Enabled", value: "\(counts.enabled)", tint: .green),
-                    .init(title: "Proposed", value: "\(counts.proposed)", tint: counts.proposed > 0 ? .orange : .secondary),
-                    .init(title: "Paused", value: "\(counts.paused)", tint: counts.paused > 0 ? .orange : .secondary),
-                    .init(title: "Disabled", value: "\(counts.disabled)", tint: .secondary)
-                ])
-            }
-
-            if routines.isEmpty {
-                IOSAutonomyMessageView(
-                    systemImage: "repeat",
-                    title: "No routines",
-                    message: "Routines will appear here."
-                )
-            } else {
-                ForEach(routines) { routine in
-                    IOSAutonomyPanel {
-                        HStack(alignment: .firstTextBaseline, spacing: 10) {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(routine.name)
-                                    .font(.callout.weight(.semibold))
-                                Text(routine.template.rawValue)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            IOSAutonomyPill(text: routine.state.rawValue, tint: tint(for: routine.state))
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     private func refresh() async {
         isLoading = true
         errorMessage = nil
@@ -329,7 +356,7 @@ struct IOSAutonomyView: View {
             routines = nextRoutines.sorted { $0.updatedAt > $1.updatedAt }
 
             if !didChooseInitialSection {
-                selectedSection = nextCards.isEmpty ? .brief : .review
+                selectedSection = nextCards.isEmpty ? .brief : .inbox
                 didChooseInitialSection = true
             }
         } catch {
@@ -384,6 +411,61 @@ struct IOSAutonomyView: View {
             errorMessage = error.localizedDescription
         }
         updatingCardID = nil
+    }
+
+    private func saveRoutine(_ routine: KishRoutine, name: String, state: RoutineState) async {
+        guard routineActionID == nil else { return }
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else {
+            errorMessage = "Routine name cannot be empty."
+            return
+        }
+
+        routineActionID = routine.id
+        errorMessage = nil
+        do {
+            let updated = try await client.updateRoutine(routine.id, name: trimmedName, state: state)
+            selectedRoutine = updated
+            await refresh()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        routineActionID = nil
+    }
+
+    private func runRoutine(_ routine: KishRoutine) async {
+        guard routineActionID == nil else { return }
+        routineActionID = routine.id
+        errorMessage = nil
+        let manualID = "manual_\(UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased())"
+        do {
+            let result = try await client.runRoutine(
+                routine.id,
+                idempotencyKey: "routine:\(routine.id):manual:\(manualID)",
+                trigger: RoutineRunTrigger(type: .manual, manualRunId: manualID)
+            )
+            await refresh()
+            if let conversationId = result.conversationId, let threadId = result.threadId {
+                _ = await onOpenConversation(conversationId, threadId)
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        routineActionID = nil
+    }
+
+    private func deleteRoutine(_ routine: KishRoutine) async {
+        guard routineActionID == nil else { return }
+        routineActionID = routine.id
+        errorMessage = nil
+        do {
+            try await client.deleteRoutine(routine.id)
+            selectedRoutine = nil
+            await refresh()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        routineActionID = nil
     }
 
     private func relativeText(for date: Date) -> String {
@@ -461,12 +543,12 @@ private struct IOSAutonomyOverview: View {
 
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
                 IOSAutonomySignalCard(
-                    title: "Review",
+                    title: "Inbox",
                     value: reviewValue,
                     detail: reviewDetail,
                     systemImage: "checklist",
                     tint: reviewTint,
-                    action: { onSelect(.review) }
+                    action: { onSelect(.inbox) }
                 )
                 IOSAutonomySignalCard(
                     title: "Latest Brief",
@@ -640,12 +722,90 @@ private extension RoutineRunState {
     }
 }
 
+private extension RoutineState {
+    static let editableStates: [RoutineState] = [.enabled, .paused, .disabled, .proposed]
+
+    var displayTitle: String {
+        switch self {
+        case .proposed:
+            return "Proposed"
+        case .enabled:
+            return "On"
+        case .paused:
+            return "Paused"
+        case .disabled:
+            return "Off"
+        }
+    }
+}
+
+private extension RoutineTemplate {
+    var displayTitle: String {
+        switch self {
+        case .dailyBrief:
+            return "Daily brief"
+        case .ideaGeneration:
+            return "Idea generation"
+        case .projectMaintenance:
+            return "Project maintenance"
+        case .prioritization:
+            return "Prioritization"
+        }
+    }
+}
+
+private extension RoutineDefinitionTrigger {
+    var displayText: String {
+        switch type {
+        case .manual:
+            return "Manual"
+        case .scheduled:
+            return schedule ?? "Scheduled"
+        case .event:
+            return eventName ?? "Event"
+        }
+    }
+}
+
+private extension OutputMode {
+    var displayTitle: String {
+        switch self {
+        case .newConversationPerRun:
+            return "New conversation per run"
+        }
+    }
+}
+
+private extension ActionClass {
+    var displayTitle: String {
+        switch self {
+        case .readContext:
+            return "Read context"
+        case .summarize:
+            return "Summarize"
+        case .draftArtifact:
+            return "Draft artifact"
+        case .createReviewCard:
+            return "Create review card"
+        case .runLightChecks:
+            return "Run checks"
+        case .startCoding:
+            return "Start coding"
+        case .sendExternalMessage:
+            return "Send message"
+        case .deleteOrDestructive:
+            return "Destructive action"
+        case .mergeDeployPublish:
+            return "Merge/deploy/publish"
+        }
+    }
+}
+
 private enum IOSAutonomySection: String, CaseIterable, Identifiable {
     case brief
-    case review
+    case inbox
     case recentRuns
     case memory
-    case routines
 
     var id: String { rawValue }
 
@@ -653,14 +813,160 @@ private enum IOSAutonomySection: String, CaseIterable, Identifiable {
         switch self {
         case .brief:
             return "Brief"
-        case .review:
-            return "Review"
+        case .inbox:
+            return "Inbox"
         case .recentRuns:
             return "Recent Runs"
         case .memory:
             return "Memory"
-        case .routines:
-            return "Routines"
+        }
+    }
+}
+
+private struct IOSRoutineInboxRow: View {
+    let routine: KishRoutine
+    let tint: Color
+
+    var body: some View {
+        IOSAutonomyPanel {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(routine.name)
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(2)
+                    Text(routine.template.displayTitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 8)
+
+                IOSAutonomyPill(text: routine.state.displayTitle, tint: tint)
+            }
+
+            HStack(spacing: 8) {
+                Label(routine.trigger.displayText, systemImage: "clock")
+                Label("\(routine.allowedActionClasses.count) actions", systemImage: "checklist")
+            }
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+
+            Text("Edit, run, turn on or off, or delete")
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(.blue)
+        }
+        .accessibilityLabel("\(routine.name), \(routine.state.displayTitle), edit routine")
+    }
+}
+
+private struct IOSRoutineEditorSheet: View {
+    let routine: KishRoutine
+    let isWorking: Bool
+    let onSave: (String, RoutineState) -> Void
+    let onRun: () -> Void
+    let onDelete: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var name: String
+    @State private var state: RoutineState
+    @State private var isConfirmingDelete = false
+
+    init(
+        routine: KishRoutine,
+        isWorking: Bool,
+        onSave: @escaping (String, RoutineState) -> Void,
+        onRun: @escaping () -> Void,
+        onDelete: @escaping () -> Void
+    ) {
+        self.routine = routine
+        self.isWorking = isWorking
+        self.onSave = onSave
+        self.onRun = onRun
+        self.onDelete = onDelete
+        _name = State(initialValue: routine.name)
+        _state = State(initialValue: routine.state)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Routine") {
+                    TextField("Name", text: $name)
+                    Picker("State", selection: $state) {
+                        ForEach(RoutineState.editableStates, id: \.self) { state in
+                            Text(state.displayTitle).tag(state)
+                        }
+                    }
+                    Text(routine.template.displayTitle)
+                        .foregroundStyle(.secondary)
+                }
+
+                Section("Policy") {
+                    LabeledContent("Trigger", value: routine.trigger.displayText)
+                    LabeledContent("Output", value: routine.outputMode.displayTitle)
+                    if routine.allowedActionClasses.isEmpty {
+                        Text("No allowed actions")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Allowed actions")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            IOSAutonomyFlagRow(flags: routine.allowedActionClasses.map(\.displayTitle))
+                        }
+                    }
+                }
+
+                Section {
+                    Button {
+                        onSave(name, state)
+                    } label: {
+                        if isWorking {
+                            ProgressView()
+                        } else {
+                            Text("Save Changes")
+                                .frame(maxWidth: .infinity)
+                        }
+                    }
+                    .disabled(isWorking || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                    Button {
+                        onRun()
+                    } label: {
+                        Label("Run Now", systemImage: "play.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .disabled(isWorking || state == .disabled)
+                }
+
+                Section {
+                    Button(role: .destructive) {
+                        isConfirmingDelete = true
+                    } label: {
+                        Text("Delete Routine")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .disabled(isWorking)
+                }
+            }
+            .navigationTitle("Edit Routine")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+            .confirmationDialog("Delete this routine?", isPresented: $isConfirmingDelete, titleVisibility: .visible) {
+                Button("Delete Routine", role: .destructive) {
+                    onDelete()
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This removes it from the local autonomy inbox.")
+            }
         }
     }
 }
