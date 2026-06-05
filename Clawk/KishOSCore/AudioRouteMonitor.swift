@@ -41,6 +41,14 @@ final class AudioRouteMonitor: ObservableObject {
     @Published private(set) var preferredRouteName: String?
     @Published var prefersHandsFreeRoute = false
 
+    /// True while a live call owns the audio session (begun by `beginCallSession`,
+    /// cleared by `endCallSession`). During this window the session is NOT torn down
+    /// between listen/speak turns.
+    @Published private(set) var isCallSessionActive = false
+    /// Whether an external (glasses/bluetooth/headset) route was seen at any point
+    /// during the current call session. Read by P0.3 to derive the "lost" route state.
+    @Published private(set) var wasExternalSeenInCallSession = false
+
     private var isStarted = false
     private let userDefaults: UserDefaults
     private static let prefersHandsFreeRouteKey = "KishOSPrefersHandsFreeRoute"
@@ -198,6 +206,10 @@ final class AudioRouteMonitor: ObservableObject {
         preferredRouteName = nil
         availableRoutes = []
         #endif
+
+        if isCallSessionActive, isPreferredRouteActive {
+            wasExternalSeenInCallSession = true
+        }
     }
 
     func setPrefersHandsFreeRoute(_ enabled: Bool) {
@@ -233,6 +245,46 @@ final class AudioRouteMonitor: ObservableObject {
         #else
         refresh()
         #endif
+    }
+
+    /// Begin a live-call audio session. The call owns the session for its full
+    /// duration. ALWAYS attempts the preferred external input regardless of
+    /// `prefersHandsFreeRoute` (force semantics). If no external input exists or
+    /// activation throws, the call still runs on phone audio — this never fails the
+    /// call. Note: call mode does NOT use `.defaultToSpeaker`.
+    func beginCallSession(timeout: TimeInterval = 2.0) async {
+        wasExternalSeenInCallSession = false
+        isCallSessionActive = true
+        #if os(iOS)
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetoothHFP, .allowBluetoothA2DP, .duckOthers])
+            try session.setActive(true, options: .notifyOthersOnDeactivation)
+            if let preferredInput = preferredInput(from: session.availableInputs ?? []) {
+                try? session.setPreferredInput(preferredInput)
+                await waitForRouteActivation(preferredInput: preferredInput, timeout: timeout)
+            } else {
+                activationDetail = "No external input"
+            }
+        } catch {
+            // Never fail the call: mark route unavailable and continue on phone audio.
+            status = "Unavailable"
+            activationDetail = error.localizedDescription
+        }
+        #endif
+        refresh()
+    }
+
+    /// End the live-call audio session: deactivate, clear the preferred input, and
+    /// reset call-session route context.
+    func endCallSession() {
+        isCallSessionActive = false
+        wasExternalSeenInCallSession = false
+        #if os(iOS)
+        clearPreferredInput()
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        #endif
+        refresh()
     }
 
     private func clearPreferredInput() {

@@ -18,6 +18,7 @@
 		182D525333F502C00AAF063A /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 227D7EAA8BA576629153DE13 /* HomeView.swift */; };
 		1AFDFA4A2AC2CEE77CD4C856 /* ConversationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9440A6471F2F63111CB49B46 /* ConversationStore.swift */; };
 		1CDB7EBBF886F63BA1460083 /* GatewayProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA864BCB8E5CB4DC707F8304 /* GatewayProtocol.swift */; };
+		1E8856CDDD2EDD4D58AE1764 /* AudioRouteMonitorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A09B9BE9268B212D6655E35 /* AudioRouteMonitorTests.swift */; };
 		25CAA09F895BFE70FB427FE6 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9BBBBEE778FA330FC6B2E92 /* SettingsView.swift */; };
 		2808C6EC9F10FBF1D766B1E0 /* MessageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB9ECBC77D8360B0E33A59D8 /* MessageStore.swift */; };
 		308209664CE7C20106C3362B /* FileTextPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FD04F5548C04F8DD34D6D50 /* FileTextPickerView.swift */; };
@@ -135,6 +136,7 @@
 		8C1A0D60877DBDD9B129B343 /* KishOSLiveActivityWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KishOSLiveActivityWidget.swift; sourceTree = "<group>"; };
 		8FD04F5548C04F8DD34D6D50 /* FileTextPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileTextPickerView.swift; sourceTree = "<group>"; };
 		9440A6471F2F63111CB49B46 /* ConversationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationStore.swift; sourceTree = "<group>"; };
+		9A09B9BE9268B212D6655E35 /* AudioRouteMonitorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRouteMonitorTests.swift; sourceTree = "<group>"; };
 		9CC1BF11D78A813E2D75B65E /* LiveCallController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveCallController.swift; sourceTree = "<group>"; };
 		9FE1FF29E9B858E390CE9933 /* KishOSLiveActivityController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KishOSLiveActivityController.swift; sourceTree = "<group>"; };
 		A733B461015C5FBC8DD9322E /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
@@ -224,6 +226,7 @@
 			isa = PBXGroup;
 			children = (
 				04F0A10E61286CFABA0ACA0C /* AgentClientTests.swift */,
+				9A09B9BE9268B212D6655E35 /* AudioRouteMonitorTests.swift */,
 				57945B542C95784AEA518EA7 /* ConversationStoreTests.swift */,
 				75E96526AACAAE4CF7DDFF93 /* ConversationTests.swift */,
 				65378C85FE1C24B32C67E9EA /* ProjectStoreTests.swift */,
@@ -448,6 +451,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				9F2ABD0D551D1F7292C5A5F9 /* AgentClientTests.swift in Sources */,
+				1E8856CDDD2EDD4D58AE1764 /* AudioRouteMonitorTests.swift in Sources */,
 				5867E09D19864EF00D3856F9 /* ConversationStoreTests.swift in Sources */,
 				71970BDF43769ECE44DC4FED /* ConversationTests.swift in Sources */,
 				FF2D59CFBA3D08E48F8466DE /* ProjectStoreTests.swift in Sources */,

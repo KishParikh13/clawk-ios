@@ -9,6 +9,12 @@ final class VoiceController: ObservableObject {
     @Published var status = "Off"
     @Published var waveformLevels = Array(repeating: CGFloat(0.04), count: 32)
 
+    /// When `true` (default, dictation behavior), `startRecording()` configures the
+    /// audio session and `stopRecording()` deactivates it. When `false`, an external
+    /// owner (the live call) holds the session across listen/speak/listen turns, so
+    /// recording must NOT configure or tear down the session between turns.
+    var managesAudioSession = true
+
     private let recognizer = SFSpeechRecognizer()
     private let audioEngine = AVAudioEngine()
     private var request: SFSpeechAudioBufferRecognitionRequest?
@@ -36,11 +42,13 @@ final class VoiceController: ObservableObject {
             return
         }
 
-        do {
-            try configureAudioSession()
-        } catch {
-            status = "Audio error"
-            return
+        if managesAudioSession {
+            do {
+                try configureAudioSession()
+            } catch {
+                status = "Audio error"
+                return
+            }
         }
 
         recognitionTask?.cancel()
@@ -70,7 +78,9 @@ final class VoiceController: ObservableObject {
             isRecording = true
             status = "Listening"
         } catch {
-            deactivateAudioSession()
+            if managesAudioSession {
+                deactivateAudioSession()
+            }
             status = "Mic error"
             return
         }
@@ -101,7 +111,9 @@ final class VoiceController: ObservableObject {
         isRecording = false
         status = "Ready"
         waveformLevels = Array(repeating: CGFloat(0.04), count: 32)
-        deactivateAudioSession()
+        if managesAudioSession {
+            deactivateAudioSession()
+        }
 
         let clean = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         transcript = ""

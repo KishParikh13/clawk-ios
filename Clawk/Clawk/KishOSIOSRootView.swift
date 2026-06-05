@@ -248,7 +248,8 @@ struct KishOSIOSRootView: View {
         activeCallController = controller
         Task {
             audio.start()
-            await audio.activatePreferredHandsFreeRoute()
+            voice.managesAudioSession = false
+            await audio.beginCallSession()
             await controller.start()
         }
     }
@@ -256,6 +257,8 @@ struct KishOSIOSRootView: View {
     private func endLiveCall() {
         activeCallController?.endCall()
         activeCallController = nil
+        audio.endCallSession()
+        voice.managesAudioSession = true
         refreshWakeSuppression()
         refreshLiveActivitySummary()
     }
