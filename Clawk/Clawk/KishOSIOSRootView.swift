@@ -31,6 +31,7 @@ struct KishOSIOSRootView: View {
     @State private var showingConversations = false
     @State private var isDrainingQueuedMessages = false
     @State private var activeCallController: LiveCallController?
+    @State private var callStartTask: Task<Void, Never>?
     @State private var activeSendTasks: [UUID: Task<Void, Never>] = [:]
 
     var body: some View {
@@ -246,15 +247,22 @@ struct KishOSIOSRootView: View {
             }
         )
         activeCallController = controller
-        Task {
+        callStartTask = Task {
             audio.start()
             voice.managesAudioSession = false
             await audio.beginCallSession()
+            guard !Task.isCancelled, activeCallController === controller else {
+                audio.endCallSession()
+                voice.managesAudioSession = true
+                return
+            }
             await controller.start()
         }
     }
 
     private func endLiveCall() {
+        callStartTask?.cancel()
+        callStartTask = nil
         activeCallController?.endCall()
         activeCallController = nil
         audio.endCallSession()

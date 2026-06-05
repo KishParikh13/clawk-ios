@@ -227,21 +227,7 @@ final class AudioRouteMonitor: ObservableObject {
     func activatePreferredHandsFreeRoute(timeout: TimeInterval = 2.0) async {
         #if os(iOS)
         guard prefersHandsFreeRoute else { return }
-        let session = AVAudioSession.sharedInstance()
-        do {
-            try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetoothHFP, .allowBluetoothA2DP, .defaultToSpeaker, .duckOthers])
-            try session.setActive(true, options: .notifyOthersOnDeactivation)
-            if let preferredInput = preferredInput(from: session.availableInputs ?? []) {
-                try? session.setPreferredInput(preferredInput)
-                await waitForRouteActivation(preferredInput: preferredInput, timeout: timeout)
-            } else {
-                activationDetail = "No external input"
-                refresh()
-            }
-        } catch {
-            status = "Unavailable"
-            activationDetail = error.localizedDescription
-        }
+        await configureRouteSession(defaultToSpeaker: true, refreshWhenNoExternalInput: true, timeout: timeout)
         #else
         refresh()
         #endif
@@ -256,24 +242,51 @@ final class AudioRouteMonitor: ObservableObject {
         wasExternalSeenInCallSession = false
         isCallSessionActive = true
         #if os(iOS)
+        // Never fail the call: on throw, `configureRouteSession` marks route
+        // unavailable and we continue on phone audio. Call mode omits
+        // `.defaultToSpeaker` and does not refresh in the no-external branch
+        // (the trailing `refresh()` covers it).
+        await configureRouteSession(defaultToSpeaker: false, refreshWhenNoExternalInput: false, timeout: timeout)
+        #endif
+        refresh()
+    }
+
+    #if os(iOS)
+    /// Shared route-session setup: setCategory -> setActive -> setPreferredInput ->
+    /// waitForRouteActivation, with a catch that marks the route unavailable.
+    /// - Parameters:
+    ///   - defaultToSpeaker: Adds `.defaultToSpeaker` to the category options.
+    ///     Dictation passes true; call mode passes false.
+    ///   - refreshWhenNoExternalInput: Whether to `refresh()` in the no-external-input
+    ///     branch. Preserves the existing divergence between the two callers.
+    private func configureRouteSession(
+        defaultToSpeaker: Bool,
+        refreshWhenNoExternalInput: Bool,
+        timeout: TimeInterval
+    ) async {
+        var options: AVAudioSession.CategoryOptions = [.allowBluetoothHFP, .allowBluetoothA2DP, .duckOthers]
+        if defaultToSpeaker {
+            options.insert(.defaultToSpeaker)
+        }
         let session = AVAudioSession.sharedInstance()
         do {
-            try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetoothHFP, .allowBluetoothA2DP, .duckOthers])
+            try session.setCategory(.playAndRecord, mode: .voiceChat, options: options)
             try session.setActive(true, options: .notifyOthersOnDeactivation)
             if let preferredInput = preferredInput(from: session.availableInputs ?? []) {
                 try? session.setPreferredInput(preferredInput)
                 await waitForRouteActivation(preferredInput: preferredInput, timeout: timeout)
             } else {
                 activationDetail = "No external input"
+                if refreshWhenNoExternalInput {
+                    refresh()
+                }
             }
         } catch {
-            // Never fail the call: mark route unavailable and continue on phone audio.
             status = "Unavailable"
             activationDetail = error.localizedDescription
         }
-        #endif
-        refresh()
     }
+    #endif
 
     /// End the live-call audio session: deactivate, clear the preferred input, and
     /// reset call-session route context.
@@ -282,7 +295,11 @@ final class AudioRouteMonitor: ObservableObject {
         wasExternalSeenInCallSession = false
         #if os(iOS)
         clearPreferredInput()
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        do {
+            try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        } catch {
+            activationDetail = "Deactivate failed: \(error.localizedDescription)"
+        }
         #endif
         refresh()
     }
