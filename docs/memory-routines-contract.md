@@ -1,8 +1,8 @@
 # Memory/Routines Autonomy Contract
 
-Updated: 2026-06-05  
-Schema version: `1`  
-Backend owner: `kish-agent`  
+Updated: 2026-06-05
+Schema version: `1`
+Backend owner: `kish-agent`
 Native surface: `Autonomy`
 
 This document is the API and data model agreement between the native app and `kish-agent` for the Autonomy MVP. `kish-agent` is canonical for memory, routines, durable policies, routine runs, review cards, tombstones, and scheduling. Native stores are cache-only and must be treated as offline read-only snapshots.
