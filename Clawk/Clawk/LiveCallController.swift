@@ -58,6 +58,12 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
     private var finalizeTask: Task<Void, Never>?
     private var activeSendTask: Task<Void, Never>?
     private var hasLiveActivitySession = false
+    /// Guards `finalizeCurrentUtterance` against a manual `submitCurrentUtterance`
+    /// tap racing the auto-finalize task. Both run on the @MainActor, but each
+    /// awaits inside the body, so without this a second entrant could run the
+    /// body twice (e.g. call `beginListening()` mid-send). Set on entry, reset on
+    /// every exit path.
+    private var isFinalizing = false
 
     init(
         client: KishAgentClient,
@@ -112,13 +118,6 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
         isOutputEnabled.toggle()
         if !isOutputEnabled {
             speechSynthesizer.stopSpeaking(at: .immediate)
-        }
-    }
-
-    func interruptAndListen() {
-        Task {
-            await stopActiveRun()
-            await beginListening()
         }
     }
 
@@ -226,6 +225,14 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
     }
 
     private func finalizeCurrentUtterance() async {
+        // A manual submitCurrentUtterance tap can race the auto-finalize task.
+        // Both run on the @MainActor, but the body awaits, so without this guard
+        // a second entrant could run the body twice (e.g. beginListening()
+        // mid-send). Reset on every exit path below.
+        guard !isFinalizing else { return }
+        isFinalizing = true
+        defer { isFinalizing = false }
+
         finalizeTask?.cancel()
         // Never send a partial that the user has already abandoned by ending
         // the call. (Mute/discard route through here too via manual send, where
@@ -303,25 +310,6 @@ final class LiveCallController: NSObject, ObservableObject, AVSpeechSynthesizerD
                 self.state = .failed
             }
         }
-    }
-
-    private func stopActiveRun() async {
-        finalizeTask?.cancel()
-        activeSendTask?.cancel()
-        activeSendTask = nil
-        _ = voice.stopRecording()
-        speechSynthesizer.stopSpeaking(at: .immediate)
-        activeUserPartial = ""
-        activeAgentText = ""
-
-        guard let activeConversationID,
-              let conversation = workspace.conversation(id: activeConversationID)
-        else { return }
-
-        if conversation.isRunning {
-            workspace.cancelActiveResponse(in: activeConversationID)
-        }
-        try? await client.cancel(threadId: conversation.threadId)
     }
 
     private func appendUserTurn(_ text: String) -> Conversation? {

@@ -69,6 +69,26 @@ final class AudioRouteMonitor: ObservableObject {
     /// `waitForRouteActivation`) is in flight. Drives the `switching` route state.
     private var isAttemptingRouteActivation = false
 
+    /// Dedicated source of truth for whether the audio route is unavailable
+    /// (a `setCategory` / `setActive` failure). Unlike `status` — which is
+    /// overloaded with "Listening" while recording — this flag is not masked by
+    /// the recording state, so a `blocked` route stays `blocked` across a
+    /// `refresh(isRecording: true)`. Set on a config failure, cleared once a
+    /// session activates cleanly or on `endCallSession`.
+    private var isRouteUnavailable = false
+
+    #if DEBUG
+    /// Test-only seam. The only production path that sets `isRouteUnavailable`
+    /// is the iOS-gated `configureRouteSession` catch, which the macOS test
+    /// target cannot reach. This lets a test mark the route unavailable and then
+    /// verify it survives a `refresh(isRecording: true)` (the real bug: the old
+    /// `status == "Unavailable"` derivation was masked by "Listening").
+    func setRouteUnavailableForTesting(_ unavailable: Bool) {
+        isRouteUnavailable = unavailable
+        refresh()
+    }
+    #endif
+
     private var isStarted = false
     private let userDefaults: UserDefaults
     private static let prefersHandsFreeRouteKey = "KishOSPrefersHandsFreeRoute"
@@ -316,7 +336,7 @@ final class AudioRouteMonitor: ObservableObject {
         }
 
         routeState = Self.deriveRouteState(
-            isUnavailable: status == "Unavailable",
+            isUnavailable: isRouteUnavailable,
             isExternalActive: isPreferredRouteActive,
             hasExternalAvailable: hasExternalRouteAvailable,
             isCallSessionActive: isCallSessionActive,
@@ -390,6 +410,8 @@ final class AudioRouteMonitor: ObservableObject {
         do {
             try session.setCategory(.playAndRecord, mode: .voiceChat, options: options)
             try session.setActive(true, options: .notifyOthersOnDeactivation)
+            // The category/active calls succeeded — the route is healthy.
+            isRouteUnavailable = false
             if let preferredInput = preferredInput(from: session.availableInputs ?? []) {
                 try? session.setPreferredInput(preferredInput)
                 await waitForRouteActivation(preferredInput: preferredInput, timeout: timeout)
@@ -400,6 +422,7 @@ final class AudioRouteMonitor: ObservableObject {
                 }
             }
         } catch {
+            isRouteUnavailable = true
             status = "Unavailable"
             activationDetail = error.localizedDescription
         }
@@ -411,6 +434,7 @@ final class AudioRouteMonitor: ObservableObject {
     func endCallSession() {
         isCallSessionActive = false
         wasExternalSeenInCallSession = false
+        isRouteUnavailable = false
         #if os(iOS)
         clearPreferredInput()
         do {
@@ -427,6 +451,7 @@ final class AudioRouteMonitor: ObservableObject {
         do {
             try AVAudioSession.sharedInstance().setPreferredInput(nil)
         } catch {
+            isRouteUnavailable = true
             status = "Unavailable"
         }
         #endif

@@ -70,6 +70,34 @@ final class AudioRouteMonitorTests: XCTestCase {
 
         XCTAssertFalse(monitor.prefersHandsFreeRoute)
     }
+
+    // Regression: `blocked` must not be masked by the recording state. `status` is
+    // overloaded with "Listening" while recording, so deriving route truth from
+    // `status == "Unavailable"` flipped a blocked route back to `system` the moment
+    // refresh(isRecording: true) fired. Route truth now lives in a dedicated flag,
+    // so the route stays `.blocked` across a recording refresh.
+    func testRouteStaysBlockedAcrossRecordingRefresh() {
+        let monitor = makeMonitor()
+        monitor.setRouteUnavailableForTesting(true)
+        XCTAssertEqual(monitor.routeState, .blocked)
+
+        // This is the exact call the live-call recording loop makes. Previously it
+        // overwrote `status` with "Listening" and unmasked the block.
+        monitor.refresh(isRecording: true)
+        XCTAssertEqual(monitor.routeState, .blocked)
+    }
+
+    // Clearing the unavailable flag returns the route to a healthy state even while
+    // recording.
+    func testClearingUnavailableRestoresRouteWhileRecording() {
+        let monitor = makeMonitor()
+        monitor.setRouteUnavailableForTesting(true)
+        XCTAssertEqual(monitor.routeState, .blocked)
+
+        monitor.setRouteUnavailableForTesting(false)
+        monitor.refresh(isRecording: true)
+        XCTAssertNotEqual(monitor.routeState, .blocked)
+    }
 }
 
 @MainActor
