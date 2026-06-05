@@ -380,6 +380,53 @@ final class RouteNameClassificationTests: XCTestCase {
 }
 
 @MainActor
+final class GlassesConnectionPresentationTests: XCTestCase {
+    func testGlassesConnectedWhenActiveRouteIsGlasses() {
+        XCTAssertTrue(
+            AudioRouteMonitor.isGlassesConnected(activeKind: .glasses, availableRoutes: [])
+        )
+    }
+
+    func testGlassesConnectedWhenAvailableRouteIsGlasses() {
+        XCTAssertTrue(
+            AudioRouteMonitor.isGlassesConnected(
+                activeKind: .builtIn,
+                availableRoutes: [
+                    AudioRouteCandidate(
+                        name: "Ray-Ban Meta",
+                        portType: "Bluetooth HFP",
+                        kind: .glasses,
+                        isInput: true,
+                        isOutput: false,
+                        isActive: false,
+                        isPreferredCandidate: true
+                    )
+                ]
+            )
+        )
+    }
+
+    func testGenericBluetoothDoesNotCountAsGlasses() {
+        XCTAssertFalse(
+            AudioRouteMonitor.isGlassesConnected(
+                activeKind: .bluetooth,
+                availableRoutes: [
+                    AudioRouteCandidate(
+                        name: "AirPods Pro",
+                        portType: "Bluetooth HFP",
+                        kind: .bluetooth,
+                        isInput: true,
+                        isOutput: false,
+                        isActive: true,
+                        isPreferredCandidate: true
+                    )
+                ]
+            )
+        )
+    }
+}
+
+@MainActor
 final class VoiceControllerAudioSessionTests: XCTestCase {
     func testManagesAudioSessionDefaultsTrue() {
         let voice = VoiceController()

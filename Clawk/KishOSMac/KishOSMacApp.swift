@@ -741,6 +741,7 @@ private struct ChatView: View {
                     isSending: isRunning,
                     isDisabled: isRunning,
                     voice: voice,
+                    audio: audio,
                     runState: runState,
                     projectPath: projectPath,
                     allowsReferences: projectLocked,
@@ -1470,6 +1471,7 @@ private struct ChatComposer: View {
     let isSending: Bool
     let isDisabled: Bool
     @ObservedObject var voice: VoiceController
+    @ObservedObject var audio: AudioRouteMonitor
     let runState: ConversationRunState?
     let projectPath: String?
     let allowsReferences: Bool
@@ -1529,11 +1531,11 @@ private struct ChatComposer: View {
 
             HStack(spacing: 10) {
                 Button(action: toggleDictation) {
-                    Image(systemName: voice.isRecording ? "stop.circle.fill" : "mic")
+                    Image(systemName: dictationIconName)
                 }
                 .buttonStyle(.borderless)
                 .foregroundStyle(voice.isRecording ? .red : .secondary)
-                .help(voice.isRecording ? "Stop dictation" : "Dictate")
+                .help(dictationHelp)
                 .disabled(isDisabled)
 
                 Button(action: chooseFiles) {
@@ -1623,6 +1625,20 @@ private struct ChatComposer: View {
 
     private var isWorking: Bool {
         runState?.isActive == true
+    }
+
+    private var dictationIconName: String {
+        if voice.isRecording {
+            return "stop.circle.fill"
+        }
+        return audio.hasGlassesConnected ? "eyeglasses" : "mic"
+    }
+
+    private var dictationHelp: String {
+        if voice.isRecording {
+            return "Stop dictation"
+        }
+        return audio.hasGlassesConnected ? "Dictate with glasses" : "Dictate"
     }
 
     private var trailingButtonDisabled: Bool {
@@ -2276,6 +2292,29 @@ private struct SettingsView: View {
                             audio.refresh(isRecording: voice.isRecording)
                         }
                     }
+
+                    HStack(alignment: .center, spacing: 10) {
+                        Image(systemName: "eyeglasses")
+                            .font(.system(size: 22, weight: .semibold))
+                            .foregroundStyle(glassesConnectionTint)
+                            .frame(width: 30, height: 30)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(glassesConnectionTitle)
+                                .font(.callout.weight(.semibold))
+                            Text(glassesConnectionDetail)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                        }
+
+                        Spacer(minLength: 8)
+
+                        Text(glassesConnectionPillTitle)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(glassesConnectionTint)
+                    }
+
                     LazyVGrid(columns: statusColumns, spacing: 8) {
                         StatusRow(title: "Input", value: audio.inputName, tint: audio.statusLabel == "Unavailable" ? .red : .green)
                         StatusRow(title: "Output", value: audio.outputName, tint: audio.statusLabel == "Unavailable" ? .red : .green)
@@ -2368,6 +2407,28 @@ private struct SettingsView: View {
         default:
             return .secondary
         }
+    }
+
+    private var glassesConnectionTitle: String {
+        audio.hasGlassesConnected ? "Glasses connected" : "Glasses not connected"
+    }
+
+    private var glassesConnectionDetail: String {
+        if audio.activeRouteKind == .glasses {
+            return "Active on \(audio.routeDetail)."
+        }
+        if let routeName = audio.availableRoutes.first(where: { $0.kind == .glasses })?.name {
+            return "\(routeName) is available for hands-free audio."
+        }
+        return "Connect Ray-Ban Meta glasses in Bluetooth."
+    }
+
+    private var glassesConnectionPillTitle: String {
+        audio.hasGlassesConnected ? "Connected" : "Not connected"
+    }
+
+    private var glassesConnectionTint: Color {
+        audio.hasGlassesConnected ? .green : .secondary
     }
 
     private func reconnect() {

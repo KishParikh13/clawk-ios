@@ -10,22 +10,32 @@
 		008080B3368DE6AEA80E6807 /* ApprovalQueueView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE29A68B30630F58BCB47CF0 /* ApprovalQueueView.swift */; };
 		04F144AAB362A6236543697B /* GatewayConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BF9B02D88EDF9A8620601CA /* GatewayConnection.swift */; };
 		05611179C1434EA208CEF157 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 641664BF743F7453554BF316 /* ContentView.swift */; };
+		063CC422BEB9EACD0DE02435 /* MWDATCore in Frameworks */ = {isa = PBXBuildFile; productRef = AD1672C85AD35A3554C43BEB /* MWDATCore */; };
+		070011FEB255317D0FE11AE3 /* GeminiTTSTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D78B84542725E77161D5306 /* GeminiTTSTests.swift */; };
 		07ECBC7DBE333CC10DB84502 /* WakePhraseController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2D141A3B5C138ABA7F09EB3 /* WakePhraseController.swift */; };
 		0A1ED870A9A13443207F4CE4 /* Project.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38C9E838432B8DF4680F2236 /* Project.swift */; };
 		117624A408FFC48CDCB574E6 /* LiveVoiceHeuristicsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9656BF2A2157AFEDE4FBBAA /* LiveVoiceHeuristicsTests.swift */; };
 		13D989FEDC813BC32D37A770 /* SharedViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62E583E96D8734B6045457C9 /* SharedViews.swift */; };
+		13F6CB00836380689ABAA7E8 /* earcon_question.wav in Resources */ = {isa = PBXBuildFile; fileRef = 6FC54DB13BC61C4A063BB347 /* earcon_question.wav */; };
 		14D0013ECE6E7348671AB8E1 /* AudioRouteMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B96F6934906F6A77BBB59125 /* AudioRouteMonitor.swift */; };
+		15DB383F98DBA774798736FA /* MWDATMockDevice in Frameworks */ = {isa = PBXBuildFile; productRef = 79AE7C035385B05DBA8BFB55 /* MWDATMockDevice */; };
 		1692CD406B2399800935424F /* GatewayChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A89B98F7C06E05A590381E2 /* GatewayChatView.swift */; };
 		182D525333F502C00AAF063A /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 227D7EAA8BA576629153DE13 /* HomeView.swift */; };
+		18F985F3C92B9010019E68D2 /* working_ambient.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = D1D3558C3F4589A44DCB481B /* working_ambient.mp3 */; };
 		1AFDFA4A2AC2CEE77CD4C856 /* ConversationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9440A6471F2F63111CB49B46 /* ConversationStore.swift */; };
 		1CDB7EBBF886F63BA1460083 /* GatewayProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA864BCB8E5CB4DC707F8304 /* GatewayProtocol.swift */; };
 		1E8856CDDD2EDD4D58AE1764 /* AudioRouteMonitorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A09B9BE9268B212D6655E35 /* AudioRouteMonitorTests.swift */; };
+		2081CCB185BD8585F46AD194 /* CaptureIntentDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49E085E6118F1DC6961821CB /* CaptureIntentDetector.swift */; };
+		22DAF4DF52F4ECC4CEA7A882 /* CaptureIntentDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49E085E6118F1DC6961821CB /* CaptureIntentDetector.swift */; };
 		25CAA09F895BFE70FB427FE6 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9BBBBEE778FA330FC6B2E92 /* SettingsView.swift */; };
 		2808C6EC9F10FBF1D766B1E0 /* MessageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB9ECBC77D8360B0E33A59D8 /* MessageStore.swift */; };
 		2A69B05F72FD85C8B56B8A5D /* LiveVoiceHeuristics.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2919CDF093E048E4BA4E905 /* LiveVoiceHeuristics.swift */; };
+		2FD63A9C5810075E073DFE9D /* MWDATCamera in Frameworks */ = {isa = PBXBuildFile; productRef = 7D09ECB808406F2061A70A59 /* MWDATCamera */; };
 		308209664CE7C20106C3362B /* FileTextPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FD04F5548C04F8DD34D6D50 /* FileTextPickerView.swift */; };
 		343EF98CC7F86AA397A05B39 /* ProjectPickerPopover.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD5ACACFC3A919EE97C9392D /* ProjectPickerPopover.swift */; };
 		406B8FE4F7E6B617DF8742F4 /* ClawkApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A7C72458B614B76F4F4240A /* ClawkApp.swift */; };
+		41E6738699BE891320DF53B4 /* MediaCaptureModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62714387005A06F1ACB1AB78 /* MediaCaptureModels.swift */; };
+		48FCC55E6C3223A19D7DA970 /* CaptureIntentDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD7A3E13B0AE5CF429536BDF /* CaptureIntentDetectorTests.swift */; };
 		4DF47FC10F47C2C8D771C0BF /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A733B461015C5FBC8DD9322E /* DashboardView.swift */; };
 		520D1CD0D409E1F4E2F2256B /* CostsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 493A6B6CB1096E8BA7B489A8 /* CostsView.swift */; };
 		544FE18D516A26C1E3093F9D /* ChatListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8E4765E74CC787BC5A5D4C7 /* ChatListView.swift */; };
@@ -47,26 +57,38 @@
 		7BD5F5B36769FA80703D2671 /* KishOSCallActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7EAB08A2E3A0A5C69507E33 /* KishOSCallActivityAttributes.swift */; };
 		81647F15B3A011B04AB5F3D2 /* ConversationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9440A6471F2F63111CB49B46 /* ConversationStore.swift */; };
 		84BFEA1D564F790D22C66C45 /* KishOSWidgetsBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF4A758449B0DDC52CA5EC66 /* KishOSWidgetsBundle.swift */; };
+		8979F348DB8B97A7050ADD60 /* GeminiTTS.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5A0E1C64CBFC366A2DCEFC3 /* GeminiTTS.swift */; };
 		89D3E7F8286D9CCF88978618 /* VoiceController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6FCA3DA8BE4B76E2A75DD23 /* VoiceController.swift */; };
 		8EA0D1D5917487AA69C3C978 /* KishOSMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61D254F493783576AAF3D410 /* KishOSMacApp.swift */; };
+		9107FA009F08D71201390019 /* MediaCaptureModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62714387005A06F1ACB1AB78 /* MediaCaptureModels.swift */; };
 		928890E0FA908816C1A0A749 /* KishOSCallActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7EAB08A2E3A0A5C69507E33 /* KishOSCallActivityAttributes.swift */; };
 		948B83E8BA1F40E0036CA590 /* MemoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E59A447B777F28AAE47C8346 /* MemoryView.swift */; };
+		9AC6B5403C319A5CEA3FA033 /* waiting_ambient.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 010B33A53CAA01052DD086C2 /* waiting_ambient.mp3 */; };
 		9F2ABD0D551D1F7292C5A5F9 /* AgentClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F0A10E61286CFABA0ACA0C /* AgentClientTests.swift */; };
 		9FFAF5F0C740BC711E743240 /* CameraTextCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FB7BD6F07C94FA433856EFD /* CameraTextCaptureView.swift */; };
 		A910280A5CEBEB328812E732 /* MoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BC007C150922B621095A597 /* MoreView.swift */; };
+		ACC37946AF3843F9AC6A3B36 /* ProgrammaticPhoneCameraCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = D78FDE5CC911DA361C943216 /* ProgrammaticPhoneCameraCapture.swift */; };
+		AE30548E6102ED9C66705BDC /* earcon_error.wav in Resources */ = {isa = PBXBuildFile; fileRef = 55CE07725E2DEC1AC9B27993 /* earcon_error.wav */; };
 		AF059C6FC928B2316266DA4A /* AgentClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A57A732EA4AFC2B553AF70A /* AgentClient.swift */; };
 		B37123DFEC2CEF33BEAA92C0 /* ProjectStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D6A4231FB3898169E2AD1AE /* ProjectStore.swift */; };
 		B8036E2296F7628A5C0572CE /* AgentClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A57A732EA4AFC2B553AF70A /* AgentClient.swift */; };
+		BA02CFDB68E1792223988D95 /* call_end.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = A3DF64B976EAB8FC9FDDC82E /* call_end.mp3 */; };
 		BC6317C19C95851E6AB379FC /* Project.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38C9E838432B8DF4680F2236 /* Project.swift */; };
+		BD9AEAF9F506D564012139B4 /* MetaWearablesBootstrap.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3E45217ADBE0BBC887B57EB /* MetaWearablesBootstrap.swift */; };
 		BDEEDBE68E3D64469C36508C /* KishOSLiveActivityController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FE1FF29E9B858E390CE9933 /* KishOSLiveActivityController.swift */; };
 		BEA296B530D3EE0B1A1037F2 /* LiveDashboardTabs.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC24015FE274E4F772DA97DD /* LiveDashboardTabs.swift */; };
+		C190386236E42F810B30F0AE /* CallVoices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 525788442C6AC4CD4DF9B8CE /* CallVoices.swift */; };
+		C2E3A7B176A9EA061F457BFA /* GlassesCameraCaptureController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C56A570B9E9921EF71EFD452 /* GlassesCameraCaptureController.swift */; };
 		CC774E2820437531FBB8D8EE /* KishOSWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = F873185D94B16907C1073B00 /* KishOSWorkspace.swift */; };
+		D35D2BFFD121A498A3A912C5 /* reply_ready.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 481D1E1B432E9F97C159A41E /* reply_ready.mp3 */; };
 		D5E0FA06E527E6EE4F6524CE /* SessionChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FA8028A0517DF1195BA7854 /* SessionChatView.swift */; };
 		D8B63FA9F24AA1FF0F35754C /* KishOSFeaturePlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47CE52D6F6C3B3791B2874BF /* KishOSFeaturePlan.swift */; };
 		E0764B563F6690479678CB27 /* KishOSWorkspace.swift in Sources */ = {isa = PBXBuildFile; fileRef = F873185D94B16907C1073B00 /* KishOSWorkspace.swift */; };
 		E0970E477EF5F286C09EE94C /* CronManagementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD2B0BD8253B85A1A695E980 /* CronManagementView.swift */; };
+		E1C643FB50B70956E720D2F0 /* GeminiTTS.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5A0E1C64CBFC366A2DCEFC3 /* GeminiTTS.swift */; };
 		E5B9761377A5DDC85827D781 /* ChatDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F68684194B8B5DC79D73D38 /* ChatDetailView.swift */; };
 		E987A5A657F8E60CD3D6D53C /* ChatHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29F2E674D7271CB505C361DF /* ChatHistoryStore.swift */; };
+		EA6527A2AD1DDC010567C5B4 /* call_start.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 85D08B6CC7F49570F2B138C1 /* call_start.mp3 */; };
 		ECD45AB1DC169FB9AF51B23D /* Conversation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D66F48AF324D00EE65E801F /* Conversation.swift */; };
 		F49790AC7650ECEAB5D6A053 /* KishOSCallActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7EAB08A2E3A0A5C69507E33 /* KishOSCallActivityAttributes.swift */; };
 		F54C662780149393EA220455 /* ProjectStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D6A4231FB3898169E2AD1AE /* ProjectStore.swift */; };
@@ -106,6 +128,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		010B33A53CAA01052DD086C2 /* waiting_ambient.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = waiting_ambient.mp3; sourceTree = "<group>"; };
 		04F0A10E61286CFABA0ACA0C /* AgentClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentClientTests.swift; sourceTree = "<group>"; };
 		185356541FC2C862D03FB7A2 /* KishOSMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KishOSMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		19D33F8BBD6020A9F8F43C0D /* DashboardAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardAPIClient.swift; sourceTree = "<group>"; };
@@ -117,46 +140,61 @@
 		3BC007C150922B621095A597 /* MoreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoreView.swift; sourceTree = "<group>"; };
 		3BF9B02D88EDF9A8620601CA /* GatewayConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayConnection.swift; sourceTree = "<group>"; };
 		47CE52D6F6C3B3791B2874BF /* KishOSFeaturePlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KishOSFeaturePlan.swift; sourceTree = "<group>"; };
+		481D1E1B432E9F97C159A41E /* reply_ready.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = reply_ready.mp3; sourceTree = "<group>"; };
 		493A6B6CB1096E8BA7B489A8 /* CostsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CostsView.swift; sourceTree = "<group>"; };
+		49E085E6118F1DC6961821CB /* CaptureIntentDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureIntentDetector.swift; sourceTree = "<group>"; };
 		4A57A732EA4AFC2B553AF70A /* AgentClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentClient.swift; sourceTree = "<group>"; };
 		4F68684194B8B5DC79D73D38 /* ChatDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatDetailView.swift; sourceTree = "<group>"; };
+		525788442C6AC4CD4DF9B8CE /* CallVoices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallVoices.swift; sourceTree = "<group>"; };
+		55CE07725E2DEC1AC9B27993 /* earcon_error.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = earcon_error.wav; sourceTree = "<group>"; };
 		57945B542C95784AEA518EA7 /* ConversationStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationStoreTests.swift; sourceTree = "<group>"; };
 		5A89B98F7C06E05A590381E2 /* GatewayChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayChatView.swift; sourceTree = "<group>"; };
 		5FB7BD6F07C94FA433856EFD /* CameraTextCaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraTextCaptureView.swift; sourceTree = "<group>"; };
 		61D254F493783576AAF3D410 /* KishOSMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KishOSMacApp.swift; sourceTree = "<group>"; };
+		62714387005A06F1ACB1AB78 /* MediaCaptureModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaCaptureModels.swift; sourceTree = "<group>"; };
 		62E583E96D8734B6045457C9 /* SharedViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedViews.swift; sourceTree = "<group>"; };
 		641664BF743F7453554BF316 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		645A6F0E142A68BB46D021FB /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		65378C85FE1C24B32C67E9EA /* ProjectStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectStoreTests.swift; sourceTree = "<group>"; };
 		67B095715EC6D0657B8EF344 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
 		6D66F48AF324D00EE65E801F /* Conversation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Conversation.swift; sourceTree = "<group>"; };
+		6FC54DB13BC61C4A063BB347 /* earcon_question.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = earcon_question.wav; sourceTree = "<group>"; };
 		716ADB4A08C625A0CEDDD715 /* ThinkingStepsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThinkingStepsView.swift; sourceTree = "<group>"; };
 		75E96526AACAAE4CF7DDFF93 /* ConversationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationTests.swift; sourceTree = "<group>"; };
 		7A7C72458B614B76F4F4240A /* ClawkApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClawkApp.swift; sourceTree = "<group>"; };
 		7FF44E68ED45E7EEF8CCBB51 /* KishOSWidgetsExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = KishOSWidgetsExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		85D08B6CC7F49570F2B138C1 /* call_start.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = call_start.mp3; sourceTree = "<group>"; };
 		8C1A0D60877DBDD9B129B343 /* KishOSLiveActivityWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KishOSLiveActivityWidget.swift; sourceTree = "<group>"; };
+		8D78B84542725E77161D5306 /* GeminiTTSTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeminiTTSTests.swift; sourceTree = "<group>"; };
 		8FD04F5548C04F8DD34D6D50 /* FileTextPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileTextPickerView.swift; sourceTree = "<group>"; };
 		9440A6471F2F63111CB49B46 /* ConversationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationStore.swift; sourceTree = "<group>"; };
 		9A09B9BE9268B212D6655E35 /* AudioRouteMonitorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRouteMonitorTests.swift; sourceTree = "<group>"; };
 		9CC1BF11D78A813E2D75B65E /* LiveCallController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveCallController.swift; sourceTree = "<group>"; };
 		9FE1FF29E9B858E390CE9933 /* KishOSLiveActivityController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KishOSLiveActivityController.swift; sourceTree = "<group>"; };
+		A3DF64B976EAB8FC9FDDC82E /* call_end.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = call_end.mp3; sourceTree = "<group>"; };
 		A733B461015C5FBC8DD9322E /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		A9656BF2A2157AFEDE4FBBAA /* LiveVoiceHeuristicsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveVoiceHeuristicsTests.swift; sourceTree = "<group>"; };
 		AB9ECBC77D8360B0E33A59D8 /* MessageStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageStore.swift; sourceTree = "<group>"; };
 		AD5ACACFC3A919EE97C9392D /* ProjectPickerPopover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectPickerPopover.swift; sourceTree = "<group>"; };
 		AD712A5FAAB152C8254982BC /* KishOSMacTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = KishOSMacTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B5A0E1C64CBFC366A2DCEFC3 /* GeminiTTS.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeminiTTS.swift; sourceTree = "<group>"; };
 		B8E4765E74CC787BC5A5D4C7 /* ChatListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatListView.swift; sourceTree = "<group>"; };
 		B96F6934906F6A77BBB59125 /* AudioRouteMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRouteMonitor.swift; sourceTree = "<group>"; };
+		BD7A3E13B0AE5CF429536BDF /* CaptureIntentDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureIntentDetectorTests.swift; sourceTree = "<group>"; };
 		C2D141A3B5C138ABA7F09EB3 /* WakePhraseController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WakePhraseController.swift; sourceTree = "<group>"; };
+		C56A570B9E9921EF71EFD452 /* GlassesCameraCaptureController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassesCameraCaptureController.swift; sourceTree = "<group>"; };
 		C6FCA3DA8BE4B76E2A75DD23 /* VoiceController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceController.swift; sourceTree = "<group>"; };
 		C8A11F3E2CC0EFED534C022B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		C9C695097D8B1B6E3834D7C7 /* ProjectPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectPickerSheet.swift; sourceTree = "<group>"; };
 		CA864BCB8E5CB4DC707F8304 /* GatewayProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayProtocol.swift; sourceTree = "<group>"; };
 		CD2B0BD8253B85A1A695E980 /* CronManagementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CronManagementView.swift; sourceTree = "<group>"; };
 		CF4A758449B0DDC52CA5EC66 /* KishOSWidgetsBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KishOSWidgetsBundle.swift; sourceTree = "<group>"; };
+		D1D3558C3F4589A44DCB481B /* working_ambient.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = working_ambient.mp3; sourceTree = "<group>"; };
 		D2D7F8370605F68579B5D56D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		D387D95D0B541A46D648E1C0 /* KishOSIOSRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KishOSIOSRootView.swift; sourceTree = "<group>"; };
+		D3E45217ADBE0BBC887B57EB /* MetaWearablesBootstrap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetaWearablesBootstrap.swift; sourceTree = "<group>"; };
 		D479C595005207FF75F951E6 /* AgentLogsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentLogsView.swift; sourceTree = "<group>"; };
+		D78FDE5CC911DA361C943216 /* ProgrammaticPhoneCameraCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgrammaticPhoneCameraCapture.swift; sourceTree = "<group>"; };
 		D7EAB08A2E3A0A5C69507E33 /* KishOSCallActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KishOSCallActivityAttributes.swift; sourceTree = "<group>"; };
 		DC24015FE274E4F772DA97DD /* LiveDashboardTabs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveDashboardTabs.swift; sourceTree = "<group>"; };
 		DE29A68B30630F58BCB47CF0 /* ApprovalQueueView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovalQueueView.swift; sourceTree = "<group>"; };
@@ -167,18 +205,34 @@
 		F9BBBBEE778FA330FC6B2E92 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFrameworksBuildPhase section */
+		55413B5E243C80626B016FA4 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				063CC422BEB9EACD0DE02435 /* MWDATCore in Frameworks */,
+				2FD63A9C5810075E073DFE9D /* MWDATCamera in Frameworks */,
+				15DB383F98DBA774798736FA /* MWDATMockDevice in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
 /* Begin PBXGroup section */
 		3E7D35ADFF5183E2A2A5B42A /* KishOSCore */ = {
 			isa = PBXGroup;
 			children = (
 				4A57A732EA4AFC2B553AF70A /* AgentClient.swift */,
 				B96F6934906F6A77BBB59125 /* AudioRouteMonitor.swift */,
+				49E085E6118F1DC6961821CB /* CaptureIntentDetector.swift */,
 				6D66F48AF324D00EE65E801F /* Conversation.swift */,
 				9440A6471F2F63111CB49B46 /* ConversationStore.swift */,
+				B5A0E1C64CBFC366A2DCEFC3 /* GeminiTTS.swift */,
 				D7EAB08A2E3A0A5C69507E33 /* KishOSCallActivityAttributes.swift */,
 				47CE52D6F6C3B3791B2874BF /* KishOSFeaturePlan.swift */,
 				F873185D94B16907C1073B00 /* KishOSWorkspace.swift */,
 				E2919CDF093E048E4BA4E905 /* LiveVoiceHeuristics.swift */,
+				62714387005A06F1ACB1AB78 /* MediaCaptureModels.swift */,
 				38C9E838432B8DF4680F2236 /* Project.swift */,
 				2D6A4231FB3898169E2AD1AE /* ProjectStore.swift */,
 				C6FCA3DA8BE4B76E2A75DD23 /* VoiceController.swift */,
@@ -191,6 +245,9 @@
 			children = (
 				D479C595005207FF75F951E6 /* AgentLogsView.swift */,
 				DE29A68B30630F58BCB47CF0 /* ApprovalQueueView.swift */,
+				A3DF64B976EAB8FC9FDDC82E /* call_end.mp3 */,
+				85D08B6CC7F49570F2B138C1 /* call_start.mp3 */,
+				525788442C6AC4CD4DF9B8CE /* CallVoices.swift */,
 				5FB7BD6F07C94FA433856EFD /* CameraTextCaptureView.swift */,
 				4F68684194B8B5DC79D73D38 /* ChatDetailView.swift */,
 				29F2E674D7271CB505C361DF /* ChatHistoryStore.swift */,
@@ -202,10 +259,13 @@
 				CD2B0BD8253B85A1A695E980 /* CronManagementView.swift */,
 				19D33F8BBD6020A9F8F43C0D /* DashboardAPIClient.swift */,
 				A733B461015C5FBC8DD9322E /* DashboardView.swift */,
+				55CE07725E2DEC1AC9B27993 /* earcon_error.wav */,
+				6FC54DB13BC61C4A063BB347 /* earcon_question.wav */,
 				8FD04F5548C04F8DD34D6D50 /* FileTextPickerView.swift */,
 				5A89B98F7C06E05A590381E2 /* GatewayChatView.swift */,
 				3BF9B02D88EDF9A8620601CA /* GatewayConnection.swift */,
 				CA864BCB8E5CB4DC707F8304 /* GatewayProtocol.swift */,
+				C56A570B9E9921EF71EFD452 /* GlassesCameraCaptureController.swift */,
 				227D7EAA8BA576629153DE13 /* HomeView.swift */,
 				645A6F0E142A68BB46D021FB /* Info.plist */,
 				D387D95D0B541A46D648E1C0 /* KishOSIOSRootView.swift */,
@@ -214,13 +274,18 @@
 				DC24015FE274E4F772DA97DD /* LiveDashboardTabs.swift */,
 				E59A447B777F28AAE47C8346 /* MemoryView.swift */,
 				AB9ECBC77D8360B0E33A59D8 /* MessageStore.swift */,
+				D3E45217ADBE0BBC887B57EB /* MetaWearablesBootstrap.swift */,
 				3BC007C150922B621095A597 /* MoreView.swift */,
+				D78FDE5CC911DA361C943216 /* ProgrammaticPhoneCameraCapture.swift */,
 				C9C695097D8B1B6E3834D7C7 /* ProjectPickerSheet.swift */,
+				481D1E1B432E9F97C159A41E /* reply_ready.mp3 */,
 				1FA8028A0517DF1195BA7854 /* SessionChatView.swift */,
 				F9BBBBEE778FA330FC6B2E92 /* SettingsView.swift */,
 				62E583E96D8734B6045457C9 /* SharedViews.swift */,
 				716ADB4A08C625A0CEDDD715 /* ThinkingStepsView.swift */,
+				010B33A53CAA01052DD086C2 /* waiting_ambient.mp3 */,
 				C2D141A3B5C138ABA7F09EB3 /* WakePhraseController.swift */,
+				D1D3558C3F4589A44DCB481B /* working_ambient.mp3 */,
 			);
 			path = Clawk;
 			sourceTree = "<group>";
@@ -230,8 +295,10 @@
 			children = (
 				04F0A10E61286CFABA0ACA0C /* AgentClientTests.swift */,
 				9A09B9BE9268B212D6655E35 /* AudioRouteMonitorTests.swift */,
+				BD7A3E13B0AE5CF429536BDF /* CaptureIntentDetectorTests.swift */,
 				57945B542C95784AEA518EA7 /* ConversationStoreTests.swift */,
 				75E96526AACAAE4CF7DDFF93 /* ConversationTests.swift */,
+				8D78B84542725E77161D5306 /* GeminiTTSTests.swift */,
 				A9656BF2A2157AFEDE4FBBAA /* LiveVoiceHeuristicsTests.swift */,
 				65378C85FE1C24B32C67E9EA /* ProjectStoreTests.swift */,
 			);
@@ -289,6 +356,8 @@
 			buildConfigurationList = 69E1EC7F38785B2031E2BA3A /* Build configuration list for PBXNativeTarget "Clawk" */;
 			buildPhases = (
 				208DBEBD8890A387DE22E529 /* Sources */,
+				55F38AC531947E13E49A3A6F /* Resources */,
+				55413B5E243C80626B016FA4 /* Frameworks */,
 				3210AC750C824DBA0DBF8D3D /* Embed Foundation Extensions */,
 			);
 			buildRules = (
@@ -298,6 +367,9 @@
 			);
 			name = Clawk;
 			packageProductDependencies = (
+				AD1672C85AD35A3554C43BEB /* MWDATCore */,
+				7D09ECB808406F2061A70A59 /* MWDATCamera */,
+				79AE7C035385B05DBA8BFB55 /* MWDATMockDevice */,
 			);
 			productName = Clawk;
 			productReference = E8710FBF24E9CAA28D156CE7 /* Clawk.app */;
@@ -387,6 +459,9 @@
 			);
 			mainGroup = E2CBAB2EEB3B310BC3BE53AD;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				CA2B97F4F509778E846DCB74 /* XCRemoteSwiftPackageReference "meta-wearables-dat-ios" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = FF47E99327B575DC454AC59C /* Products */;
 			projectDirPath = "";
@@ -400,6 +475,23 @@
 		};
 /* End PBXProject section */
 
+/* Begin PBXResourcesBuildPhase section */
+		55F38AC531947E13E49A3A6F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BA02CFDB68E1792223988D95 /* call_end.mp3 in Resources */,
+				EA6527A2AD1DDC010567C5B4 /* call_start.mp3 in Resources */,
+				AE30548E6102ED9C66705BDC /* earcon_error.wav in Resources */,
+				13F6CB00836380689ABAA7E8 /* earcon_question.wav in Resources */,
+				D35D2BFFD121A498A3A912C5 /* reply_ready.mp3 in Resources */,
+				9AC6B5403C319A5CEA3FA033 /* waiting_ambient.mp3 in Resources */,
+				18F985F3C92B9010019E68D2 /* working_ambient.mp3 in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		208DBEBD8890A387DE22E529 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -409,7 +501,9 @@
 				57022D80604899DEC98B40DB /* AgentLogsView.swift in Sources */,
 				008080B3368DE6AEA80E6807 /* ApprovalQueueView.swift in Sources */,
 				14D0013ECE6E7348671AB8E1 /* AudioRouteMonitor.swift in Sources */,
+				C190386236E42F810B30F0AE /* CallVoices.swift in Sources */,
 				9FFAF5F0C740BC711E743240 /* CameraTextCaptureView.swift in Sources */,
+				2081CCB185BD8585F46AD194 /* CaptureIntentDetector.swift in Sources */,
 				E5B9761377A5DDC85827D781 /* ChatDetailView.swift in Sources */,
 				E987A5A657F8E60CD3D6D53C /* ChatHistoryStore.swift in Sources */,
 				544FE18D516A26C1E3093F9D /* ChatListView.swift in Sources */,
@@ -426,6 +520,8 @@
 				1692CD406B2399800935424F /* GatewayChatView.swift in Sources */,
 				04F144AAB362A6236543697B /* GatewayConnection.swift in Sources */,
 				1CDB7EBBF886F63BA1460083 /* GatewayProtocol.swift in Sources */,
+				8979F348DB8B97A7050ADD60 /* GeminiTTS.swift in Sources */,
+				C2E3A7B176A9EA061F457BFA /* GlassesCameraCaptureController.swift in Sources */,
 				182D525333F502C00AAF063A /* HomeView.swift in Sources */,
 				7BD5F5B36769FA80703D2671 /* KishOSCallActivityAttributes.swift in Sources */,
 				7666D67DF6BC6148AD3BF7EC /* KishOSFeaturePlan.swift in Sources */,
@@ -435,9 +531,12 @@
 				5A7AFF483B2ADF25FE7A563D /* LiveCallController.swift in Sources */,
 				BEA296B530D3EE0B1A1037F2 /* LiveDashboardTabs.swift in Sources */,
 				2A69B05F72FD85C8B56B8A5D /* LiveVoiceHeuristics.swift in Sources */,
+				41E6738699BE891320DF53B4 /* MediaCaptureModels.swift in Sources */,
 				948B83E8BA1F40E0036CA590 /* MemoryView.swift in Sources */,
 				2808C6EC9F10FBF1D766B1E0 /* MessageStore.swift in Sources */,
+				BD9AEAF9F506D564012139B4 /* MetaWearablesBootstrap.swift in Sources */,
 				A910280A5CEBEB328812E732 /* MoreView.swift in Sources */,
+				ACC37946AF3843F9AC6A3B36 /* ProgrammaticPhoneCameraCapture.swift in Sources */,
 				BC6317C19C95851E6AB379FC /* Project.swift in Sources */,
 				5588A38DFB55167BA7AAE15F /* ProjectPickerSheet.swift in Sources */,
 				B37123DFEC2CEF33BEAA92C0 /* ProjectStore.swift in Sources */,
@@ -456,8 +555,10 @@
 			files = (
 				9F2ABD0D551D1F7292C5A5F9 /* AgentClientTests.swift in Sources */,
 				1E8856CDDD2EDD4D58AE1764 /* AudioRouteMonitorTests.swift in Sources */,
+				48FCC55E6C3223A19D7DA970 /* CaptureIntentDetectorTests.swift in Sources */,
 				5867E09D19864EF00D3856F9 /* ConversationStoreTests.swift in Sources */,
 				71970BDF43769ECE44DC4FED /* ConversationTests.swift in Sources */,
+				070011FEB255317D0FE11AE3 /* GeminiTTSTests.swift in Sources */,
 				117624A408FFC48CDCB574E6 /* LiveVoiceHeuristicsTests.swift in Sources */,
 				FF2D59CFBA3D08E48F8466DE /* ProjectStoreTests.swift in Sources */,
 			);
@@ -479,13 +580,16 @@
 			files = (
 				B8036E2296F7628A5C0572CE /* AgentClient.swift in Sources */,
 				6BA31FC7928D5D03B10723E8 /* AudioRouteMonitor.swift in Sources */,
+				22DAF4DF52F4ECC4CEA7A882 /* CaptureIntentDetector.swift in Sources */,
 				6B004850282B901FDC7DFBCF /* Conversation.swift in Sources */,
 				1AFDFA4A2AC2CEE77CD4C856 /* ConversationStore.swift in Sources */,
+				E1C643FB50B70956E720D2F0 /* GeminiTTS.swift in Sources */,
 				928890E0FA908816C1A0A749 /* KishOSCallActivityAttributes.swift in Sources */,
 				D8B63FA9F24AA1FF0F35754C /* KishOSFeaturePlan.swift in Sources */,
 				8EA0D1D5917487AA69C3C978 /* KishOSMacApp.swift in Sources */,
 				CC774E2820437531FBB8D8EE /* KishOSWorkspace.swift in Sources */,
 				66561DCFB7F5EBB21AF1D2AD /* LiveVoiceHeuristics.swift in Sources */,
+				9107FA009F08D71201390019 /* MediaCaptureModels.swift in Sources */,
 				0A1ED870A9A13443207F4CE4 /* Project.swift in Sources */,
 				343EF98CC7F86AA397A05B39 /* ProjectPickerPopover.swift in Sources */,
 				F54C662780149393EA220455 /* ProjectStore.swift in Sources */,
@@ -668,6 +772,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = GN3TH9WD6W;
+				GEMINI_API_KEY = "";
 				INFOPLIST_FILE = Clawk/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -688,6 +793,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = GN3TH9WD6W;
+				GEMINI_API_KEY = "";
 				INFOPLIST_FILE = Clawk/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -829,6 +935,35 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		CA2B97F4F509778E846DCB74 /* XCRemoteSwiftPackageReference "meta-wearables-dat-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/facebook/meta-wearables-dat-ios";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.7.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		79AE7C035385B05DBA8BFB55 /* MWDATMockDevice */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = CA2B97F4F509778E846DCB74 /* XCRemoteSwiftPackageReference "meta-wearables-dat-ios" */;
+			productName = MWDATMockDevice;
+		};
+		7D09ECB808406F2061A70A59 /* MWDATCamera */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = CA2B97F4F509778E846DCB74 /* XCRemoteSwiftPackageReference "meta-wearables-dat-ios" */;
+			productName = MWDATCamera;
+		};
+		AD1672C85AD35A3554C43BEB /* MWDATCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = CA2B97F4F509778E846DCB74 /* XCRemoteSwiftPackageReference "meta-wearables-dat-ios" */;
+			productName = MWDATCore;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = C0CE5586F71B4AFA40F4FCF1 /* Project object */;
 }

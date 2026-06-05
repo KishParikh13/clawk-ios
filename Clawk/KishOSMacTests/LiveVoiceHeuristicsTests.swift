@@ -219,7 +219,7 @@ final class LiveVoiceHeuristicsTests: XCTestCase {
 
     // MARK: - SpokenReplyMode.current
 
-    func testCurrentDefaultsToConcise() {
+    func testCurrentDefaultsToFull() {
         let key = Mode.storageKey
         let saved = UserDefaults.standard.string(forKey: key)
         UserDefaults.standard.removeObject(forKey: key)
@@ -227,7 +227,7 @@ final class LiveVoiceHeuristicsTests: XCTestCase {
             if let saved { UserDefaults.standard.set(saved, forKey: key) }
             else { UserDefaults.standard.removeObject(forKey: key) }
         }
-        XCTAssertEqual(Mode.current, .concise)
+        XCTAssertEqual(Mode.current, .full)
     }
 
     func testCurrentReadsStoredValue() {
@@ -249,5 +249,48 @@ final class LiveVoiceHeuristicsTests: XCTestCase {
         XCTAssertEqual(Mode.concise.title, "Concise")
         XCTAssertEqual(Mode.full.title, "Full")
         XCTAssertEqual(Mode.off.title, "Off")
+    }
+
+    // MARK: - narratableThinking
+
+    private func narratable(_ text: String) -> String? {
+        LiveVoiceHeuristics.narratableThinking(from: text)
+    }
+
+    func testProseReasoningIsNarrated() {
+        XCTAssertNotNil(narratable("Let me check your calendar for tomorrow."))
+        XCTAssertNotNil(narratable("Looking at the recent emails now."))
+        XCTAssertEqual(narratable("Searching the codebase for the bug."),
+                       "Searching the codebase for the bug.")
+    }
+
+    func testBashCommandsAreNotNarrated() {
+        XCTAssertNil(narratable("cd /Users/kishparikh && grep -rn foo ."))
+        XCTAssertNil(narratable("grep -rn \"foo\" ."))
+        XCTAssertNil(narratable("xcodebuild -project Clawk.xcodeproj build"))
+        XCTAssertNil(narratable("/usr/bin/swift build"))
+        XCTAssertNil(narratable("$ ls -la"))
+        XCTAssertNil(narratable("git commit -m \"x\""))
+    }
+
+    func testCodeBlocksAndShortNoiseAreNotNarrated() {
+        XCTAssertNil(narratable("```\nlet x = 1\n```"))
+        XCTAssertNil(narratable("ok"))
+        XCTAssertNil(narratable("   "))
+    }
+
+    func testInlineCommandStrippedFromProse() {
+        let result = narratable("I'll run `git log` to see the recent commits")
+        XCTAssertNotNil(result)
+        XCTAssertFalse(result?.contains("git") ?? true)   // the backtick span is removed
+        XCTAssertTrue(result?.contains("recent commits") ?? false)
+    }
+
+    func testMixedLinesKeepProseDropCommands() {
+        let result = narratable("Let me search the codebase.\ngrep -rn foo .\nThen I will summarize.")
+        XCTAssertNotNil(result)
+        XCTAssertTrue(result?.contains("search the codebase") ?? false)
+        XCTAssertTrue(result?.contains("summarize") ?? false)
+        XCTAssertFalse(result?.contains("grep") ?? true)
     }
 }

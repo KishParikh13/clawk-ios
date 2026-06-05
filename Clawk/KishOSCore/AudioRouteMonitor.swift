@@ -114,6 +114,10 @@ final class AudioRouteMonitor: ObservableObject {
         availableRoutes.contains { $0.isPreferredCandidate }
     }
 
+    var hasGlassesConnected: Bool {
+        Self.isGlassesConnected(activeKind: activeRouteKind, availableRoutes: availableRoutes)
+    }
+
     var isPreferredRouteActive: Bool {
         activeRouteKind == .glasses || activeRouteKind == .bluetooth || activeRouteKind == .headset
     }
@@ -195,6 +199,10 @@ final class AudioRouteMonitor: ObservableObject {
         case .blocked:
             return "Blocked"
         }
+    }
+
+    static func isGlassesConnected(activeKind: AudioRouteKind, availableRoutes: [AudioRouteCandidate]) -> Bool {
+        activeKind == .glasses || availableRoutes.contains { $0.kind == .glasses }
     }
 
     /// Compact chip text for the in-call header.

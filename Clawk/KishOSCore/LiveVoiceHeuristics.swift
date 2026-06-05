@@ -33,9 +33,10 @@ enum LiveVoiceHeuristics {
     /// affects what is spoken.
     enum SpokenReplyMode: String, CaseIterable, Codable {
         /// Strip code/noise, speak a short summary (first sentence group),
-        /// capped to ~280 characters. The default.
+        /// capped to ~280 characters.
         case concise
         /// Speak the full reply, with fenced code blocks removed for speech.
+        /// The default (see `current`).
         case full
         /// Speak nothing.
         case off
@@ -50,10 +51,11 @@ enum LiveVoiceHeuristics {
             }
         }
 
-        /// The currently persisted mode, defaulting to `.concise`.
+        /// The currently persisted mode, defaulting to `.full` (read the whole
+        /// final reply aloud).
         static var current: SpokenReplyMode {
             UserDefaults.standard.string(forKey: storageKey)
-                .flatMap(SpokenReplyMode.init(rawValue:)) ?? .concise
+                .flatMap(SpokenReplyMode.init(rawValue:)) ?? .full
         }
     }
 
@@ -86,6 +88,62 @@ enum LiveVoiceHeuristics {
             let capped = cappedToBudget(summary, budget: conciseCharBudget)
             return capped.isEmpty ? nil : capped
         }
+    }
+
+    /// Extracts natural-language reasoning to read aloud while the agent works,
+    /// dropping tool/shell commands, code, paths, flags, and log noise. Returns
+    /// `nil` when the text is not prose worth speaking (e.g. a bash command).
+    /// Pure and deterministic so it is unit-testable.
+    static func narratableThinking(from text: String) -> String? {
+        let withoutCode = strippingInlineCode(strippingFencedCodeBlocks(text))
+        let proseLines = withoutCode
+            .components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter(isProseLine)
+        let joined = proseLines.joined(separator: " ")
+        let collapsed = joined.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+        let letters = collapsed.reduce(into: 0) { count, character in
+            if character.isLetter { count += 1 }
+        }
+        let words = collapsed.split(separator: " ").count
+        guard letters >= 4, words >= 2 else { return nil }
+        return collapsed
+    }
+
+    /// First tokens that mark a line as a shell command rather than prose.
+    private static let commandWords: Set<String> = [
+        "cd", "ls", "grep", "rg", "cat", "rm", "mv", "cp", "git", "npm", "brew",
+        "xcodebuild", "xcodegen", "python", "python3", "curl", "wget", "echo",
+        "mkdir", "chmod", "chown", "sed", "awk", "find", "sudo", "bash", "sh",
+        "zsh", "node", "swift", "make", "cmake", "gcc", "clang", "docker",
+        "kubectl", "ssh", "scp", "open", "tail", "head", "touch", "export",
+        "pip", "pip3", "yarn", "pnpm", "cargo", "go", "ruby", "gem", "rails",
+        "rake", "kill", "ps", "top", "df", "du", "tar", "unzip", "jq", "defaults"
+    ]
+
+    /// Whether one line reads like natural-language prose (vs a command/path/code).
+    private static func isProseLine(_ t: String) -> Bool {
+        guard t.count >= 3 else { return false }
+        if t.contains("`") { return false }
+        if let first = t.first, "$#/>".contains(first) { return false }
+        let shellOps = ["&&", "||", " | ", "$(", "${", "</", "/>", ">>", "2>", "::", "=>"]
+        for op in shellOps where t.contains(op) { return false }
+        let firstWord = t.lowercased().split(whereSeparator: { $0.isWhitespace }).first.map(String.init) ?? ""
+        if commandWords.contains(firstWord) { return false }
+
+        let letters = t.reduce(into: 0) { count, character in
+            if character.isLetter { count += 1 }
+        }
+        guard Double(letters) / Double(t.count) >= 0.55 else { return false }
+
+        let tokens = t.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+        guard tokens.count >= 2 else { return false }
+        let codey = tokens.filter {
+            $0.contains("/") || $0.contains("=") || $0.contains("\\") || ($0.hasPrefix("-") && $0.count > 1)
+        }.count
+        guard Double(codey) / Double(tokens.count) <= 0.25 else { return false }
+
+        return true
     }
 
     /// Removes fenced code blocks (```...```), keeping surrounding prose.

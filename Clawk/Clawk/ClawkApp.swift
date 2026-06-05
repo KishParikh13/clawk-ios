@@ -2,9 +2,18 @@ import SwiftUI
 
 @main
 struct ClawkApp: App {
+    init() {
+        MetaWearablesBootstrap.configure()
+    }
+
     var body: some Scene {
         WindowGroup {
             KishOSIOSRootView()
+                .onOpenURL { url in
+                    Task {
+                        await MetaWearablesBootstrap.handle(url: url)
+                    }
+                }
         }
     }
 }

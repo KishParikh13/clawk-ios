@@ -1,6 +1,14 @@
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
+import os
+
+private let mediaCaptureLog = Logger(subsystem: "com.kishparikh.clawk", category: "media-capture")
+
+private func mediaCaptureDebugLog(_ message: String) {
+    mediaCaptureLog.info("\(message, privacy: .public)")
+    print("[MediaCapture] \(message)")
+}
 
 private enum IOSTheme {
     static let background = Color(uiColor: .systemBackground)
@@ -23,6 +31,7 @@ struct KishOSIOSRootView: View {
     @StateObject private var workspace = KishOSWorkspace()
     @StateObject private var voice = VoiceController()
     @StateObject private var audio = AudioRouteMonitor()
+    @StateObject private var glassesCamera = GlassesCameraCaptureController()
     @StateObject private var wake = WakePhraseController()
     @StateObject private var projectCatalog = ProjectCatalog()
     @StateObject private var projectStore = ProjectStore()
@@ -33,6 +42,8 @@ struct KishOSIOSRootView: View {
     @State private var activeCallController: LiveCallController?
     @State private var callStartTask: Task<Void, Never>?
     @State private var activeSendTasks: [UUID: Task<Void, Never>] = [:]
+    @State private var pendingCallSnapshotReview: CallSnapshotReviewItem?
+    @State private var pendingCallSnapshotContinuation: CheckedContinuation<Bool, Never>?
 
     var body: some View {
         GeometryReader { geometry in
@@ -43,6 +54,7 @@ struct KishOSIOSRootView: View {
                             IOSSettingsPage(
                                 client: client,
                                 audio: audio,
+                                glassesCamera: glassesCamera,
                                 wake: wake,
                                 agentURL: client.agentURLString,
                                 onReconnect: reconnect
@@ -68,9 +80,10 @@ struct KishOSIOSRootView: View {
                                 agentStatus: selectedConversation?.agentStatusSummary,
                                 queuedMessageCount: selectedConversation?.queuedUserMessageCount ?? workspace.queuedMessageCount,
                                 approvals: selectedConversation?.approvals ?? [],
-                                voice: voice,
-                                audio: audio,
-                                callController: activeCallController,
+                        voice: voice,
+                        audio: audio,
+                        glassesCamera: glassesCamera,
+                        callController: activeCallController,
                                 onSend: send,
                                 onStop: stopSelectedConversation,
                                 onStartCall: startLiveCall,
@@ -115,6 +128,7 @@ struct KishOSIOSRootView: View {
                     }
                     .task {
                         audio.start()
+                        glassesCamera.start()
                     }
                     .task {
                         refreshLiveActivitySummary()
@@ -151,6 +165,22 @@ struct KishOSIOSRootView: View {
                     .onChange(of: wake.detectionCount) { oldValue, newValue in
                         guard newValue > oldValue else { return }
                         handleWakeDetected()
+                    }
+                    .sheet(item: $pendingCallSnapshotReview) { item in
+                        IOSSnapshotReviewView(
+                            item: item.snapshot,
+                            onAttach: {
+                                completeCallSnapshotReview(accepted: true)
+                            },
+                            onRetake: {
+                                completeCallSnapshotReview(accepted: false, removing: item.snapshot.attachment)
+                            },
+                            onCancel: {
+                                completeCallSnapshotReview(accepted: false, removing: item.snapshot.attachment)
+                            }
+                        )
+                        .presentationDetents([.large])
+                        .interactiveDismissDisabled()
                     }
                 }
                 .disabled(showingConversations)
@@ -244,7 +274,8 @@ struct KishOSIOSRootView: View {
             initialProject: nil,
             onConversationStarted: { id in
                 selection = .conversation(id)
-            }
+            },
+            captureMediaHandler: captureMediaForCall
         )
         activeCallController = controller
         callStartTask = Task {
@@ -265,10 +296,16 @@ struct KishOSIOSRootView: View {
         callStartTask = nil
         activeCallController?.endCall()
         activeCallController = nil
-        audio.endCallSession()
-        voice.managesAudioSession = true
         refreshWakeSuppression()
         refreshLiveActivitySummary()
+        // Keep the call's audio session alive briefly so the call-end sound can
+        // play out, then release it — unless a new call has already claimed it.
+        Task {
+            try? await Task.sleep(for: .seconds(1.6))
+            guard activeCallController == nil else { return }
+            audio.endCallSession()
+            voice.managesAudioSession = true
+        }
     }
 
     private func handleWakeDetected() {
@@ -331,6 +368,81 @@ struct KishOSIOSRootView: View {
 
     private func sidebarWidth(for containerWidth: CGFloat) -> CGFloat {
         min(356, max(304, containerWidth * 0.84))
+    }
+
+    private func captureMediaForCall(intent: CaptureIntent, conversationID: UUID?, threadId: String?) async throws -> [ChatAttachment] {
+        guard intent.mediaKind == .photo else {
+            throw CapturedMediaAttachmentError.unsupportedMediaKind
+        }
+
+        let media = try await capturePhotoMedia(for: intent)
+        var attachment = try ChatAttachment.capturedMedia(media)
+        let accepted = await reviewCallSnapshot(attachment: attachment, intent: intent, source: media.source)
+        guard accepted else {
+            AttachmentPayloadCache.shared.removePayload(for: attachment)
+            throw CancellationError()
+        }
+
+        attachment = try await uploadCapturedAttachment(attachment, conversationId: conversationID, threadId: threadId)
+        return [attachment]
+    }
+
+    private func capturePhotoMedia(for intent: CaptureIntent) async throws -> CapturedMedia {
+        mediaCaptureDebugLog("call capturePhotoMedia intentSource=\(intent.source.rawValue) mediaKind=\(intent.mediaKind.rawValue) audioHasGlasses=\(audio.hasGlassesConnected) datStatus=\(glassesCamera.status.rawValue) datCanAttempt=\(glassesCamera.canAttemptCapture) datPermission=\(glassesCamera.cameraPermission)")
+        switch intent.source {
+        case .phoneCamera:
+            mediaCaptureDebugLog("call capture source=phone explicit")
+            return try await ProgrammaticPhoneCameraCapture.shared.capturePhoto()
+        case .glassesCamera:
+            mediaCaptureDebugLog("call capture source=glasses explicit")
+            return try await glassesCamera.capturePhoto()
+        case .automatic:
+            if audio.hasGlassesConnected || glassesCamera.canAttemptCapture {
+                mediaCaptureDebugLog("call capture source=glasses automatic")
+                return try await glassesCamera.capturePhoto()
+            }
+            mediaCaptureDebugLog("call capture source=phone automatic no-glasses-signal")
+            return try await ProgrammaticPhoneCameraCapture.shared.capturePhoto()
+        }
+    }
+
+    private func reviewCallSnapshot(attachment: ChatAttachment, intent: CaptureIntent, source: MediaCaptureSource) async -> Bool {
+        await withCheckedContinuation { continuation in
+            pendingCallSnapshotContinuation = continuation
+            pendingCallSnapshotReview = CallSnapshotReviewItem(
+                snapshot: SnapshotReviewItem(
+                    attachment: attachment,
+                    sourceType: nil,
+                    captureSource: source
+                ),
+                intent: intent
+            )
+        }
+    }
+
+    private func completeCallSnapshotReview(accepted: Bool, removing attachment: ChatAttachment? = nil) {
+        if let attachment {
+            AttachmentPayloadCache.shared.removePayload(for: attachment)
+        }
+        pendingCallSnapshotReview = nil
+        pendingCallSnapshotContinuation?.resume(returning: accepted)
+        pendingCallSnapshotContinuation = nil
+    }
+
+    private func uploadCapturedAttachment(_ attachment: ChatAttachment, conversationId: UUID?, threadId: String?) async throws -> ChatAttachment {
+        var current = attachment
+        let payload = try AttachmentPayloadCache.shared.payload(for: current)
+        let uploaded = try await client.uploadAttachment(payload, conversationId: conversationId, threadId: threadId)
+        current.title = uploaded.filename
+        current.mimeType = uploaded.mimeType ?? current.mimeType
+        current.byteCount = uploaded.byteCount ?? current.byteCount
+        current.uploadId = uploaded.id
+        current.uploadState = .ready
+        current.uploadError = nil
+        if uploaded.kind == ChatAttachment.Kind.image.rawValue {
+            current.kind = .image
+        }
+        return current
     }
 
     private func send(_ text: String, attachments: [ChatAttachment], references: [ChatReference]) {
@@ -639,6 +751,7 @@ private struct ChatScreen: View {
     let approvals: [ApprovalRequest]
     @ObservedObject var voice: VoiceController
     @ObservedObject var audio: AudioRouteMonitor
+    @ObservedObject var glassesCamera: GlassesCameraCaptureController
     let callController: LiveCallController?
     let onSend: (String, [ChatAttachment], [ChatReference]) -> Void
     let onStop: () -> Void
@@ -651,6 +764,7 @@ private struct ChatScreen: View {
     @State private var draft = ""
     @State private var pendingAttachments: [ChatAttachment] = []
     @State private var pendingReferences: [ChatReference] = []
+    @State private var inlineCaptureStatus: IOSCaptureInlineStatus?
     @Namespace private var composerNamespace
 
     private var messages: [ChatMessage] {
@@ -703,6 +817,11 @@ private struct ChatScreen: View {
                             IOSCallPartialTurn(text: callController.activeUserPartial)
                                 .id("active-user")
                         }
+
+                        if let inlineCaptureStatus {
+                            IOSCaptureStatusTurn(status: inlineCaptureStatus)
+                                .id(inlineCaptureStatus.id)
+                        }
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 18)
@@ -715,6 +834,9 @@ private struct ChatScreen: View {
                     scrollToBottom(proxy)
                 }
                 .onChange(of: callController?.activeUserPartial) {
+                    scrollToBottom(proxy)
+                }
+                .onChange(of: inlineCaptureStatus?.id) {
                     scrollToBottom(proxy)
                 }
             }
@@ -779,7 +901,11 @@ private struct ChatScreen: View {
                         runState: runState,
                         voice: voice,
                         audio: audio,
+                        glassesCamera: glassesCamera,
                         namespace: composerNamespace,
+                        onCaptureStatusChange: { status in
+                            inlineCaptureStatus = status
+                        },
                         onSend: sendDraft,
                         onStop: onStop,
                         onStartCall: onStartCall
@@ -814,6 +940,9 @@ private struct ChatScreen: View {
         draft = ""
         pendingAttachments = []
         pendingReferences = pendingReferences.filter(\.isLocked)
+        if inlineCaptureStatus?.state == .succeeded {
+            inlineCaptureStatus = nil
+        }
         onSend(trimmed, attachments, references)
     }
 
@@ -1239,6 +1368,8 @@ private struct IOSCallModeComposer: View {
             return "Connecting"
         case .agentThinking, .sendingTurn:
             return "Working"
+        case .capturingMedia:
+            return "Capturing"
         case .agentSpeaking:
             return "Speaking"
         case .needsAnswer:
@@ -1286,6 +1417,74 @@ private struct IOSCallModeComposer: View {
             onSubmitSpeech()
         } else {
             onOutput()
+        }
+    }
+}
+
+private struct IOSCaptureInlineStatus: Identifiable, Equatable {
+    enum State: Equatable {
+        case capturing
+        case succeeded
+        case failed
+    }
+
+    let id: UUID
+    var state: State
+    var title: String
+    var detail: String
+
+    init(id: UUID = UUID(), state: State, title: String, detail: String) {
+        self.id = id
+        self.state = state
+        self.title = title
+        self.detail = detail
+    }
+}
+
+private struct IOSCaptureStatusTurn: View {
+    let status: IOSCaptureInlineStatus
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 9) {
+                    statusIcon
+                    Text(status.title)
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(.primary)
+                }
+
+                Text(status.detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 11)
+            .background(IOSTheme.secondaryBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(IOSTheme.hairline))
+
+            Spacer(minLength: 48)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(status.title). \(status.detail)")
+    }
+
+    @ViewBuilder
+    private var statusIcon: some View {
+        switch status.state {
+        case .capturing:
+            ProgressView()
+                .controlSize(.small)
+                .frame(width: 18, height: 18)
+        case .succeeded:
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+                .frame(width: 18, height: 18)
+        case .failed:
+            Image(systemName: "exclamationmark.circle.fill")
+                .foregroundStyle(.red)
+                .frame(width: 18, height: 18)
         }
     }
 }
@@ -1523,7 +1722,9 @@ private struct IOSComposer: View {
     let runState: ConversationRunState?
     @ObservedObject var voice: VoiceController
     @ObservedObject var audio: AudioRouteMonitor
+    @ObservedObject var glassesCamera: GlassesCameraCaptureController
     let namespace: Namespace.ID
+    let onCaptureStatusChange: (IOSCaptureInlineStatus?) -> Void
     let onSend: () -> Void
     let onStop: () -> Void
     let onStartCall: () -> Void
@@ -1533,7 +1734,11 @@ private struct IOSComposer: View {
     @State private var showingFilePicker = false
     @State private var showingReferencePicker = false
     @State private var pendingSnapshotReview: SnapshotReviewItem?
+    @State private var pendingSnapshotIntent: CaptureIntent?
+    @State private var pendingSnapshotAutoSend = false
     @State private var attachmentError: String?
+    @State private var isCapturingRequestedPhoto = false
+    @State private var autoSendAfterUploadAttachmentID: UUID?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -1640,9 +1845,21 @@ private struct IOSComposer: View {
                                 attachmentError = nil
                                 showingPhotoPicker = true
                             }
-                            Button("Upload a file", systemImage: "doc") {
+                            Button("Upload a file", systemImage: "document.on.document") {
                                 attachmentError = nil
                                 showingFilePicker = true
+                            }
+                            Button {
+                                startDictation()
+                            } label: {
+                                Label("Dictation", systemImage: "mic.fill")
+                            }
+                            Divider()
+                            Button {
+                                attachmentError = nil
+                                showingReferencePicker = true
+                            } label: {
+                                Label("Reference", systemImage: "at")
                             }
                         } label: {
                             Circle()
@@ -1655,49 +1872,17 @@ private struct IOSComposer: View {
                                 .overlay(Circle().stroke(IOSTheme.hairline))
                                 .frame(width: 40, height: 40)
                         }
+                        .menuOrder(.fixed)
                         .tint(Color(uiColor: .label))
                         .disabled(isDisabled)
                         .accessibilityLabel("Add")
                         .matchedGeometryEffect(id: "composerLeadingButton", in: namespace)
-
-                        Button {
-                            attachmentError = nil
-                            showingReferencePicker = true
-                        } label: {
-                            Circle()
-                                .fill(IOSTheme.elevatedBackground)
-                                .overlay {
-                                    Text("@")
-                                        .font(.system(size: 19, weight: .semibold))
-                                        .foregroundStyle(Color(uiColor: .label))
-                                }
-                                .overlay(Circle().stroke(IOSTheme.hairline))
-                                .frame(width: 40, height: 40)
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(isDisabled)
-                        .accessibilityLabel("Reference files")
                     }
 
                     Spacer(minLength: 6)
 
-                    if showsCallButton {
-                        Button(action: onStartCall) {
-                            Image(systemName: "phone.fill")
-                                .font(.system(size: 15, weight: .bold))
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(Color(uiColor: .label))
-                        .frame(width: 40, height: 40)
-                        .background(IOSTheme.elevatedBackground, in: Circle())
-                        .overlay(Circle().stroke(IOSTheme.hairline))
-                        .disabled(isDisabled || isSending)
-                        .accessibilityLabel("Start call")
-                        .matchedGeometryEffect(id: "composerAuxiliaryButton", in: namespace)
-                    }
-
                     Button(action: trailingAction) {
-                        if hasUploadingAttachment && !isWorking {
+                        if (hasUploadingAttachment || isCapturingRequestedPhoto) && !isWorking {
                             ProgressView()
                                 .frame(width: 18, height: 18)
                         } else {
@@ -1706,7 +1891,8 @@ private struct IOSComposer: View {
                         }
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(trailingButtonForegroundColor)
+                    .tint(trailingButtonForegroundColor)
                     .frame(width: 40, height: 40)
                     .background(trailingButtonColor, in: Circle())
                     .disabled(trailingButtonDisabled)
@@ -1773,9 +1959,6 @@ private struct IOSComposer: View {
                 onAttach: {
                     acceptSnapshotReview(item, prompt: nil)
                 },
-                onAsk: {
-                    acceptSnapshotReview(item, prompt: "What should I know about this image?")
-                },
                 onRetake: {
                     retakeSnapshotReview(item)
                 },
@@ -1803,10 +1986,6 @@ private struct IOSComposer: View {
         attachments.contains { $0.needsUpload && $0.uploadState != .uploading && $0.uploadState != .ready }
     }
 
-    private var showsCallButton: Bool {
-        !voice.isRecording && !isWorking && !hasSendableContent && !isDisabled && !isSending
-    }
-
     private var blockedAttachmentText: String {
         attachments.first(where: { $0.needsUpload && $0.uploadState != .uploading && $0.uploadState != .ready })?.uploadError
             ?? "Attachment needs upload."
@@ -1823,7 +2002,10 @@ private struct IOSComposer: View {
         if voice.isRecording {
             return "checkmark"
         }
-        return hasSendableContent ? "arrow.up" : "mic.fill"
+        if hasSendableContent {
+            return "arrow.up"
+        }
+        return "phone.fill"
     }
 
     private var trailingButtonColor: Color {
@@ -1839,6 +2021,16 @@ private struct IOSComposer: View {
         return Color(uiColor: .label)
     }
 
+    private var trailingButtonForegroundColor: Color {
+        if trailingButtonDisabled {
+            return Color(uiColor: .secondaryLabel)
+        }
+        if isWorking {
+            return .white
+        }
+        return Color(uiColor: .systemBackground)
+    }
+
     private var trailingButtonDisabled: Bool {
         if isWorking {
             return false
@@ -1847,9 +2039,9 @@ private struct IOSComposer: View {
             return false
         }
         if hasSendableContent {
-            return isDisabled || isSending || hasUploadingAttachment || hasBlockedAttachment
+            return isDisabled || isSending || hasUploadingAttachment || hasBlockedAttachment || isCapturingRequestedPhoto
         }
-        return isDisabled || isSending
+        return isDisabled || isSending || hasUploadingAttachment || hasBlockedAttachment || isCapturingRequestedPhoto
     }
 
     private var trailingAccessibilityLabel: String {
@@ -1859,7 +2051,10 @@ private struct IOSComposer: View {
         if voice.isRecording {
             return "Accept dictation"
         }
-        return hasSendableContent ? "Send" : "Start dictation"
+        if !hasSendableContent && audio.hasGlassesConnected {
+            return "Start call"
+        }
+        return hasSendableContent ? "Send" : "Start call"
     }
 
     private func trailingAction() {
@@ -1868,9 +2063,13 @@ private struct IOSComposer: View {
         } else if voice.isRecording {
             acceptDictation()
         } else if hasSendableContent {
-            onSend()
+            if let intent = CaptureIntentDetector.detect(in: draft), attachments.isEmpty {
+                startAIRequestedCapture(intent)
+            } else {
+                onSend()
+            }
         } else {
-            startDictation()
+            onStartCall()
         }
     }
 
@@ -1878,6 +2077,8 @@ private struct IOSComposer: View {
         switch result {
         case .success(let attachment):
             attachmentError = nil
+            pendingSnapshotIntent = nil
+            pendingSnapshotAutoSend = false
             pendingSnapshotReview = SnapshotReviewItem(attachment: attachment, sourceType: sourceType)
         case .failure(let error):
             attachmentError = error.localizedDescription
@@ -1885,16 +2086,35 @@ private struct IOSComposer: View {
     }
 
     private func acceptSnapshotReview(_ item: SnapshotReviewItem, prompt: String?) {
+        let intent = pendingSnapshotIntent
+        let shouldAutoSend = pendingSnapshotAutoSend
+        pendingSnapshotIntent = nil
+        pendingSnapshotAutoSend = false
         pendingSnapshotReview = nil
-        if let prompt {
+        if let intent {
+            draft = intent.prompt
+            onCaptureStatusChange(IOSCaptureInlineStatus(
+                state: .succeeded,
+                title: "Photo attached",
+                detail: "Sending the captured photo with your request."
+            ))
+        } else if let prompt {
             appendText(prompt)
         }
-        handleAttachmentSelection(.success(item.attachment))
+        handleAttachmentSelection(.success(item.attachment), autoSendAfterUpload: shouldAutoSend)
     }
 
     private func retakeSnapshotReview(_ item: SnapshotReviewItem) {
         pendingSnapshotReview = nil
         AttachmentPayloadCache.shared.removePayload(for: item.attachment)
+        if let intent = pendingSnapshotIntent {
+            pendingSnapshotIntent = nil
+            pendingSnapshotAutoSend = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                startAIRequestedCapture(intent)
+            }
+            return
+        }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
             if item.sourceType == .camera {
                 showingCameraPicker = true
@@ -1905,11 +2125,14 @@ private struct IOSComposer: View {
     }
 
     private func discardSnapshotReview(_ item: SnapshotReviewItem) {
+        pendingSnapshotIntent = nil
+        pendingSnapshotAutoSend = false
         pendingSnapshotReview = nil
+        onCaptureStatusChange(nil)
         AttachmentPayloadCache.shared.removePayload(for: item.attachment)
     }
 
-    private func handleAttachmentSelection(_ result: Result<ChatAttachment, Error>) {
+    private func handleAttachmentSelection(_ result: Result<ChatAttachment, Error>, autoSendAfterUpload: Bool = false) {
         switch result {
         case .success(let attachment):
             attachmentError = nil
@@ -1918,8 +2141,14 @@ private struct IOSComposer: View {
                 pending.uploadState = .uploading
             }
             attachments.append(pending)
+            if autoSendAfterUpload {
+                autoSendAfterUploadAttachmentID = pending.id
+            }
             if pending.needsUpload {
                 uploadAttachment(pending.id)
+            } else if autoSendAfterUpload {
+                autoSendAfterUploadAttachmentID = nil
+                onSend()
             }
         case .failure(let error):
             attachmentError = error.localizedDescription
@@ -2002,6 +2231,10 @@ private struct IOSComposer: View {
                         current.kind = .image
                     }
                 }
+                if autoSendAfterUploadAttachmentID == attachmentId {
+                    autoSendAfterUploadAttachmentID = nil
+                    onSend()
+                }
             } catch {
                 updateAttachment(attachmentId) { current in
                     current.uploadState = .failed
@@ -2020,6 +2253,91 @@ private struct IOSComposer: View {
         Task {
             await audio.activatePreferredHandsFreeRoute()
             await voice.startRecording()
+        }
+    }
+
+    private func startAIRequestedCapture(_ intent: CaptureIntent) {
+        guard intent.mediaKind == .photo else {
+            attachmentError = "Video capture is not ready yet."
+            onCaptureStatusChange(IOSCaptureInlineStatus(
+                state: .failed,
+                title: "Video capture unavailable",
+                detail: "Photo capture is available now; video capture is not ready yet."
+            ))
+            return
+        }
+
+        attachmentError = nil
+        isCapturingRequestedPhoto = true
+        onCaptureStatusChange(IOSCaptureInlineStatus(
+            state: .capturing,
+            title: "Taking photo",
+            detail: "Using \(requestedCaptureSourceTitle(for: intent))."
+        ))
+        Task {
+            do {
+                let media: CapturedMedia
+                mediaCaptureDebugLog("chat capture intentSource=\(intent.source.rawValue) mediaKind=\(intent.mediaKind.rawValue) audioHasGlasses=\(audio.hasGlassesConnected) datStatus=\(glassesCamera.status.rawValue) datCanAttempt=\(glassesCamera.canAttemptCapture) datPermission=\(glassesCamera.cameraPermission)")
+                switch intent.source {
+                case .phoneCamera:
+                    mediaCaptureDebugLog("chat capture source=phone explicit")
+                    media = try await ProgrammaticPhoneCameraCapture.shared.capturePhoto()
+                case .glassesCamera:
+                    mediaCaptureDebugLog("chat capture source=glasses explicit")
+                    media = try await glassesCamera.capturePhoto()
+                case .automatic:
+                    if audio.hasGlassesConnected || glassesCamera.canAttemptCapture {
+                        mediaCaptureDebugLog("chat capture source=glasses automatic")
+                        media = try await glassesCamera.capturePhoto()
+                    } else {
+                        mediaCaptureDebugLog("chat capture source=phone automatic no-glasses-signal")
+                        media = try await ProgrammaticPhoneCameraCapture.shared.capturePhoto()
+                    }
+                }
+                let attachment = try ChatAttachment.capturedMedia(media)
+                onCaptureStatusChange(IOSCaptureInlineStatus(
+                    state: .succeeded,
+                    title: "Photo captured",
+                    detail: "Captured from \(capturedSourceTitle(for: media.source)). Review it before sending."
+                ))
+                pendingSnapshotIntent = intent
+                pendingSnapshotAutoSend = true
+                pendingSnapshotReview = SnapshotReviewItem(
+                    attachment: attachment,
+                    sourceType: nil,
+                    captureSource: media.source
+                )
+            } catch {
+                attachmentError = error.localizedDescription
+                onCaptureStatusChange(IOSCaptureInlineStatus(
+                    state: .failed,
+                    title: "Photo capture failed",
+                    detail: error.localizedDescription
+                ))
+            }
+            isCapturingRequestedPhoto = false
+        }
+    }
+
+    private func capturedSourceTitle(for source: MediaCaptureSource) -> String {
+        switch source {
+        case .phoneCamera:
+            return "the phone camera"
+        case .glassesCamera:
+            return "the glasses camera"
+        case .automatic:
+            return "the selected camera"
+        }
+    }
+
+    private func requestedCaptureSourceTitle(for intent: CaptureIntent) -> String {
+        switch intent.source {
+        case .phoneCamera:
+            return "the phone camera"
+        case .glassesCamera:
+            return "the glasses camera"
+        case .automatic:
+            return (audio.hasGlassesConnected || glassesCamera.canAttemptCapture) ? "the glasses camera" : "the phone camera"
         }
     }
 
@@ -2045,16 +2363,32 @@ private struct IOSComposer: View {
     }
 }
 
+private struct CallSnapshotReviewItem: Identifiable {
+    let id = UUID()
+    let snapshot: SnapshotReviewItem
+    let intent: CaptureIntent
+}
+
 private struct SnapshotReviewItem: Identifiable {
     let id = UUID()
     let attachment: ChatAttachment
-    let sourceType: UIImagePickerController.SourceType
+    let sourceType: UIImagePickerController.SourceType?
+    let captureSource: MediaCaptureSource
+
+    init(
+        attachment: ChatAttachment,
+        sourceType: UIImagePickerController.SourceType?,
+        captureSource: MediaCaptureSource? = nil
+    ) {
+        self.attachment = attachment
+        self.sourceType = sourceType
+        self.captureSource = captureSource ?? .phoneCamera
+    }
 }
 
 private struct IOSSnapshotReviewView: View {
     let item: SnapshotReviewItem
     let onAttach: () -> Void
-    let onAsk: () -> Void
     let onRetake: () -> Void
     let onCancel: () -> Void
 
@@ -2088,14 +2422,12 @@ private struct IOSSnapshotReviewView: View {
                         .buttonStyle(.bordered)
                         .controlSize(.large)
 
-                    Button("Ask", action: onAsk)
-                        .buttonStyle(.bordered)
-                        .controlSize(.large)
+                    Spacer(minLength: 16)
 
-                    Button("Attach", action: onAttach)
+                    Button("Add", action: onAttach)
                         .buttonStyle(.borderedProminent)
                         .controlSize(.large)
-                        .tint(Color(uiColor: .label))
+                        .tint(.accentColor)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, 16)
@@ -2118,7 +2450,10 @@ private struct IOSSnapshotReviewView: View {
     }
 
     private var retakeTitle: String {
-        item.sourceType == .camera ? "Retake" : "Choose"
+        if item.sourceType == .photoLibrary {
+            return "Change"
+        }
+        return "Retake"
     }
 }
 
@@ -2910,12 +3245,13 @@ private struct IOSConnectionPanel: View {
 private struct IOSSettingsPage: View {
     @ObservedObject var client: KishAgentClient
     @ObservedObject var audio: AudioRouteMonitor
+    @ObservedObject var glassesCamera: GlassesCameraCaptureController
     @ObservedObject var wake: WakePhraseController
     let agentURL: String
     let onReconnect: () -> Void
 
     @AppStorage(LiveVoiceHeuristics.SpokenReplyMode.storageKey)
-    private var spokenReplyMode: LiveVoiceHeuristics.SpokenReplyMode = .concise
+    private var spokenReplyMode: LiveVoiceHeuristics.SpokenReplyMode = .full
 
     var body: some View {
         ScrollView {
@@ -2974,7 +3310,7 @@ private struct IOSSettingsPage: View {
                 .settingsCard()
 
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Settings")
+                    Text("Call Settings")
                         .font(.headline)
 
                     Toggle(isOn: Binding(
@@ -3006,6 +3342,39 @@ private struct IOSSettingsPage: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
+                }
+                .settingsCard()
+
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Text("Glasses Camera Control")
+                            .font(.headline)
+                        Spacer()
+                        IOSSettingsStatusPill(title: glassesCameraOverallTitle, tint: glassesCameraOverallTint)
+                    }
+
+                    HStack(alignment: .center, spacing: 12) {
+                        Image(systemName: "eyeglasses")
+                            .font(.system(size: 22, weight: .semibold))
+                            .foregroundStyle(glassesConnectionTint)
+                            .frame(width: 34, height: 34)
+                            .accessibilityHidden(true)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(glassesConnectionTitle)
+                                .font(.callout.weight(.semibold))
+                            Text(glassesConnectionDetail)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                        }
+
+                        Spacer(minLength: 8)
+
+                        IOSSettingsStatusPill(title: glassesConnectionPillTitle, tint: glassesConnectionTint)
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("\(glassesConnectionTitle). \(glassesConnectionDetail)")
 
                     Toggle(isOn: Binding(
                         get: { audio.prefersHandsFreeRoute },
@@ -3020,25 +3389,103 @@ private struct IOSSettingsPage: View {
                         }
                     }
 
-                    Toggle(isOn: .constant(false)) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Use glasses camera")
-                            Text("Coming soon.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .disabled(true)
+                    IOSSettingsDiagnosticRow(
+                        icon: "checkmark.seal",
+                        title: "Registration",
+                        detail: glassesCameraRegistrationDetail,
+                        status: glassesCamera.status.label,
+                        tint: glassesCameraRegistrationTint
+                    )
 
-                    Toggle(isOn: .constant(false)) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Show replies on glasses")
-                            Text("Coming soon.")
+                    IOSSettingsDiagnosticRow(
+                        icon: "eyeglasses",
+                        title: "Camera device",
+                        detail: glassesCameraDeviceDetail,
+                        status: glassesCameraDeviceTitle,
+                        tint: glassesCameraDeviceTint
+                    )
+
+                    IOSSettingsDiagnosticRow(
+                        icon: "camera",
+                        title: "Camera permission",
+                        detail: glassesCameraPermissionDetail,
+                        status: glassesCameraPermissionTitle,
+                        tint: glassesCameraPermissionTint
+                    )
+
+                    IOSSettingsDiagnosticRow(
+                        icon: "dot.radiowaves.left.and.right",
+                        title: "AI capture",
+                        detail: glassesCameraCaptureDetail,
+                        status: glassesCameraCaptureTitle,
+                        tint: glassesCameraCaptureTint
+                    )
+
+                    if let lastError = glassesCamera.lastError, !lastError.isEmpty {
+                        HStack(alignment: .top, spacing: 10) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.orange)
+                                .frame(width: 26, height: 26)
+                                .accessibilityHidden(true)
+                            Text(lastError)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 9)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(IOSTheme.secondaryBackground, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    }
+
+                    VStack(spacing: 8) {
+                        Button {
+                            glassesCamera.refreshStatus()
+                        } label: {
+                            HStack(spacing: 7) {
+                                Image(systemName: "arrow.clockwise")
+                                Text("Check camera status")
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.78)
+                            }
+                            .font(.callout.weight(.semibold))
+                            .frame(height: 40)
+                            .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(IOSSettingsActionButtonStyle(kind: .primary))
+
+                        Button {
+                            glassesCamera.requestCameraPermission()
+                        } label: {
+                            HStack(spacing: 7) {
+                                Image(systemName: "camera.badge.ellipsis")
+                                Text("Request camera permission")
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.78)
+                            }
+                            .font(.callout.weight(.semibold))
+                            .frame(height: 40)
+                            .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(IOSSettingsActionButtonStyle(kind: .secondary))
+
+                        if glassesCameraCanRegister {
+                            Button {
+                                glassesCamera.register()
+                            } label: {
+                                HStack(spacing: 7) {
+                                    Image(systemName: "link.badge.plus")
+                                    Text("Register with Meta AI")
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.78)
+                                }
+                                .font(.callout.weight(.semibold))
+                                .frame(height: 40)
+                                .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(IOSSettingsActionButtonStyle(kind: .secondary))
                         }
                     }
-                    .disabled(true)
                 }
                 .settingsCard()
             }
@@ -3047,6 +3494,7 @@ private struct IOSSettingsPage: View {
         .background(IOSTheme.groupedBackground)
         .onAppear {
             audio.refresh()
+            glassesCamera.refreshStatus()
         }
     }
 
@@ -3074,6 +3522,215 @@ private struct IOSSettingsPage: View {
         }
     }
 
+    private var glassesConnectionTitle: String {
+        audio.hasGlassesConnected ? "Glasses connected" : "Glasses not connected"
+    }
+
+    private var glassesConnectionDetail: String {
+        if audio.activeRouteKind == .glasses {
+            return "Active on \(audio.routeDetail)."
+        }
+        if let routeName = audio.availableRoutes.first(where: { $0.kind == .glasses })?.name {
+            return "\(routeName) is available for hands-free audio."
+        }
+        return "Connect Ray-Ban Meta glasses in Bluetooth."
+    }
+
+    private var glassesConnectionPillTitle: String {
+        audio.hasGlassesConnected ? "Connected" : "Not connected"
+    }
+
+    private var glassesConnectionTint: Color {
+        audio.hasGlassesConnected ? .green : .secondary
+    }
+
+    private var glassesCameraRegistrationDetail: String {
+        switch glassesCamera.status.rawValue {
+        case "registered", "streaming", "waitingForDevice":
+            return "Clawk is registered with Meta AI for DAT camera access."
+        case "registering":
+            return "Meta AI registration is in progress."
+        case "available":
+            return "Register once with Meta AI before camera capture."
+        case "failed":
+            return "Registration needs attention. Use Check camera status first."
+        default:
+            return "Meta AI registration is not available in this build or environment."
+        }
+    }
+
+    private var glassesCameraRegistrationTint: Color {
+        switch glassesCamera.status.rawValue {
+        case "registered", "streaming", "waitingForDevice":
+            return .green
+        case "registering", "available":
+            return .orange
+        case "failed":
+            return .red
+        default:
+            return .secondary
+        }
+    }
+
+    private var glassesCameraDeviceTitle: String {
+        if glassesCamera.hasActiveDevice {
+            return "Eligible"
+        }
+        if !glassesCamera.devices.isEmpty {
+            return "Seen"
+        }
+        return "No device"
+    }
+
+    private var glassesCameraDeviceDetail: String {
+        if glassesCamera.hasActiveDevice {
+            return "An eligible glasses camera device is active."
+        }
+        if glassesCamera.devices.count == 1 {
+            return "One glasses device is visible, but not active for camera yet."
+        }
+        if glassesCamera.devices.count > 1 {
+            return "\(glassesCamera.devices.count) glasses devices are visible; waiting for an eligible camera device."
+        }
+        return "Keep glasses connected, nearby, powered on, and in Developer Mode."
+    }
+
+    private var glassesCameraDeviceTint: Color {
+        if glassesCamera.hasActiveDevice {
+            return .green
+        }
+        if !glassesCamera.devices.isEmpty {
+            return .orange
+        }
+        return .secondary
+    }
+
+    private var glassesCameraPermissionTitle: String {
+        let normalized = glassesCamera.cameraPermission.lowercased()
+        if normalized.contains("granted") {
+            return "Granted"
+        }
+        if normalized.contains("denied") || normalized.contains("failed") {
+            return "Needs check"
+        }
+        if normalized.contains("unknown") || normalized.contains("not checked") {
+            return "Unknown"
+        }
+        return glassesCamera.cameraPermission
+    }
+
+    private var glassesCameraPermissionDetail: String {
+        let normalized = glassesCamera.cameraPermission.lowercased()
+        if normalized.contains("granted") {
+            return "Meta AI has granted camera access for glasses capture."
+        }
+        if normalized.contains("failed") {
+            return "Permission status could not be checked. Use the permission button to open Meta AI."
+        }
+        if normalized.contains("denied") {
+            return "Open Meta AI permission flow and allow camera access."
+        }
+        return "Camera permission is checked through Meta AI after registration."
+    }
+
+    private var glassesCameraPermissionTint: Color {
+        let normalized = glassesCamera.cameraPermission.lowercased()
+        if normalized.contains("granted") {
+            return .green
+        }
+        if normalized.contains("denied") || normalized.contains("failed") {
+            return .red
+        }
+        return .secondary
+    }
+
+    private var glassesCameraPermissionGranted: Bool {
+        glassesCamera.cameraPermission.lowercased().contains("granted")
+    }
+
+    private var glassesCameraReadyForRequest: Bool {
+        glassesCamera.isReadyForCapture || (glassesCamera.status.rawValue == "registered" && glassesCamera.hasActiveDevice && glassesCameraPermissionGranted)
+    }
+
+    private var glassesCameraOverallTitle: String {
+        if glassesCameraReadyForRequest {
+            return "Ready"
+        }
+        if glassesCamera.status.rawValue != "registered" {
+            return "Register"
+        }
+        if !glassesCamera.hasActiveDevice {
+            return "Waiting"
+        }
+        if !glassesCameraPermissionGranted {
+            return "Needs permission"
+        }
+        return "Blocked"
+    }
+
+    private var glassesCameraOverallTint: Color {
+        if glassesCameraReadyForRequest {
+            return .green
+        }
+        if glassesCamera.status.rawValue == "failed" {
+            return .red
+        }
+        if glassesCamera.status.rawValue == "registered" || glassesCamera.status.rawValue == "available" {
+            return .orange
+        }
+        return .secondary
+    }
+
+    private var glassesCameraCaptureTitle: String {
+        if glassesCameraReadyForRequest {
+            return glassesCamera.isReadyForCapture ? "Streaming" : "Ready"
+        }
+        if glassesCamera.status.rawValue != "registered" {
+            return "Register first"
+        }
+        if !glassesCamera.hasActiveDevice {
+            return "Waiting"
+        }
+        if !glassesCameraPermissionGranted {
+            return "Needs permission"
+        }
+        return "Blocked"
+    }
+
+    private var glassesCameraCaptureTint: Color {
+        if glassesCameraReadyForRequest {
+            return .green
+        }
+        if glassesCamera.status.rawValue == "failed" {
+            return .red
+        }
+        if glassesCamera.status.rawValue == "registered" || glassesCamera.hasActiveDevice {
+            return .orange
+        }
+        return .secondary
+    }
+
+    private var glassesCameraCaptureDetail: String {
+        if glassesCameraReadyForRequest {
+            return "AI photo requests will use the glasses camera."
+        }
+        if glassesCamera.hasActiveDevice {
+            return "Device is eligible; grant camera permission to enable capture."
+        }
+        if glassesCamera.canAttemptCapture {
+            return "Waiting for an eligible glasses camera device."
+        }
+        return "Register with Meta AI before capture."
+    }
+
+    private var glassesCameraCanRegister: Bool {
+        switch glassesCamera.status.rawValue {
+        case "available", "failed", "unavailable":
+            return true
+        default:
+            return false
+        }
+    }
 }
 
 private struct IOSSettingsStatusPill: View {
@@ -3094,6 +3751,82 @@ private struct IOSSettingsStatusPill: View {
         .padding(.horizontal, 10)
         .frame(height: 28)
         .background(IOSTheme.secondaryBackground, in: Capsule())
+    }
+}
+
+private struct IOSSettingsDiagnosticRow: View {
+    let icon: String
+    let title: String
+    let detail: String
+    let status: String
+    let tint: Color
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 28, height: 28)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.callout.weight(.semibold))
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.88)
+            }
+
+            Spacer(minLength: 8)
+
+            IOSSettingsStatusPill(title: status, tint: tint)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title). \(detail). \(status).")
+    }
+}
+
+private struct IOSSettingsActionButtonStyle: ButtonStyle {
+    enum Kind {
+        case primary
+        case secondary
+    }
+
+    let kind: Kind
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(foregroundColor)
+            .background(backgroundColor(configuration: configuration), in: Capsule())
+            .overlay {
+                if kind == .secondary {
+                    Capsule()
+                        .strokeBorder(IOSTheme.hairline, lineWidth: 1)
+                }
+            }
+            .contentShape(Capsule())
+            .opacity(configuration.isPressed ? 0.78 : 1)
+            .scaleEffect(configuration.isPressed ? 0.99 : 1)
+    }
+
+    private var foregroundColor: Color {
+        switch kind {
+        case .primary:
+            return .white
+        case .secondary:
+            return Color(uiColor: .label)
+        }
+    }
+
+    private func backgroundColor(configuration: Configuration) -> Color {
+        switch kind {
+        case .primary:
+            return configuration.isPressed ? Color.accentColor.opacity(0.78) : Color.accentColor
+        case .secondary:
+            return configuration.isPressed ? IOSTheme.secondaryBackground.opacity(0.72) : IOSTheme.secondaryBackground
+        }
     }
 }
 
