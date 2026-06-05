@@ -715,6 +715,7 @@ struct ApprovalOption: Codable, Equatable {
 enum SidebarSelection: Hashable {
     case newChat
     case conversation(UUID)
+    case autonomy
     case settings
     case roadmap
 }

@@ -353,6 +353,10 @@ final class KishOSWorkspace: ObservableObject {
         conversations.first { $0.id == id }
     }
 
+    func conversation(threadId: String) -> Conversation? {
+        conversations.first { $0.threadId == threadId }
+    }
+
     func markConversationRead(_ id: UUID, at readAt: Date = Date()) {
         guard let index = conversations.firstIndex(where: { $0.id == id }) else { return }
         if let lastReadAt = conversations[index].lastReadAt, lastReadAt >= readAt {

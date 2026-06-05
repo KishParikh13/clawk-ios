@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		008080B3368DE6AEA80E6807 /* ApprovalQueueView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE29A68B30630F58BCB47CF0 /* ApprovalQueueView.swift */; };
+		023615C90FB3A58EADAA3927 /* IOSAutonomyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EDE7885CFFF5F41455A36EA /* IOSAutonomyView.swift */; };
+		02A27AEAE96A40985C47F737 /* AutonomyModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = D586D7F7E69CC69F5756046F /* AutonomyModels.swift */; };
 		04F144AAB362A6236543697B /* GatewayConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BF9B02D88EDF9A8620601CA /* GatewayConnection.swift */; };
 		05611179C1434EA208CEF157 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 641664BF743F7453554BF316 /* ContentView.swift */; };
 		063CC422BEB9EACD0DE02435 /* MWDATCore in Frameworks */ = {isa = PBXBuildFile; productRef = AD1672C85AD35A3554C43BEB /* MWDATCore */; };
@@ -71,6 +73,8 @@
 		AE30548E6102ED9C66705BDC /* earcon_error.wav in Resources */ = {isa = PBXBuildFile; fileRef = 55CE07725E2DEC1AC9B27993 /* earcon_error.wav */; };
 		AF059C6FC928B2316266DA4A /* AgentClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A57A732EA4AFC2B553AF70A /* AgentClient.swift */; };
 		B37123DFEC2CEF33BEAA92C0 /* ProjectStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D6A4231FB3898169E2AD1AE /* ProjectStore.swift */; };
+		B4471CB9768552468910BC23 /* AutonomyView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42A0CB0688CB7F2AD750FCDB /* AutonomyView.swift */; };
+		B6BB36B2823A1F66DDA65206 /* AutonomyModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = D586D7F7E69CC69F5756046F /* AutonomyModels.swift */; };
 		B8036E2296F7628A5C0572CE /* AgentClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A57A732EA4AFC2B553AF70A /* AgentClient.swift */; };
 		BA02CFDB68E1792223988D95 /* call_end.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = A3DF64B976EAB8FC9FDDC82E /* call_end.mp3 */; };
 		BC6317C19C95851E6AB379FC /* Project.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38C9E838432B8DF4680F2236 /* Project.swift */; };
@@ -132,6 +136,7 @@
 		04F0A10E61286CFABA0ACA0C /* AgentClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentClientTests.swift; sourceTree = "<group>"; };
 		185356541FC2C862D03FB7A2 /* KishOSMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KishOSMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		19D33F8BBD6020A9F8F43C0D /* DashboardAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardAPIClient.swift; sourceTree = "<group>"; };
+		1EDE7885CFFF5F41455A36EA /* IOSAutonomyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSAutonomyView.swift; sourceTree = "<group>"; };
 		1FA8028A0517DF1195BA7854 /* SessionChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionChatView.swift; sourceTree = "<group>"; };
 		227D7EAA8BA576629153DE13 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		29F2E674D7271CB505C361DF /* ChatHistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatHistoryStore.swift; sourceTree = "<group>"; };
@@ -139,6 +144,7 @@
 		38C9E838432B8DF4680F2236 /* Project.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Project.swift; sourceTree = "<group>"; };
 		3BC007C150922B621095A597 /* MoreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoreView.swift; sourceTree = "<group>"; };
 		3BF9B02D88EDF9A8620601CA /* GatewayConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayConnection.swift; sourceTree = "<group>"; };
+		42A0CB0688CB7F2AD750FCDB /* AutonomyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutonomyView.swift; sourceTree = "<group>"; };
 		47CE52D6F6C3B3791B2874BF /* KishOSFeaturePlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KishOSFeaturePlan.swift; sourceTree = "<group>"; };
 		481D1E1B432E9F97C159A41E /* reply_ready.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = reply_ready.mp3; sourceTree = "<group>"; };
 		493A6B6CB1096E8BA7B489A8 /* CostsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CostsView.swift; sourceTree = "<group>"; };
@@ -195,6 +201,7 @@
 		D3E45217ADBE0BBC887B57EB /* MetaWearablesBootstrap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetaWearablesBootstrap.swift; sourceTree = "<group>"; };
 		D479C595005207FF75F951E6 /* AgentLogsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentLogsView.swift; sourceTree = "<group>"; };
 		D78FDE5CC911DA361C943216 /* ProgrammaticPhoneCameraCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgrammaticPhoneCameraCapture.swift; sourceTree = "<group>"; };
+		D586D7F7E69CC69F5756046F /* AutonomyModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutonomyModels.swift; sourceTree = "<group>"; };
 		D7EAB08A2E3A0A5C69507E33 /* KishOSCallActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KishOSCallActivityAttributes.swift; sourceTree = "<group>"; };
 		DC24015FE274E4F772DA97DD /* LiveDashboardTabs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveDashboardTabs.swift; sourceTree = "<group>"; };
 		DE29A68B30630F58BCB47CF0 /* ApprovalQueueView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovalQueueView.swift; sourceTree = "<group>"; };
@@ -225,6 +232,7 @@
 				4A57A732EA4AFC2B553AF70A /* AgentClient.swift */,
 				B96F6934906F6A77BBB59125 /* AudioRouteMonitor.swift */,
 				49E085E6118F1DC6961821CB /* CaptureIntentDetector.swift */,
+				D586D7F7E69CC69F5756046F /* AutonomyModels.swift */,
 				6D66F48AF324D00EE65E801F /* Conversation.swift */,
 				9440A6471F2F63111CB49B46 /* ConversationStore.swift */,
 				B5A0E1C64CBFC366A2DCEFC3 /* GeminiTTS.swift */,
@@ -268,6 +276,7 @@
 				C56A570B9E9921EF71EFD452 /* GlassesCameraCaptureController.swift */,
 				227D7EAA8BA576629153DE13 /* HomeView.swift */,
 				645A6F0E142A68BB46D021FB /* Info.plist */,
+				1EDE7885CFFF5F41455A36EA /* IOSAutonomyView.swift */,
 				D387D95D0B541A46D648E1C0 /* KishOSIOSRootView.swift */,
 				9FE1FF29E9B858E390CE9933 /* KishOSLiveActivityController.swift */,
 				9CC1BF11D78A813E2D75B65E /* LiveCallController.swift */,
@@ -308,6 +317,7 @@
 		8897B66058A2CF85EAECA3F8 /* KishOSMac */ = {
 			isa = PBXGroup;
 			children = (
+				42A0CB0688CB7F2AD750FCDB /* AutonomyView.swift */,
 				D2D7F8370605F68579B5D56D /* Info.plist */,
 				61D254F493783576AAF3D410 /* KishOSMacApp.swift */,
 				AD5ACACFC3A919EE97C9392D /* ProjectPickerPopover.swift */,
@@ -502,6 +512,7 @@
 				008080B3368DE6AEA80E6807 /* ApprovalQueueView.swift in Sources */,
 				14D0013ECE6E7348671AB8E1 /* AudioRouteMonitor.swift in Sources */,
 				C190386236E42F810B30F0AE /* CallVoices.swift in Sources */,
+				02A27AEAE96A40985C47F737 /* AutonomyModels.swift in Sources */,
 				9FFAF5F0C740BC711E743240 /* CameraTextCaptureView.swift in Sources */,
 				2081CCB185BD8585F46AD194 /* CaptureIntentDetector.swift in Sources */,
 				E5B9761377A5DDC85827D781 /* ChatDetailView.swift in Sources */,
@@ -523,6 +534,7 @@
 				8979F348DB8B97A7050ADD60 /* GeminiTTS.swift in Sources */,
 				C2E3A7B176A9EA061F457BFA /* GlassesCameraCaptureController.swift in Sources */,
 				182D525333F502C00AAF063A /* HomeView.swift in Sources */,
+				023615C90FB3A58EADAA3927 /* IOSAutonomyView.swift in Sources */,
 				7BD5F5B36769FA80703D2671 /* KishOSCallActivityAttributes.swift in Sources */,
 				7666D67DF6BC6148AD3BF7EC /* KishOSFeaturePlan.swift in Sources */,
 				5693E81908F23485ACF4340B /* KishOSIOSRootView.swift in Sources */,
@@ -581,6 +593,8 @@
 				B8036E2296F7628A5C0572CE /* AgentClient.swift in Sources */,
 				6BA31FC7928D5D03B10723E8 /* AudioRouteMonitor.swift in Sources */,
 				22DAF4DF52F4ECC4CEA7A882 /* CaptureIntentDetector.swift in Sources */,
+				B6BB36B2823A1F66DDA65206 /* AutonomyModels.swift in Sources */,
+				B4471CB9768552468910BC23 /* AutonomyView.swift in Sources */,
 				6B004850282B901FDC7DFBCF /* Conversation.swift in Sources */,
 				1AFDFA4A2AC2CEE77CD4C856 /* ConversationStore.swift in Sources */,
 				E1C643FB50B70956E720D2F0 /* GeminiTTS.swift in Sources */,

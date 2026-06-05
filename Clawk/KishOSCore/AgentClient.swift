@@ -456,6 +456,186 @@ final class KishAgentClient: ObservableObject {
         )
     }
 
+    func fetchAutonomySummary() async throws -> AutonomySummary {
+        let payload: AutonomySummaryPayload = try await autonomyGet(["autonomy", "summary"])
+        return payload.summary
+    }
+
+    func fetchMemory(includeForgotten: Bool = false) async throws -> [KishMemory] {
+        try await collectAutonomyPages(
+            ["memory"],
+            queryItems: [URLQueryItem(name: "includeForgotten", value: includeForgotten ? "true" : "false")],
+            items: { (payload: MemoryListPayload) in payload.memory },
+            nextCursor: { $0.nextCursor }
+        )
+    }
+
+    func updateMemory(
+        _ id: String,
+        state: MemoryState? = nil,
+        text: String? = nil,
+        summary: String? = nil,
+        reviewFlags: [MemoryReviewFlag]? = nil
+    ) async throws -> KishMemory {
+        let payload: MemoryMutationPayload = try await autonomySend(
+            ["memory", id],
+            method: "PATCH",
+            body: MemoryUpdateRequest(state: state, text: text, summary: summary, reviewFlags: reviewFlags)
+        )
+        return payload.memory
+    }
+
+    func forgetMemory(_ id: String, reason: String) async throws -> KishMemory {
+        let payload: MemoryMutationPayload = try await autonomySend(
+            ["memory", id, "forget"],
+            method: "POST",
+            body: MemoryForgetRequest(reason: reason)
+        )
+        return payload.memory
+    }
+
+    func runDailyBrief(idempotencyKey: String, trigger: RoutineRunTrigger) async throws -> DailyBriefRunResult {
+        try await autonomySend(
+            ["briefs", "daily"],
+            method: "POST",
+            body: RoutineRunRequest(idempotencyKey: idempotencyKey, trigger: trigger)
+        )
+    }
+
+    func fetchRoutines() async throws -> [KishRoutine] {
+        let payload: RoutineListPayload = try await autonomyGet(["routines"])
+        return payload.routines
+    }
+
+    func runRoutine(_ id: String, idempotencyKey: String, trigger: RoutineRunTrigger) async throws -> RoutineRunResult {
+        try await autonomySend(
+            ["routines", id, "run"],
+            method: "POST",
+            body: RoutineRunRequest(idempotencyKey: idempotencyKey, trigger: trigger)
+        )
+    }
+
+    func fetchRoutineRuns(routineId: String? = nil) async throws -> [RoutineRun] {
+        var queryItems: [URLQueryItem] = []
+        if let routineId {
+            queryItems.append(URLQueryItem(name: "routineId", value: routineId))
+        }
+        return try await collectAutonomyPages(
+            ["routine-runs"],
+            queryItems: queryItems,
+            items: { (payload: RoutineRunsPayload) in payload.runs },
+            nextCursor: { $0.nextCursor }
+        )
+    }
+
+    func fetchReviewCards(state: ReviewCardState = .open) async throws -> [ReviewCard] {
+        try await collectAutonomyPages(
+            ["review-cards"],
+            queryItems: [URLQueryItem(name: "state", value: state.rawValue)],
+            items: { (payload: ReviewCardsPayload) in payload.reviewCards },
+            nextCursor: { $0.nextCursor }
+        )
+    }
+
+    func updateReviewCard(_ id: String, decision: RecommendedAction, note: String? = nil) async throws -> ReviewCardUpdateResult {
+        try await autonomySend(
+            ["review-cards", id],
+            method: "PATCH",
+            body: ReviewCardUpdateRequest(decision: decision, note: note)
+        )
+    }
+
+    func fetchPolicies(routineId: String? = nil) async throws -> [RoutinePolicy] {
+        var queryItems: [URLQueryItem] = []
+        if let routineId {
+            queryItems.append(URLQueryItem(name: "routineId", value: routineId))
+        }
+        let payload: PoliciesPayload = try await autonomyGet(["policies"], queryItems: queryItems)
+        return payload.policies
+    }
+
+    private func autonomyGet<Payload: Decodable>(
+        _ pathComponents: [String],
+        queryItems: [URLQueryItem] = []
+    ) async throws -> Payload {
+        var request = URLRequest(url: agentURL(pathComponents, queryItems: queryItems))
+        request.timeoutInterval = 20
+        return try await decodeAutonomyEnvelope(from: request)
+    }
+
+    private func collectAutonomyPages<Payload: Decodable, Item>(
+        _ pathComponents: [String],
+        queryItems: [URLQueryItem] = [],
+        items: (Payload) -> [Item],
+        nextCursor: (Payload) -> String?
+    ) async throws -> [Item] {
+        var collected: [Item] = []
+        var cursor: String?
+        var seenCursors: Set<String> = []
+
+        repeat {
+            var pageQueryItems = queryItems
+            if let cursor {
+                pageQueryItems.append(URLQueryItem(name: "cursor", value: cursor))
+            }
+
+            let payload: Payload = try await autonomyGet(pathComponents, queryItems: pageQueryItems)
+            collected.append(contentsOf: items(payload))
+
+            let next = nextCursor(payload)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let next, !next.isEmpty else {
+                cursor = nil
+                continue
+            }
+            guard seenCursors.insert(next).inserted else {
+                throw AgentClientError.requestFailed("kish-agent returned a repeated cursor")
+            }
+            cursor = next
+        } while cursor != nil
+
+        return collected
+    }
+
+    private func autonomySend<Payload: Decodable, Body: Encodable>(
+        _ pathComponents: [String],
+        method: String,
+        body: Body
+    ) async throws -> Payload {
+        var request = URLRequest(url: agentURL(pathComponents))
+        request.httpMethod = method
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 60
+        request.httpBody = try Self.encoder.encode(body)
+        return try await decodeAutonomyEnvelope(from: request)
+    }
+
+    private func decodeAutonomyEnvelope<Payload: Decodable>(from request: URLRequest) async throws -> Payload {
+        do {
+            let (data, response) = try await session.data(for: request)
+            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            let decoded = try Self.decoder.decode(AgentEnvelope<Payload>.self, from: data)
+            guard statusCode == 200 && decoded.ok, let payload = decoded.data else {
+                let message = decoded.error?.message ?? "kish-agent returned HTTP \(statusCode)"
+                throw AgentClientError.requestFailed(message)
+            }
+            return payload
+        } catch let error as URLError {
+            markNetworkError(error)
+            throw AgentClientError.network(error)
+        }
+    }
+
+    private func agentURL(_ pathComponents: [String], queryItems: [URLQueryItem] = []) -> URL {
+        var url = baseURL
+        for pathComponent in pathComponents {
+            url.appendPathComponent(pathComponent)
+        }
+        guard !queryItems.isEmpty else { return url }
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        components.queryItems = queryItems
+        return components.url!
+    }
+
     private func markOffline(_ message: String) {
         miniStatus = "Offline"
         httpStatus = "Offline"
@@ -525,6 +705,12 @@ final class KishAgentClient: ObservableObject {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return decoder
+    }()
+
+    private static let encoder: JSONEncoder = {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
     }()
 
     private static func displayString(for url: URL) -> String {
@@ -861,6 +1047,121 @@ private struct HealthResponse: Decodable {
 private struct BasicResponse: Decodable {
     let ok: Bool
     let error: String?
+}
+
+private struct AgentEnvelope<Payload: Decodable>: Decodable {
+    let ok: Bool
+    let schemaVersion: Int
+    let traceId: String
+    let data: Payload?
+    let error: AgentEnvelopeError?
+}
+
+private struct AgentEnvelopeError: Decodable, Equatable {
+    let code: String?
+    let message: String
+    let details: [String: JSONValue]?
+}
+
+private struct AutonomySummaryPayload: Decodable {
+    let summary: AutonomySummary
+}
+
+private struct MemoryListPayload: Decodable {
+    let memory: [KishMemory]
+    let nextCursor: String?
+}
+
+private struct MemoryMutationPayload: Decodable {
+    let memory: KishMemory
+    let reviewCards: [ReviewCard]?
+}
+
+private struct MemoryUpdateRequest: Encodable {
+    let state: MemoryState?
+    let text: String?
+    let summary: String?
+    let reviewFlags: [MemoryReviewFlag]?
+}
+
+private struct MemoryForgetRequest: Encodable {
+    let reason: String
+}
+
+private struct RoutineRunRequest: Encodable {
+    let idempotencyKey: String
+    let trigger: RoutineRunTrigger
+}
+
+private struct RoutineListPayload: Decodable {
+    let routines: [KishRoutine]
+}
+
+private struct RoutineRunsPayload: Decodable {
+    let runs: [RoutineRun]
+    let nextCursor: String?
+}
+
+private struct ReviewCardsPayload: Decodable {
+    let reviewCards: [ReviewCard]
+    let nextCursor: String?
+}
+
+private struct ReviewCardUpdateRequest: Encodable {
+    let decision: RecommendedAction
+    let note: String?
+    let memoryPatch: MemoryUpdateRequest?
+    let routinePatch: RoutineUpdateRequest?
+
+    init(
+        decision: RecommendedAction,
+        note: String? = nil,
+        memoryPatch: MemoryUpdateRequest? = nil,
+        routinePatch: RoutineUpdateRequest? = nil
+    ) {
+        self.decision = decision
+        self.note = note
+        self.memoryPatch = memoryPatch
+        self.routinePatch = routinePatch
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case decision
+        case note
+        case memoryPatch
+        case routinePatch
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(decision, forKey: .decision)
+        try container.encodeIfPresent(note, forKey: .note)
+
+        if let memoryPatch {
+            try container.encode(memoryPatch, forKey: .memoryPatch)
+        } else {
+            try container.encodeNil(forKey: .memoryPatch)
+        }
+
+        if let routinePatch {
+            try container.encode(routinePatch, forKey: .routinePatch)
+        } else {
+            try container.encodeNil(forKey: .routinePatch)
+        }
+    }
+}
+
+private struct PoliciesPayload: Decodable {
+    let policies: [RoutinePolicy]
+}
+
+private struct RoutineUpdateRequest: Encodable {
+    let name: String?
+    let state: RoutineState?
+    let trigger: RoutineDefinitionTrigger?
+    let allowedContextSources: [ContextSource]?
+    let allowedProjectPaths: [String]?
+    let allowedActionClasses: [ActionClass]?
 }
 
 private struct AttachmentUploadResponse: Decodable {
