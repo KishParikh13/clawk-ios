@@ -678,7 +678,7 @@ private struct ChatScreen: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 18) {
                         if messages.isEmpty {
-                            if let callController {
+                            if let callController, callController.activeUserPartial.isEmpty {
                                 IOSLiveVoiceHero(
                                     state: callController.state,
                                     routeState: audio.routeState,
@@ -1023,6 +1023,8 @@ private struct IOSRouteChip: View {
         .overlay(Capsule().strokeBorder(tint.opacity(0.22), lineWidth: 0.5))
         .onAppear { startPulseIfNeeded() }
         .onChange(of: state) { _, _ in startPulseIfNeeded() }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Route: \(label)")
     }
 
     private var tint: Color {
@@ -1069,6 +1071,7 @@ private struct IOSLiveVoiceHero: View {
                     .symbolRenderingMode(.hierarchical)
             }
             .animation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true), value: breathe)
+            .accessibilityHidden(true)
 
             VStack(spacing: 6) {
                 Text(headline)
@@ -1087,6 +1090,8 @@ private struct IOSLiveVoiceHero: View {
         .padding(.top, 96)
         .padding(.horizontal, 24)
         .onAppear { breathe = true }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(headline). \(subhead) Route: \(routeLabel)")
     }
 
     private var glyph: String {
