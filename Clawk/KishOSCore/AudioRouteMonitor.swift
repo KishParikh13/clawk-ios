@@ -588,6 +588,17 @@ final class AudioRouteMonitor: ObservableObject {
     }
 
     private static func kind(forName name: String, fallback: AudioRouteKind) -> AudioRouteKind {
+        classifyRouteName(name, fallback: fallback)
+    }
+
+    /// Testable name-only classifier seam. Returns `.glasses` for glasses-like
+    /// names, `.bluetooth` for other external-like names, and `fallback`
+    /// otherwise. This is the single source of truth for name-based route
+    /// classification: it reuses the existing `isGlassesLikeName` /
+    /// `isExternalLikeName` patterns (no duplication) so hardware QA can tighten
+    /// one place. Pure and side-effect free, so the macOS test target can hit the
+    /// real production logic without an `AVAudioSession`.
+    static func classifyRouteName(_ name: String, fallback: AudioRouteKind = .unknown) -> AudioRouteKind {
         if isGlassesLikeName(name) {
             return .glasses
         }

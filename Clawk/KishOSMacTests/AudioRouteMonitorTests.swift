@@ -290,6 +290,68 @@ final class RouteStateLabelTests: XCTestCase {
 }
 
 @MainActor
+final class RouteNameClassificationTests: XCTestCase {
+    // These names hit the REAL production classifier `AudioRouteMonitor.classifyRouteName`,
+    // which reuses the same `isGlassesLikeName` / `isExternalLikeName` patterns the live
+    // route path uses (no mirror).
+    //
+    // NOTE: the exact route names iOS reports for the Ray-Ban Meta Gen 3 over Bluetooth
+    // HFP are NOT yet confirmed. The strings below are our best guess at Gen 3 names.
+    // Hardware QA must record the real observed names (see
+    // .context/rayban-meta-gen3-route-matrix.md) and tighten these patterns if the real
+    // names differ.
+
+    func testGlassesLikeNamesClassifyAsGlasses() {
+        let glassesNames = [
+            "Ray-Ban Meta",
+            "RB Meta",
+            "Ray-Ban Meta Gen 3",
+            "rayban",
+            "Meta glasses",
+            "Glasses"
+        ]
+        for name in glassesNames {
+            XCTAssertEqual(
+                AudioRouteMonitor.classifyRouteName(name),
+                .glasses,
+                "expected \(name) to classify as .glasses"
+            )
+        }
+    }
+
+    func testNonGlassesNamesDoNotClassifyAsGlasses() {
+        let nonGlassesNames = [
+            "AirPods Pro",
+            "iPhone Microphone",
+            "MacBook Pro Microphone",
+            "Beats"
+        ]
+        for name in nonGlassesNames {
+            XCTAssertNotEqual(
+                AudioRouteMonitor.classifyRouteName(name),
+                .glasses,
+                "expected \(name) NOT to classify as .glasses"
+            )
+        }
+    }
+
+    // The classifier still falls back to the external/bluetooth name logic for known
+    // external accessories, and to the provided fallback for plain built-in names.
+    func testExternalNamesClassifyAsBluetoothNotGlasses() {
+        XCTAssertEqual(AudioRouteMonitor.classifyRouteName("AirPods Pro"), .bluetooth)
+        XCTAssertEqual(AudioRouteMonitor.classifyRouteName("Beats"), .bluetooth)
+    }
+
+    func testNonExternalNameUsesFallback() {
+        XCTAssertEqual(
+            AudioRouteMonitor.classifyRouteName("MacBook Pro Microphone", fallback: .builtIn),
+            .builtIn
+        )
+        XCTAssertEqual(AudioRouteMonitor.classifyRouteName("iPhone Microphone"), .unknown)
+    }
+}
+
+@MainActor
 final class VoiceControllerAudioSessionTests: XCTestCase {
     func testManagesAudioSessionDefaultsTrue() {
         let voice = VoiceController()
