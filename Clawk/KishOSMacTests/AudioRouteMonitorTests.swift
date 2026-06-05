@@ -245,10 +245,10 @@ final class RouteStateLabelTests: XCTestCase {
         XCTAssertEqual(monitor.callRouteLabel, "Phone")
     }
 
-    // Exhaustive label mapping for the non-system states. We assert the documented
-    // strings for every RouteState so a typo or a missing case is caught. The switch in
-    // each helper mirrors production; the compiler's exhaustiveness check on RouteState
-    // guarantees no state is silently unmapped.
+    // Exhaustive label mapping for every RouteState, asserted directly against the
+    // production static `AudioRouteMonitor.routeStateLabel(for:kind:)`. This catches a
+    // typo or missing case in the REAL switch (the instance computed property delegates
+    // to this static). `.externalActive` is exercised with real `kind` values.
     func testRouteStateLabelMappingIsExhaustive() {
         let cases: [(RouteState, AudioRouteKind, String)] = [
             (.system, .system, "Phone audio"),
@@ -261,7 +261,11 @@ final class RouteStateLabelTests: XCTestCase {
             (.blocked, .system, "Audio blocked")
         ]
         for (state, kind, expected) in cases {
-            XCTAssertEqual(Self.routeStateLabel(state, kind), expected, "routeStateLabel for \(state)/\(kind)")
+            XCTAssertEqual(
+                AudioRouteMonitor.routeStateLabel(for: state, kind: kind),
+                expected,
+                "routeStateLabel for \(state)/\(kind)"
+            )
         }
     }
 
@@ -276,32 +280,11 @@ final class RouteStateLabelTests: XCTestCase {
             (.blocked, .system, "Blocked")
         ]
         for (state, kind, expected) in cases {
-            XCTAssertEqual(Self.callRouteLabel(state, kind), expected, "callRouteLabel for \(state)/\(kind)")
-        }
-    }
-
-    // These mirror AudioRouteMonitor's production label switches. The exhaustive switch
-    // (no `default`) means adding a RouteState case forces an update here too, keeping
-    // the mapping honest.
-    private static func routeStateLabel(_ state: RouteState, _ kind: AudioRouteKind) -> String {
-        switch state {
-        case .system: return "Phone audio"
-        case .externalAvailable: return "External available"
-        case .externalActive: return kind.rawValue
-        case .switching: return "Switching…"
-        case .lost: return "Lost · phone audio"
-        case .blocked: return "Audio blocked"
-        }
-    }
-
-    private static func callRouteLabel(_ state: RouteState, _ kind: AudioRouteKind) -> String {
-        switch state {
-        case .system: return "Phone"
-        case .externalAvailable: return "External ready"
-        case .externalActive: return kind.rawValue
-        case .switching: return "Switching…"
-        case .lost: return "Lost · phone"
-        case .blocked: return "Blocked"
+            XCTAssertEqual(
+                AudioRouteMonitor.callRouteLabel(for: state, kind: kind),
+                expected,
+                "callRouteLabel for \(state)/\(kind)"
+            )
         }
     }
 }

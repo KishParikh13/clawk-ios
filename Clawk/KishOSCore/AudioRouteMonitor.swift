@@ -134,15 +134,16 @@ final class AudioRouteMonitor: ObservableObject {
         return .system
     }
 
-    /// Human-truthful route label for general surfaces.
-    var routeStateLabel: String {
-        switch routeState {
+    /// Pure label mapping for general surfaces. Keyed on `RouteState` so tests can
+    /// exercise the real production switch for every state.
+    static func routeStateLabel(for state: RouteState, kind: AudioRouteKind) -> String {
+        switch state {
         case .system:
             return "Phone audio"
         case .externalAvailable:
             return "External available"
         case .externalActive:
-            return activeRouteKind.rawValue
+            return kind.rawValue
         case .switching:
             return "Switching…"
         case .lost:
@@ -152,15 +153,21 @@ final class AudioRouteMonitor: ObservableObject {
         }
     }
 
-    /// Compact chip text for the in-call header.
-    var callRouteLabel: String {
-        switch routeState {
+    /// Human-truthful route label for general surfaces.
+    var routeStateLabel: String {
+        Self.routeStateLabel(for: routeState, kind: activeRouteKind)
+    }
+
+    /// Pure compact-chip label mapping for the in-call header. Keyed on `RouteState`
+    /// so tests can exercise the real production switch for every state.
+    static func callRouteLabel(for state: RouteState, kind: AudioRouteKind) -> String {
+        switch state {
         case .system:
             return "Phone"
         case .externalAvailable:
             return "External ready"
         case .externalActive:
-            return activeRouteKind.rawValue
+            return kind.rawValue
         case .switching:
             return "Switching…"
         case .lost:
@@ -168,6 +175,11 @@ final class AudioRouteMonitor: ObservableObject {
         case .blocked:
             return "Blocked"
         }
+    }
+
+    /// Compact chip text for the in-call header.
+    var callRouteLabel: String {
+        Self.callRouteLabel(for: routeState, kind: activeRouteKind)
     }
 
     var routeHealthLabel: String {
