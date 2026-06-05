@@ -1,129 +1,64 @@
-# Clawk iOS — Quick Start
+# KishOS Local Setup
 
-## 1. Clone and Setup
+This setup is for the current native KishOS app. Older Railway relay setup notes were removed because the primary chat path now talks to the Mac mini `kish-agent`.
 
-```bash
-git clone https://github.com/kish2576/clawk-ios.git
-cd clawk-ios
-```
+## Prerequisites
 
-## 2. Deploy Backend to Railway
+- macOS with Xcode installed.
+- XcodeGen. `./generate-project.sh` installs it with Homebrew if needed.
+- Network access to the Mac mini agent at `http://kishs-mac-mini-1:17891`.
+- Optional for TestFlight: Apple Developer account and App Store Connect access.
 
-```bash
-cd backend
-railway login
-railway init
-railway up
-```
-
-Get your domain:
-```bash
-railway domain
-# → https://clawk-production.up.railway.app
-```
-
-## 3. Update iOS Config
-
-Edit `Clawk/Clawk/Config.swift`:
-```swift
-static let baseURL = "https://your-app.up.railway.app"
-```
-
-## 4. Generate Xcode Project
+## Generate the Project
 
 ```bash
 ./generate-project.sh
 ```
 
-Or manually:
-```bash
-cd Clawk
-xcodegen generate
-```
+This reads `Clawk/project.yml` and creates `Clawk/Clawk.xcodeproj`.
 
-## 5. Run on Device
+## Run Locally
+
+Open the project:
 
 ```bash
 open Clawk/Clawk.xcodeproj
 ```
 
-- Select your iPhone as target
-- Hit Run (⌘R)
-- App will auto-pair on first launch
+Useful schemes:
 
-## 6. Send a Test Message
+- `Clawk`: iOS app target.
+- `KishOSMac`: macOS app target.
+- `KishOSWidgetExtension`: widget and Live Activity extension.
+
+The native client default is `KishAgentClient.defaultBaseURL`, currently:
+
+```text
+http://kishs-mac-mini-1:17891
+```
+
+The app expects the agent to provide conversation, streaming, project, attachment, file-reference, and branch-switch endpoints. If the Mac mini hostname is not resolvable from the current network, use a reachable hostname or IP in the client configuration.
+
+## Verify
+
+Run focused client tests:
 
 ```bash
-curl -X POST https://your-app.up.railway.app/message \
-  -H "Content-Type: application/json" \
-  -H "x-device-token: your-device-token-from-app" \
-  -d '{
-    "message": "Hello from OpenClaw!",
-    "actions": ["👍", "👎", "Dismiss"]
-  }'
+xcodebuild test -project Clawk/Clawk.xcodeproj -scheme KishOSMac -destination 'platform=macOS' -only-testing:KishOSMacTests/AgentClientTests
 ```
 
-Get your device token from the app logs in Xcode.
+Run an iOS simulator build:
 
-## Tailscale Setup (Optional but Recommended)
-
-For fully private networking:
-
-1. Install Tailscale on iPhone
-2. Install Tailscale on Railway:
-   ```bash
-   railway add --plugin tailscale
-   ```
-3. Or run relay on a local machine with Tailscale
-4. Update `Config.swift` to use Tailscale IP:
-   ```swift
-   static let baseURL = "http://100.x.x.x:3000"
-   ```
-
-## Project Structure
-
-```
-├── backend/           # Node.js relay service
-│   ├── server.js      # WebSocket + REST API
-│   └── package.json
-├── Clawk/             # SwiftUI iOS app
-│   ├── Clawk/
-│   │   ├── ClawkApp.swift      # App entry
-│   │   ├── ContentView.swift   # Main UI
-│   │   ├── MessageStore.swift  # WebSocket + state
-│   │   └── Config.swift        # Your settings
-│   └── project.yml    # XcodeGen config
-├── generate-project.sh
-└── README.md
+```bash
+xcodebuild build -project Clawk/Clawk.xcodeproj -scheme Clawk -destination 'generic/platform=iOS Simulator'
 ```
 
-## What's Working
+Run the Ralph queue verifier:
 
-- ✅ WebSocket real-time connection
-- ✅ Auto-pairing on first launch
-- ✅ Card UI with buttons
-- ✅ Message history
-- ✅ Connection status indicator
-- ✅ Response tracking
+```bash
+.ralph/verify.sh
+```
 
-## Next Up
+## Legacy Backend
 
-- [ ] Push notifications (APNs)
-- [ ] Rich media (images in messages)
-- [ ] Quick actions from lock screen
-- [ ] Siri shortcuts
-
-## Troubleshooting
-
-**App can't connect?**
-- Check Railway URL in Config.swift
-- Ensure device is paired (POST to /pair)
-- Check Xcode console for WebSocket errors
-
-**Messages not appearing?**
-- Verify device token matches
-- Check relay logs: `railway logs`
-
-**WebSocket disconnects?**
-- Normal on background — app reconnects on foreground
-- For persistent connection, enable Background Mode (coming soon)
+`backend/` and some legacy app files still reference the older relay/dashboard architecture. Keep them available until they are deliberately removed, but do not treat them as the source of truth for the native KishOS roadmap.

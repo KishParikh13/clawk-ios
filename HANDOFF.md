@@ -1,104 +1,36 @@
-# KishOS Session Handoff
+# KishOS Handoff
 
-Date: 2026-06-03 PT / 2026-06-04 UTC
-Workspace: `/Users/kishparikh/conductor/workspaces/clawk-ios/baghdad`
-Branch: `KishParikh13/baghdad`
-Target branch: `origin/main`
+Last updated: 2026-06-04
 
-## Summary
+## Current State
 
-This session turned the Clawk iOS workspace into the first working KishOS native app shell, with a real macOS app for fast testing and a matching iOS surface. The current milestone proves text chat against `kish-agent`, shared conversations across Mac and iOS, streaming visibility, question handling, and dictation-to-composer.
+- Repo: `https://github.com/KishParikh13/clawk-ios/tree/main`
+- Current source of truth: `docs/ROADMAP.md`
+- Detailed specs: `docs/specs/glasses-voice-hands-free.md` and `docs/specs/memory-routines.md`
+- Code-backed feature list: `Clawk/KishOSCore/KishOSFeaturePlan.swift`
+- Ralph queue history: `.ralph/prd.json`
 
-The Mac mini `kish-agent` repo was also extended with the native HTTP bridge used by the apps.
+The native KishOS app is live as the primary product path. It uses shared SwiftUI code across iOS and macOS and talks to the Mac mini `kish-agent` at `http://kishs-mac-mini-1:17891`.
 
-## Shipped
+## Recent Commits
 
-- Added shared KishOS app core under `Clawk/KishOSCore/`.
-- Added macOS app target `KishOSMac`.
-- Swapped the iOS entry point to the new KishOS UI.
-- Added shared conversation sync through the Mac mini `kish-agent`.
-- Added streaming chat with visible steps/tool activity.
-- Added conversation sidebar, new chat flow, and same-session follow-up continuity.
-- Added pending question UX that replaces the composer with preset choices plus `Other`.
-- Added dictation mode that fills the text box without auto-sending.
-- Removed read-aloud controls and hidden unused input/output settings.
-- Disabled the chat input while a response is running.
-- Added `/tools` support to show available agent/tool context in the macOS settings surface.
-- Cleaned UI redundancy, removed AI icons from responses, improved markdown rendering, and filtered duplicate final-response/tool-call noise.
+- `f9f3879 chore: ignore local conflict and xcode files`
+- `df645be fix: allow concurrent chat sends`
 
-## Key Paths
+The concurrency fix scopes send disablement to the active conversation, so a running chat no longer disables input in unrelated chats.
 
-- `Clawk/KishOSCore/AgentClient.swift`
-- `Clawk/KishOSCore/Conversation.swift`
-- `Clawk/KishOSCore/ConversationStore.swift`
-- `Clawk/KishOSCore/KishOSFeaturePlan.swift`
-- `Clawk/KishOSCore/KishOSWorkspace.swift`
-- `Clawk/KishOSCore/VoiceController.swift`
-- `Clawk/KishOSMac/KishOSMacApp.swift`
-- `Clawk/Clawk/KishOSIOSRootView.swift`
-- `Clawk/KishOSMacTests/`
+## Last Verified
 
-Remote Mac mini repo:
+```bash
+xcodebuild test -project Clawk/Clawk.xcodeproj -scheme KishOSMac -destination 'platform=macOS' -only-testing:KishOSMacTests/AgentClientTests
+xcodebuild build -project Clawk/Clawk.xcodeproj -scheme Clawk -destination 'generic/platform=iOS Simulator'
+```
 
-- `kishparikh@kishs-mac-mini-1:~/Code/kish-agent/listener/index.js`
+## Planning Focus
 
-## Current Milestones
+The next major work should be split into separate worktrees:
 
-- M0 Text chat: usable.
-- M1 Streaming: usable.
-- M2 Questions/tools: usable baseline.
-- M3 Dictation: usable baseline.
-- M4 iOS parity: usable baseline with shared conversations.
-- Next: connection recovery and stronger test coverage, then glasses audio.
+- Glasses/voice hands-free: `docs/specs/glasses-voice-hands-free.md`
+- Memory/routines: `docs/specs/memory-routines.md`
 
-## Verification
-
-Last verified during this session:
-
-- `xcodebuild test -project Clawk.xcodeproj -scheme KishOSMac -destination 'platform=macOS'`
-  - Passed: 9 tests, 0 failures.
-- `xcodebuild build -project Clawk.xcodeproj -scheme Clawk -destination 'generic/platform=iOS Simulator'`
-  - Succeeded.
-- Mac mini `/tools` smoke test:
-  - `ok: true`
-  - commands: 6
-  - engines included Claude and Codex as available.
-  - recent observed tools included `Edit`, `Read`, `Write`, `AskUserQuestion`, and `Bash`.
-
-The Mac app and iOS simulator were relaunched after the latest changes before this handoff.
-
-## Manual Test Checklist
-
-- Start a new chat on Mac and send a text message.
-- Send a follow-up and confirm it stays in the same session.
-- Open iOS and confirm the same conversations appear.
-- Trigger an agent question and confirm the question replaces the composer.
-- Choose a preset answer and test `Other` with custom text.
-- Confirm the `# Steps` disclosure opens while streaming and collapses after final response.
-- Use dictation and confirm the transcript fills `Ask KishOS` without sending.
-- Confirm the input is disabled while the agent is responding.
-- Open macOS settings and confirm the Tools section loads.
-
-## Known Limits
-
-- `/tools` is currently a practical inventory from slash commands, engine availability, and recently observed tools. It is not full MCP introspection yet.
-- iOS has the shared chat baseline but not the full macOS tools/settings surface.
-- Runtime shared conversation data lives on the Mac mini in `.kishos-conversations.json`; that file is intentionally not committed.
-- Queueing or steering while a run is active is intentionally disabled for now.
-- Spoken replies were removed by design; the app currently supports dictation only.
-
-## Recommended Next Build Order
-
-1. Add connection recovery, offline state, and HTTP-client tests for failure cases.
-2. Separate true approvals from multi-choice questions if `kish-agent` exposes a richer approval contract.
-3. Add an engine selector only if switching between Claude/Codex becomes useful in daily use.
-4. Add glasses audio route support as the first glasses milestone.
-5. Add explicit camera snapshot/vision support after audio works reliably.
-
-## Runtime Notes
-
-- Mac mini host: `kishs-mac-mini-1`.
-- Mac mini user: `kishparikh`.
-- Agent repo: `~/Code/kish-agent`.
-- The native apps expect the `kish-agent` listener to be running and reachable.
-- Do not commit `.kishos-conversations.json`; it is runtime state.
+Kish direction: the product is many-chat for now, moving toward supervised autonomy where the app captures ideas/input, turns them into specs/work items, and eventually helps improve itself. Old relay/dashboard code should be deleted when native replacements are verified, rather than kept around indefinitely.
