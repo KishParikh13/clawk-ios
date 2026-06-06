@@ -89,6 +89,7 @@
 		E5B9761377A5DDC85827D781 /* ChatDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F68684194B8B5DC79D73D38 /* ChatDetailView.swift */; };
 		E987A5A657F8E60CD3D6D53C /* ChatHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29F2E674D7271CB505C361DF /* ChatHistoryStore.swift */; };
 		EA6527A2AD1DDC010567C5B4 /* call_start.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 85D08B6CC7F49570F2B138C1 /* call_start.mp3 */; };
+		EC0EBB6F0B65F330FE93646F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 008E82971BC91B86C924883B /* Assets.xcassets */; };
 		ECD45AB1DC169FB9AF51B23D /* Conversation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D66F48AF324D00EE65E801F /* Conversation.swift */; };
 		F49790AC7650ECEAB5D6A053 /* KishOSCallActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7EAB08A2E3A0A5C69507E33 /* KishOSCallActivityAttributes.swift */; };
 		F54C662780149393EA220455 /* ProjectStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D6A4231FB3898169E2AD1AE /* ProjectStore.swift */; };
@@ -128,6 +129,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		008E82971BC91B86C924883B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		010B33A53CAA01052DD086C2 /* waiting_ambient.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = waiting_ambient.mp3; sourceTree = "<group>"; };
 		04F0A10E61286CFABA0ACA0C /* AgentClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentClientTests.swift; sourceTree = "<group>"; };
 		185356541FC2C862D03FB7A2 /* KishOSMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = KishOSMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -245,6 +247,7 @@
 			children = (
 				D479C595005207FF75F951E6 /* AgentLogsView.swift */,
 				DE29A68B30630F58BCB47CF0 /* ApprovalQueueView.swift */,
+				008E82971BC91B86C924883B /* Assets.xcassets */,
 				A3DF64B976EAB8FC9FDDC82E /* call_end.mp3 */,
 				85D08B6CC7F49570F2B138C1 /* call_start.mp3 */,
 				525788442C6AC4CD4DF9B8CE /* CallVoices.swift */,
@@ -480,6 +483,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				EC0EBB6F0B65F330FE93646F /* Assets.xcassets in Resources */,
 				BA02CFDB68E1792223988D95 /* call_end.mp3 in Resources */,
 				EA6527A2AD1DDC010567C5B4 /* call_start.mp3 in Resources */,
 				AE30548E6102ED9C66705BDC /* earcon_error.wav in Resources */,
