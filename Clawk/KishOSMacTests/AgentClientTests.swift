@@ -776,6 +776,458 @@ final class AgentClientTests: XCTestCase {
         XCTAssertNotNil(inventory.updatedAt)
     }
 
+    func testFetchAutonomySummaryDecodesNilBriefAndPolicyIssues() async throws {
+        let client = makeClient { request in
+            XCTAssertEqual(request.url?.path, "/autonomy/summary")
+            return jsonResponse(
+                """
+                {
+                  "ok": true,
+                  "schemaVersion": 1,
+                  "traceId": "trace_summary",
+                  "data": {
+                    "summary": {
+                      "latestBrief": null,
+                      "pendingReviewCount": 2,
+                      "urgentReviewCount": 1,
+                      "recentRuns": [],
+                      "memoryCounts": {
+                        "active": 12,
+                        "pinned": 3,
+                        "archived": 4,
+                        "forgotten": 9,
+                        "needsReview": 1,
+                        "sensitive": 1,
+                        "conflicted": 0
+                      },
+                      "routineCounts": {
+                        "proposed": 1,
+                        "enabled": 4,
+                        "paused": 0,
+                        "disabled": 0
+                      },
+                      "policyIssues": [
+                        {
+                          "id": "issue_1",
+                          "policyId": "policy_1",
+                          "routineId": "routine_1",
+                          "severity": "warning",
+                          "message": "Policy expansion needs durable approval.",
+                          "reviewCardId": "review_1"
+                        }
+                      ],
+                      "updatedAt": "2026-06-05T12:00:00Z"
+                    }
+                  }
+                }
+                """
+            )
+        }
+
+        let summary = try await client.fetchAutonomySummary()
+
+        XCTAssertNil(summary.latestBrief)
+        XCTAssertEqual(summary.pendingReviewCount, 2)
+        XCTAssertEqual(summary.urgentReviewCount, 1)
+        XCTAssertEqual(summary.memoryCounts.active, 12)
+        XCTAssertEqual(summary.routineCounts.enabled, 4)
+        XCTAssertEqual(summary.policyIssues.first?.severity, .warning)
+        XCTAssertEqual(summary.policyIssues.first?.message, "Policy expansion needs durable approval.")
+    }
+
+    func testFetchMemoryDecodesProvenanceFlagsAndOptionalDates() async throws {
+        let client = makeClient { request in
+            XCTAssertEqual(request.url?.path, "/memory")
+            let components = try XCTUnwrap(URLComponents(url: try XCTUnwrap(request.url), resolvingAgainstBaseURL: false))
+            XCTAssertEqual(components.queryItems?.first(where: { $0.name == "includeForgotten" })?.value, "true")
+            return jsonResponse(
+                """
+                {
+                  "ok": true,
+                  "schemaVersion": 1,
+                  "traceId": "trace_memory",
+                  "data": {
+                    "memory": [
+                      {
+                        "id": "mem_active",
+                        "state": "pinned",
+                        "text": "Kish prefers concise engineering updates.",
+                        "summary": "Prefers concise updates.",
+                        "reviewFlags": ["sensitive"],
+                        "confidence": 0.96,
+                        "provenance": [
+                          {
+                            "id": "prov_1",
+                            "sourceType": "conversation",
+                            "sourceId": "conv_1",
+                            "threadId": "thread_1",
+                            "routineRunId": null,
+                            "quote": "Keep it concise.",
+                            "observedAt": "2026-06-04T19:00:00Z",
+                            "url": null
+                          }
+                        ],
+                        "createdAt": "2026-06-04T19:00:00Z",
+                        "updatedAt": "2026-06-05T15:00:00Z",
+                        "lastUsedAt": "2026-06-05T15:00:00Z",
+                        "forgottenAt": null,
+                        "tombstoneReason": null
+                      },
+                      {
+                        "id": "mem_forgotten",
+                        "state": "forgotten",
+                        "text": "Forgotten text.",
+                        "summary": null,
+                        "reviewFlags": ["needsReview", "conflicted"],
+                        "confidence": 0.5,
+                        "provenance": [
+                          {
+                            "id": "prov_2",
+                            "sourceType": "manualEdit",
+                            "sourceId": null,
+                            "threadId": null,
+                            "routineRunId": null,
+                            "quote": null,
+                            "observedAt": "2026-06-04T20:00:00Z",
+                            "url": "kishos://memory/mem_forgotten"
+                          }
+                        ],
+                        "createdAt": "2026-06-04T20:00:00Z",
+                        "updatedAt": "2026-06-05T16:00:00Z",
+                        "lastUsedAt": null,
+                        "forgottenAt": "2026-06-05T16:00:00Z",
+                        "tombstoneReason": "User requested forgetting."
+                      }
+                    ],
+                    "nextCursor": null
+                  }
+                }
+                """
+            )
+        }
+
+        let memory = try await client.fetchMemory(includeForgotten: true)
+
+        XCTAssertEqual(memory.count, 2)
+        XCTAssertEqual(memory[0].state, .pinned)
+        XCTAssertEqual(memory[0].reviewFlags, [.sensitive])
+        XCTAssertEqual(memory[0].provenance.first?.sourceType, .conversation)
+        XCTAssertNotNil(memory[0].lastUsedAt)
+        XCTAssertNil(memory[0].forgottenAt)
+        XCTAssertEqual(memory[1].state, .forgotten)
+        XCTAssertEqual(memory[1].reviewFlags, [.needsReview, .conflicted])
+        XCTAssertNil(memory[1].lastUsedAt)
+        XCTAssertNotNil(memory[1].forgottenAt)
+        XCTAssertEqual(memory[1].tombstoneReason, "User requested forgetting.")
+    }
+
+    func testPagedAutonomyListsFollowNextCursor() async throws {
+        var seenRequests: [(path: String, cursor: String?)] = []
+        let client = makeClient { request in
+            let url = try XCTUnwrap(request.url)
+            let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
+            let cursor = components.queryItems?.first(where: { $0.name == "cursor" })?.value
+            seenRequests.append((url.path, cursor))
+
+            switch (url.path, cursor) {
+            case ("/memory", nil):
+                XCTAssertEqual(components.queryItems?.first(where: { $0.name == "includeForgotten" })?.value, "false")
+                return jsonResponse(autonomyEnvelope(data: #"{ "memory": [\#(memoryJSON(id: "mem_page_1"))], "nextCursor": "memory_cursor" }"#))
+            case ("/memory", "memory_cursor"):
+                return jsonResponse(autonomyEnvelope(data: #"{ "memory": [\#(memoryJSON(id: "mem_page_2"))], "nextCursor": null }"#))
+            case ("/routine-runs", nil):
+                XCTAssertEqual(components.queryItems?.first(where: { $0.name == "routineId" })?.value, "routine_1")
+                return jsonResponse(autonomyEnvelope(data: #"{ "runs": [\#(routineRunJSON(id: "run_page_1"))], "nextCursor": "run_cursor" }"#))
+            case ("/routine-runs", "run_cursor"):
+                XCTAssertEqual(components.queryItems?.first(where: { $0.name == "routineId" })?.value, "routine_1")
+                return jsonResponse(autonomyEnvelope(data: #"{ "runs": [\#(routineRunJSON(id: "run_page_2"))], "nextCursor": null }"#))
+            case ("/review-cards", nil):
+                XCTAssertEqual(components.queryItems?.first(where: { $0.name == "state" })?.value, "open")
+                return jsonResponse(autonomyEnvelope(data: #"{ "reviewCards": [\#(reviewCardJSON(id: "review_page_1"))], "nextCursor": "review_cursor" }"#))
+            case ("/review-cards", "review_cursor"):
+                XCTAssertEqual(components.queryItems?.first(where: { $0.name == "state" })?.value, "open")
+                return jsonResponse(autonomyEnvelope(data: #"{ "reviewCards": [\#(reviewCardJSON(id: "review_page_2"))], "nextCursor": null }"#))
+            default:
+                XCTFail("Unexpected request \(url.absoluteString)")
+                return jsonResponse(#"{ "ok": false, "error": "unexpected path" }"#, statusCode: 404)
+            }
+        }
+
+        let memory = try await client.fetchMemory()
+        let runs = try await client.fetchRoutineRuns(routineId: "routine_1")
+        let reviewCards = try await client.fetchReviewCards()
+
+        XCTAssertEqual(memory.map(\.id), ["mem_page_1", "mem_page_2"])
+        XCTAssertEqual(runs.map(\.id), ["run_page_1", "run_page_2"])
+        XCTAssertEqual(reviewCards.map(\.id), ["review_page_1", "review_page_2"])
+        XCTAssertEqual(
+            seenRequests.map { "\($0.path):\($0.cursor ?? "nil")" },
+            [
+                "/memory:nil",
+                "/memory:memory_cursor",
+                "/routine-runs:nil",
+                "/routine-runs:run_cursor",
+                "/review-cards:nil",
+                "/review-cards:review_cursor"
+            ]
+        )
+    }
+
+    func testRunDailyBriefPostsRequestAndDecodesResult() async throws {
+        var capturedBody: Data?
+        let client = makeClient { request in
+            XCTAssertEqual(request.url?.path, "/briefs/daily")
+            XCTAssertEqual(request.httpMethod, "POST")
+            capturedBody = requestBodyData(from: request)
+            return jsonResponse(
+                """
+                {
+                  "ok": true,
+                  "schemaVersion": 1,
+                  "traceId": "trace_daily",
+                  "data": {
+                    "brief": {
+                      "id": "brief_1",
+                      "routineRunId": "run_1",
+                      "conversationId": "conv_1",
+                      "threadId": "thread_1",
+                      "previousBriefRunId": null,
+                      "summary": "One item needs review.",
+                      "sections": [
+                        { "title": "Needs input", "items": ["Review one sensitive memory."] }
+                      ],
+                      "reviewCardIds": ["review_1"],
+                      "createdAt": "2026-06-05T15:00:00Z"
+                    },
+                    "run": {
+                      "id": "run_1",
+                      "routineId": "routine_dailyBrief",
+                      "idempotencyKey": "routine:routine_dailyBrief:manual:manual_1",
+                      "status": "needsReview",
+                      "conversationId": "conv_1",
+                      "threadId": "thread_1",
+                      "startedAt": "2026-06-05T14:59:00Z",
+                      "finishedAt": "2026-06-05T15:00:00Z",
+                      "priorRunIdsUsed": [],
+                      "error": null,
+                      "retryOfRunId": null,
+                      "reviewCardIdsCreated": ["review_1"],
+                      "createdAt": "2026-06-05T14:59:00Z",
+                      "updatedAt": "2026-06-05T15:00:00Z"
+                    },
+                    "reviewCards": [
+                      {
+                        "id": "review_1",
+                        "kind": "reviewSensitiveMemory",
+                        "state": "open",
+                        "title": "Review sensitive memory",
+                        "body": "A routine found a possible sensitive memory.",
+                        "routineId": "routine_dailyBrief",
+                        "routineRunId": "run_1",
+                        "memoryId": "mem_1",
+                        "policyId": null,
+                        "conversationId": "conv_1",
+                        "threadId": "thread_1",
+                        "reviewFlags": ["sensitive"],
+                        "recommendedAction": "approve",
+                        "notificationBehavior": "autonomyInbox",
+                        "createdAt": "2026-06-05T15:00:00Z",
+                        "updatedAt": "2026-06-05T15:00:00Z",
+                        "resolvedAt": null
+                      }
+                    ],
+                    "conversationId": "conv_1",
+                    "threadId": "thread_1"
+                  }
+                }
+                """
+            )
+        }
+
+        let result = try await client.runDailyBrief(
+            idempotencyKey: "routine:routine_dailyBrief:manual:manual_1",
+            trigger: RoutineRunTrigger(type: .manual, manualRunId: "manual_1")
+        )
+        let body = try XCTUnwrap(capturedBody)
+        let request = try JSONDecoder().decode(TestRoutineRunRequest.self, from: body)
+
+        XCTAssertEqual(request.idempotencyKey, "routine:routine_dailyBrief:manual:manual_1")
+        XCTAssertEqual(request.trigger.type, "manual")
+        XCTAssertEqual(request.trigger.manualRunId, "manual_1")
+        XCTAssertEqual(result.brief.id, "brief_1")
+        XCTAssertEqual(result.run.status, .needsReview)
+        XCTAssertEqual(result.reviewCards.first?.id, "review_1")
+        XCTAssertEqual(result.conversationId, "conv_1")
+        XCTAssertEqual(result.threadId, "thread_1")
+    }
+
+    func testRunRoutineDuplicateResponseDecodesDuplicateTrue() async throws {
+        var capturedBody: Data?
+        let client = makeClient { request in
+            XCTAssertEqual(request.url?.path, "/routines/routine_1/run")
+            XCTAssertEqual(request.httpMethod, "POST")
+            capturedBody = requestBodyData(from: request)
+            return jsonResponse(
+                """
+                {
+                  "ok": true,
+                  "schemaVersion": 1,
+                  "traceId": "trace_duplicate",
+                  "data": {
+                    "run": {
+                      "id": "run_1",
+                      "routineId": "routine_1",
+                      "idempotencyKey": "routine:routine_1:manual:manual_1",
+                      "status": "done",
+                      "conversationId": "conv_1",
+                      "threadId": "thread_1",
+                      "startedAt": "2026-06-05T15:10:00Z",
+                      "finishedAt": "2026-06-05T15:11:00Z",
+                      "priorRunIdsUsed": ["run_0"],
+                      "error": null,
+                      "retryOfRunId": null,
+                      "reviewCardIdsCreated": [],
+                      "createdAt": "2026-06-05T15:10:00Z",
+                      "updatedAt": "2026-06-05T15:11:00Z"
+                    },
+                    "reviewCards": [],
+                    "conversationId": "conv_1",
+                    "threadId": "thread_1",
+                    "duplicate": true
+                  }
+                }
+                """
+            )
+        }
+
+        let result = try await client.runRoutine(
+            "routine_1",
+            idempotencyKey: "routine:routine_1:manual:manual_1",
+            trigger: RoutineRunTrigger(type: .manual, manualRunId: "manual_1")
+        )
+        let body = try XCTUnwrap(capturedBody)
+        let request = try JSONDecoder().decode(TestRoutineRunRequest.self, from: body)
+
+        XCTAssertEqual(request.trigger.manualRunId, "manual_1")
+        XCTAssertEqual(result.run.id, "run_1")
+        XCTAssertEqual(result.duplicate, true)
+        XCTAssertEqual(result.conversationId, "conv_1")
+        XCTAssertEqual(result.threadId, "thread_1")
+    }
+
+    func testUpdateReviewCardPatchesDecisionAndNoteAndDecodesRelatedObjects() async throws {
+        var capturedBody: Data?
+        let client = makeClient { request in
+            XCTAssertEqual(request.url?.path, "/review-cards/review_1")
+            XCTAssertEqual(request.httpMethod, "PATCH")
+            capturedBody = requestBodyData(from: request)
+            return jsonResponse(
+                """
+                {
+                  "ok": true,
+                  "schemaVersion": 1,
+                  "traceId": "trace_review_update",
+                  "data": {
+                    "reviewCard": {
+                      "id": "review_1",
+                      "kind": "reviewSensitiveMemory",
+                      "state": "approved",
+                      "title": "Review sensitive memory",
+                      "body": "Looks correct.",
+                      "routineId": "routine_1",
+                      "routineRunId": "run_1",
+                      "memoryId": "mem_1",
+                      "policyId": null,
+                      "conversationId": "conv_1",
+                      "threadId": "thread_1",
+                      "reviewFlags": ["sensitive"],
+                      "recommendedAction": "approve",
+                      "notificationBehavior": "autonomyInbox",
+                      "createdAt": "2026-06-05T15:00:00Z",
+                      "updatedAt": "2026-06-05T15:05:00Z",
+                      "resolvedAt": "2026-06-05T15:05:00Z"
+                    },
+                    "relatedMemory": {
+                      "id": "mem_1",
+                      "state": "active",
+                      "text": "Kish prefers concise updates.",
+                      "summary": "Prefers concise updates.",
+                      "reviewFlags": [],
+                      "confidence": 0.9,
+                      "provenance": [],
+                      "createdAt": "2026-06-04T19:00:00Z",
+                      "updatedAt": "2026-06-05T15:05:00Z",
+                      "lastUsedAt": null,
+                      "forgottenAt": null,
+                      "tombstoneReason": null
+                    },
+                    "relatedRoutine": null,
+                    "relatedPolicy": {
+                      "id": "policy_1",
+                      "routineId": "routine_1",
+                      "allowedActions": ["readContext", "summarize"],
+                      "blockedActions": ["startCoding"],
+                      "allowedContextSources": ["conversation", "memory"],
+                      "allowedProjectPaths": [],
+                      "maxRuntimeClass": "short",
+                      "maxCostClass": "low",
+                      "notificationBehavior": "dailyBriefDigest",
+                      "createdAt": "2026-06-05T12:00:00Z",
+                      "approvedAt": null,
+                      "updatedAt": "2026-06-05T12:00:00Z"
+                    }
+                  }
+                }
+                """
+            )
+        }
+
+        let result = try await client.updateReviewCard("review_1", decision: .approve, note: "Looks correct.")
+        let body = try XCTUnwrap(capturedBody)
+        let request = try JSONDecoder().decode(TestReviewCardUpdateRequest.self, from: body)
+        let rawRequest = try JSONSerialization.jsonObject(with: body) as? [String: Any]
+
+        XCTAssertEqual(request.decision, "approve")
+        XCTAssertEqual(request.note, "Looks correct.")
+        XCTAssertNil(request.state)
+        XCTAssertTrue(rawRequest?.keys.contains("memoryPatch") == true)
+        XCTAssertTrue(rawRequest?["memoryPatch"] is NSNull)
+        XCTAssertTrue(rawRequest?.keys.contains("routinePatch") == true)
+        XCTAssertTrue(rawRequest?["routinePatch"] is NSNull)
+        XCTAssertEqual(result.reviewCard.state, .approved)
+        XCTAssertEqual(result.relatedMemory?.id, "mem_1")
+        XCTAssertNil(result.relatedRoutine)
+        XCTAssertEqual(result.relatedPolicy?.id, "policy_1")
+    }
+
+    func testAutonomyErrorEnvelopeThrowsUsefulMessage() async {
+        let client = makeClient { request in
+            XCTAssertEqual(request.url?.path, "/policies")
+            return jsonResponse(
+                """
+                {
+                  "ok": false,
+                  "schemaVersion": 1,
+                  "traceId": "trace_error",
+                  "error": {
+                    "code": "forbidden_by_policy",
+                    "message": "Policy does not allow this action.",
+                    "details": { "actionClass": "startCoding" }
+                  }
+                }
+                """,
+                statusCode: 403
+            )
+        }
+
+        do {
+            _ = try await client.fetchPolicies()
+            XCTFail("Expected autonomy envelope error to throw")
+        } catch {
+            XCTAssertEqual(error.localizedDescription, "Policy does not allow this action.")
+        }
+    }
+
     private func makeClient(handler: @escaping (URLRequest) throws -> (HTTPURLResponse, Data)) -> KishAgentClient {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [MockURLProtocol.self]
@@ -821,6 +1273,26 @@ private struct TestBranchSwitchRequest: Decodable {
     let projectPath: String
     let branch: String
     let dirtyAction: String?
+}
+
+private struct TestRoutineRunRequest: Decodable {
+    let idempotencyKey: String
+    let trigger: TestRoutineRunTrigger
+}
+
+private struct TestRoutineRunTrigger: Decodable {
+    let type: String
+    let manualRunId: String?
+    let scheduledFor: String?
+    let eventName: String?
+}
+
+private struct TestReviewCardUpdateRequest: Decodable {
+    let decision: String
+    let note: String?
+    let memoryPatch: JSONValue?
+    let routinePatch: JSONValue?
+    let state: String?
 }
 
 private func jsonResponse(_ json: String, statusCode: Int = 200) -> (HTTPURLResponse, Data) {
@@ -874,6 +1346,81 @@ private func requestBodyData(from request: URLRequest) -> Data? {
     }
 
     return data
+}
+
+private func autonomyEnvelope(data: String) -> String {
+    """
+    {
+      "ok": true,
+      "schemaVersion": 1,
+      "traceId": "trace_paged",
+      "data": \(data)
+    }
+    """
+}
+
+private func memoryJSON(id: String) -> String {
+    """
+    {
+      "id": "\(id)",
+      "state": "active",
+      "text": "Remember \(id).",
+      "summary": null,
+      "reviewFlags": [],
+      "confidence": 0.8,
+      "provenance": [],
+      "createdAt": "2026-06-04T19:00:00Z",
+      "updatedAt": "2026-06-05T15:00:00Z",
+      "lastUsedAt": null,
+      "forgottenAt": null,
+      "tombstoneReason": null
+    }
+    """
+}
+
+private func routineRunJSON(id: String) -> String {
+    """
+    {
+      "id": "\(id)",
+      "routineId": "routine_1",
+      "idempotencyKey": "routine:routine_1:manual:\(id)",
+      "status": "done",
+      "conversationId": "conv_1",
+      "threadId": "thread_1",
+      "startedAt": "2026-06-05T15:10:00Z",
+      "finishedAt": "2026-06-05T15:11:00Z",
+      "priorRunIdsUsed": [],
+      "error": null,
+      "retryOfRunId": null,
+      "reviewCardIdsCreated": [],
+      "createdAt": "2026-06-05T15:10:00Z",
+      "updatedAt": "2026-06-05T15:11:00Z"
+    }
+    """
+}
+
+private func reviewCardJSON(id: String) -> String {
+    """
+    {
+      "id": "\(id)",
+      "kind": "reviewSensitiveMemory",
+      "state": "open",
+      "title": "Review \(id)",
+      "body": "Needs review.",
+      "routineId": "routine_1",
+      "routineRunId": "run_1",
+      "memoryId": "mem_1",
+      "policyId": null,
+      "conversationId": "conv_1",
+      "threadId": "thread_1",
+      "reviewFlags": ["sensitive"],
+      "recommendedAction": "approve",
+      "notificationBehavior": "autonomyInbox",
+      "createdAt": "2026-06-05T15:00:00Z",
+      "updatedAt": "2026-06-05T15:00:00Z",
+      "resolvedAt": null
+    }
+    """
 }
 
 private final class MockURLProtocol: URLProtocol {

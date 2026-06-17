@@ -79,6 +79,8 @@ private struct MacRootView: View {
                 }
 
                 Section("System") {
+                    Label("Autonomy", systemImage: "sparkles")
+                        .tag(SidebarSelection.autonomy)
                     Label("Roadmap", systemImage: "checklist")
                         .tag(SidebarSelection.roadmap)
                     Label("Settings", systemImage: "slider.horizontal.3")
@@ -208,6 +210,8 @@ private struct MacRootView: View {
             } else {
                 EmptySelectionView()
             }
+        case .autonomy:
+            AutonomyView(client: client, onOpenConversation: openRoutineConversation)
         case .roadmap:
             RoadmapView()
         case .settings:
@@ -298,6 +302,24 @@ private struct MacRootView: View {
         }
         Task {
             try? await client.deleteConversation(id)
+        }
+    }
+
+    private func openRoutineConversation(conversationId: String?, threadId: String?) {
+        Task {
+            await syncSharedConversations()
+
+            if let conversationId,
+               let uuid = UUID(uuidString: conversationId),
+               workspace.conversation(id: uuid) != nil {
+                selection = .conversation(uuid)
+                return
+            }
+
+            if let threadId,
+               let conversation = workspace.conversation(threadId: threadId) {
+                selection = .conversation(conversation.id)
+            }
         }
     }
 
@@ -2659,7 +2681,7 @@ private struct EmptySelectionView: View {
     }
 }
 
-private struct Header: View {
+struct Header: View {
     let title: String
     let subtitle: String
 
@@ -2675,7 +2697,7 @@ private struct Header: View {
     }
 }
 
-private struct StatusRow: View {
+struct StatusRow: View {
     let title: String
     let value: String
     let tint: Color

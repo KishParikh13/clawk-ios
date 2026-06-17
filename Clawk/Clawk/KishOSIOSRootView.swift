@@ -10,7 +10,7 @@ private func mediaCaptureDebugLog(_ message: String) {
     print("[MediaCapture] \(message)")
 }
 
-private enum IOSTheme {
+enum IOSTheme {
     static let background = Color(uiColor: .systemBackground)
     static let secondaryBackground = Color(uiColor: .secondarySystemBackground)
     static let groupedBackground = Color(uiColor: .systemGroupedBackground)
@@ -21,6 +21,7 @@ private enum IOSTheme {
 private enum IOSChatSelection: Equatable {
     case newChat
     case conversation(UUID)
+    case autonomy
     case settings
 }
 
@@ -60,6 +61,21 @@ struct KishOSIOSRootView: View {
                                 onReconnect: reconnect
                             )
                             .navigationTitle("Control Panel")
+                            .navigationBarTitleDisplayMode(.inline)
+                            .toolbar {
+                                ToolbarItem(placement: .topBarLeading) {
+                                    Button(action: openSidebar) {
+                                        Image(systemName: "sidebar.left")
+                                    }
+                                    .accessibilityLabel("Conversations")
+                                }
+                            }
+                        } else if selection == .autonomy {
+                            IOSAutonomyView(
+                                client: client,
+                                onOpenConversation: openAutonomyConversation
+                            )
+                            .navigationTitle("Autonomy")
                             .navigationBarTitleDisplayMode(.inline)
                             .toolbar {
                                 ToolbarItem(placement: .topBarLeading) {
@@ -197,6 +213,7 @@ struct KishOSIOSRootView: View {
                     ConversationPicker(
                         conversations: workspace.conversations,
                         selectedID: selectedConversationID,
+                        isAutonomySelected: selection == .autonomy,
                         client: client,
                         audio: audio,
                         wake: wake,
@@ -210,6 +227,10 @@ struct KishOSIOSRootView: View {
                         },
                         onOpenSettings: {
                             openSettings()
+                            closeConversations()
+                        },
+                        onOpenAutonomy: {
+                            openAutonomy()
                             closeConversations()
                         },
                         onDelete: deleteConversation,
@@ -261,6 +282,10 @@ struct KishOSIOSRootView: View {
 
     private func openSettings() {
         selection = .settings
+    }
+
+    private func openAutonomy() {
+        selection = .autonomy
     }
 
     private func startLiveCall() {
@@ -663,6 +688,25 @@ struct KishOSIOSRootView: View {
         } catch {
             // Keep local conversations usable when the shared backend is unavailable.
         }
+    }
+
+    private func openAutonomyConversation(conversationId: String?, threadId: String?) async -> Bool {
+        await syncSharedConversations()
+
+        if let conversationId,
+           let uuid = UUID(uuidString: conversationId),
+           workspace.conversation(id: uuid) != nil {
+            selection = .conversation(uuid)
+            return true
+        }
+
+        if let threadId,
+           let conversation = workspace.conversation(threadId: threadId) {
+            selection = .conversation(conversation.id)
+            return true
+        }
+
+        return false
     }
 
     private func startSharedConversationSyncLoop() async {
@@ -2944,12 +2988,14 @@ private struct IOSReferenceChip: View {
 private struct ConversationPicker: View {
     let conversations: [Conversation]
     let selectedID: UUID?
+    let isAutonomySelected: Bool
     @ObservedObject var client: KishAgentClient
     @ObservedObject var audio: AudioRouteMonitor
     @ObservedObject var wake: WakePhraseController
     let onSelect: (UUID) -> Void
     let onNewChat: () -> Void
     let onOpenSettings: () -> Void
+    let onOpenAutonomy: () -> Void
     let onDelete: (UUID) -> Void
     let onCopyTranscript: (Conversation) -> Void
     let onCopyChatID: (Conversation) -> Void
@@ -3025,6 +3071,46 @@ private struct ConversationPicker: View {
                 RoundedRectangle(cornerRadius: 13, style: .continuous)
                     .stroke(IOSTheme.hairline)
             )
+            .padding(.horizontal, 18)
+            .padding(.bottom, 18)
+
+            Button(action: onOpenAutonomy) {
+                HStack(spacing: 12) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(isAutonomySelected ? Color.accentColor : .secondary)
+                        .frame(width: 24, height: 24)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Autonomy")
+                            .font(.callout.weight(.semibold))
+                            .foregroundStyle(.primary)
+                        Text("Brief, inbox, memory, routines")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+
+                    Spacer(minLength: 8)
+
+                    if isAutonomySelected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(Color.accentColor)
+                            .accessibilityHidden(true)
+                    } else {
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 12)
+            .frame(height: 54)
+            .background(isAutonomySelected ? Color.accentColor.opacity(0.10) : IOSTheme.elevatedBackground.opacity(0.72), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(IOSTheme.hairline))
             .padding(.horizontal, 18)
             .padding(.bottom, 18)
 
