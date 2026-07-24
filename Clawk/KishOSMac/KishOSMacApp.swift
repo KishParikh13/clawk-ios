@@ -2271,6 +2271,7 @@ private struct SettingsView: View {
                     StatusRow(title: "Mac mini", value: client.miniStatus, tint: client.miniStatus == "Online" ? .green : .secondary)
                     StatusRow(title: "HTTP", value: client.httpStatus, tint: client.httpStatus == "Online" ? .green : .secondary)
                     StatusRow(title: "Agent", value: client.agentStatus, tint: client.agentStatus == "Online" ? .green : .secondary)
+                    StatusRow(title: "API", value: client.agentProtocolStatus, tint: apiTint)
                     StatusRow(title: "History", value: storeError == nil ? "On" : "Error", tint: storeError == nil ? .green : .red)
                     StatusRow(title: "Tools", value: client.toolInventoryStatus, tint: client.toolInventoryStatus == "Ready" ? .green : .secondary)
                 }
@@ -2403,6 +2404,19 @@ private struct SettingsView: View {
         case "Switching", "Waiting":
             return .orange
         case "Unavailable":
+            return .red
+        default:
+            return .secondary
+        }
+    }
+
+    private var apiTint: Color {
+        switch client.agentProtocolStatus {
+        case "Ready":
+            return .green
+        case "Needs update":
+            return .orange
+        case "Unavailable", "Offline":
             return .red
         default:
             return .secondary

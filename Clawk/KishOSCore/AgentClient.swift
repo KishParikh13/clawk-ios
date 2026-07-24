@@ -11,6 +11,7 @@ final class KishAgentClient: ObservableObject {
     @Published var httpStatus = "Checking"
     @Published var agentStatus = "Checking"
     @Published var chatStatus = "Idle"
+    @Published var agentProtocolStatus = "Checking"
     @Published var detail = "Starting up"
     @Published var toolInventory = ToolInventory.empty
     @Published var toolInventoryStatus = "Checking"
@@ -102,9 +103,10 @@ final class KishAgentClient: ObservableObject {
                 miniStatus = "Online"
                 httpStatus = "Online"
                 agentStatus = "Online"
+                agentProtocolStatus = Self.agentProtocolStatus(for: health)
                 chatStatus = "Ready"
                 status = "Ready"
-                detail = "Connected to kish-agent"
+                detail = Self.healthDetail(for: health)
                 await refreshToolInventory()
             } else if statusCode == 200 {
                 markAgentUnavailable("kish-agent is not ready")
@@ -460,6 +462,7 @@ final class KishAgentClient: ObservableObject {
         miniStatus = "Offline"
         httpStatus = "Offline"
         agentStatus = "Offline"
+        agentProtocolStatus = "Offline"
         chatStatus = "Offline"
         toolInventoryStatus = "Offline"
         status = "Offline"
@@ -480,6 +483,7 @@ final class KishAgentClient: ObservableObject {
         miniStatus = "Checking"
         httpStatus = "Checking"
         agentStatus = "Checking"
+        agentProtocolStatus = "Checking"
         if chatStatus != "Sending" && chatStatus != "Question" {
             chatStatus = "Checking"
         }
@@ -496,6 +500,7 @@ final class KishAgentClient: ObservableObject {
         miniStatus = "Online"
         httpStatus = "Error"
         agentStatus = "Offline"
+        agentProtocolStatus = "Unavailable"
         chatStatus = "Offline"
         toolInventoryStatus = "Unavailable"
         status = "Error"
@@ -506,6 +511,7 @@ final class KishAgentClient: ObservableObject {
         miniStatus = "Online"
         httpStatus = "Online"
         agentStatus = "Offline"
+        agentProtocolStatus = "Unavailable"
         chatStatus = "Offline"
         toolInventoryStatus = "Unavailable"
         status = "Offline"
@@ -516,6 +522,7 @@ final class KishAgentClient: ObservableObject {
         miniStatus = "Online"
         httpStatus = "Online"
         agentStatus = "Online"
+        agentProtocolStatus = "Ready"
         chatStatus = "Error"
         status = "Error"
         detail = message
@@ -533,6 +540,56 @@ final class KishAgentClient: ObservableObject {
             output.removeLast()
         }
         return output
+    }
+
+    private static let requiredAgentEndpoints: Set<String> = [
+        "health",
+        "chat-stream",
+        "cancel",
+        "conversations",
+        "attachments",
+        "approve",
+        "projects",
+        "projects/files",
+        "projects/branches",
+        "projects/switch-branch",
+        "tools"
+    ]
+
+    private static func agentProtocolStatus(for health: HealthResponse) -> String {
+        guard let endpoints = health.endpoints, !endpoints.isEmpty else {
+            return "Unknown"
+        }
+        return missingRequiredEndpoints(from: endpoints).isEmpty ? "Ready" : "Needs update"
+    }
+
+    private static func healthDetail(for health: HealthResponse) -> String {
+        let version = health.version ?? health.apiVersion ?? health.protocolVersion
+        let versionText = version.map { " \($0)" } ?? ""
+
+        guard let endpoints = health.endpoints, !endpoints.isEmpty else {
+            return "Connected to kish-agent\(versionText)"
+        }
+
+        let missing = missingRequiredEndpoints(from: endpoints)
+        guard !missing.isEmpty else {
+            return "Connected to kish-agent\(versionText)"
+        }
+
+        let preview = missing.prefix(3).joined(separator: ", ")
+        let suffix = missing.count > 3 ? ", ..." : ""
+        return "kish-agent\(versionText) is missing \(preview)\(suffix)"
+    }
+
+    private static func missingRequiredEndpoints(from reportedEndpoints: [String]) -> [String] {
+        let normalized = Set(reportedEndpoints.map { endpoint in
+            endpoint
+                .trimmingCharacters(in: CharacterSet(charactersIn: " /"))
+                .lowercased()
+        })
+        return requiredAgentEndpoints
+            .filter { !normalized.contains($0) }
+            .sorted()
     }
 
     private static func multipartBody(
@@ -856,6 +913,10 @@ private struct ChatResponse: Decodable {
 
 private struct HealthResponse: Decodable {
     let ok: Bool
+    let version: String?
+    let apiVersion: String?
+    let protocolVersion: String?
+    let endpoints: [String]?
 }
 
 private struct BasicResponse: Decodable {

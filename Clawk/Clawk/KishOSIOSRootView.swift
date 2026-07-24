@@ -3249,6 +3249,7 @@ private struct IOSSettingsPage: View {
     @ObservedObject var wake: WakePhraseController
     let agentURL: String
     let onReconnect: () -> Void
+    @State private var agentURLDraft = ""
 
     @AppStorage(LiveVoiceHeuristics.SpokenReplyMode.storageKey)
     private var spokenReplyMode: LiveVoiceHeuristics.SpokenReplyMode = .full
@@ -3278,6 +3279,38 @@ private struct IOSSettingsPage: View {
                     .buttonStyle(.borderedProminent)
                     .tint(Color(uiColor: .label))
 
+                    VStack(alignment: .leading, spacing: 8) {
+                        TextField("Agent URL", text: $agentURLDraft)
+                            .keyboardType(.URL)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .submitLabel(.go)
+                            .textFieldStyle(.roundedBorder)
+                            .onSubmit(applyAgentURL)
+
+                        HStack(spacing: 8) {
+                            Button(action: applyAgentURL) {
+                                Label("Reconnect", systemImage: "link")
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.78)
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.bordered)
+
+                            Button {
+                                client.resetBaseURL()
+                                agentURLDraft = client.agentURLString
+                                Task { await client.reconnect() }
+                            } label: {
+                                Label("Reset", systemImage: "arrow.uturn.backward")
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.78)
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                    }
+
                     Button {
                         audio.refresh()
                     } label: {
@@ -3293,19 +3326,21 @@ private struct IOSSettingsPage: View {
                     }
                     .buttonStyle(.bordered)
 
-                    HStack(spacing: 8) {
-                        Image(systemName: "server.rack")
-                            .foregroundStyle(.secondary)
-                        Text(agentURL)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
-                    .padding(.horizontal, 10)
-                    .frame(height: 34)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(IOSTheme.secondaryBackground, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    IOSSettingsDiagnosticRow(
+                        icon: "server.rack",
+                        title: "Agent URL",
+                        detail: agentURL,
+                        status: client.httpStatus,
+                        tint: client.httpStatus == "Online" ? .green : .secondary
+                    )
+
+                    IOSSettingsDiagnosticRow(
+                        icon: "checklist.checked",
+                        title: "Native API",
+                        detail: client.detail,
+                        status: client.agentProtocolStatus,
+                        tint: apiTint
+                    )
                 }
                 .settingsCard()
 
@@ -3493,8 +3528,12 @@ private struct IOSSettingsPage: View {
         }
         .background(IOSTheme.groupedBackground)
         .onAppear {
+            agentURLDraft = client.agentURLString
             audio.refresh()
             glassesCamera.refreshStatus()
+        }
+        .onChange(of: client.agentURLString) {
+            agentURLDraft = client.agentURLString
         }
     }
 
@@ -3519,6 +3558,27 @@ private struct IOSSettingsPage: View {
             return .orange
         default:
             return .red
+        }
+    }
+
+    private var apiTint: Color {
+        switch client.agentProtocolStatus {
+        case "Ready":
+            return .green
+        case "Needs update":
+            return .orange
+        case "Unavailable", "Offline":
+            return .red
+        default:
+            return .secondary
+        }
+    }
+
+    private func applyAgentURL() {
+        guard client.updateBaseURL(agentURLDraft) else { return }
+        agentURLDraft = client.agentURLString
+        Task {
+            await client.reconnect()
         }
     }
 

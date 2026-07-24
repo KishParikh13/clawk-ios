@@ -64,7 +64,7 @@ final class AgentClientTests: XCTestCase {
         let client = makeClient { request in
             switch request.url?.path {
             case "/health":
-                return jsonResponse(#"{ "ok": true }"#)
+                return jsonResponse(#"{ "ok": true, "version": "demo", "endpoints": ["health", "chat-stream", "cancel", "conversations", "attachments", "approve", "projects", "projects/files", "projects/branches", "projects/switch-branch", "tools"] }"#)
             case "/tools":
                 return jsonResponse(#"{ "ok": true, "commands": [], "engines": [], "recentTools": [] }"#)
             default:
@@ -79,7 +79,28 @@ final class AgentClientTests: XCTestCase {
         XCTAssertEqual(client.agentStatus, "Online")
         XCTAssertEqual(client.chatStatus, "Ready")
         XCTAssertEqual(client.status, "Ready")
+        XCTAssertEqual(client.agentProtocolStatus, "Ready")
         XCTAssertEqual(client.toolInventoryStatus, "Ready")
+    }
+
+    func testRefreshHealthMissingEndpointReportsAgentNeedsUpdate() async throws {
+        let client = makeClient { request in
+            switch request.url?.path {
+            case "/health":
+                return jsonResponse(#"{ "ok": true, "version": "old", "endpoints": ["health", "chat-stream"] }"#)
+            case "/tools":
+                return jsonResponse(#"{ "ok": true, "commands": [], "engines": [], "recentTools": [] }"#)
+            default:
+                return jsonResponse(#"{ "ok": false, "error": "unexpected path" }"#, statusCode: 404)
+            }
+        }
+
+        await client.refreshHealth()
+
+        XCTAssertEqual(client.status, "Ready")
+        XCTAssertEqual(client.chatStatus, "Ready")
+        XCTAssertEqual(client.agentProtocolStatus, "Needs update")
+        XCTAssertTrue(client.detail.contains("missing"))
     }
 
     func testRefreshHealthNetworkFailureMarksAllConnectionsOffline() async {
@@ -92,6 +113,7 @@ final class AgentClientTests: XCTestCase {
         XCTAssertEqual(client.miniStatus, "Offline")
         XCTAssertEqual(client.httpStatus, "Offline")
         XCTAssertEqual(client.agentStatus, "Offline")
+        XCTAssertEqual(client.agentProtocolStatus, "Offline")
         XCTAssertEqual(client.chatStatus, "Offline")
         XCTAssertEqual(client.status, "Offline")
         XCTAssertEqual(client.detail, "Cannot reach kish-agent")
@@ -107,6 +129,7 @@ final class AgentClientTests: XCTestCase {
         XCTAssertEqual(client.miniStatus, "Online")
         XCTAssertEqual(client.httpStatus, "Error")
         XCTAssertEqual(client.agentStatus, "Offline")
+        XCTAssertEqual(client.agentProtocolStatus, "Unavailable")
         XCTAssertEqual(client.chatStatus, "Offline")
         XCTAssertEqual(client.status, "Error")
         XCTAssertEqual(client.detail, "Unexpected health response")

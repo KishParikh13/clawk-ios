@@ -1,16 +1,19 @@
 # KishOS Handoff
 
-Last updated: 2026-06-04
+Last updated: 2026-06-10
 
 ## Current State
 
 - Repo: `https://github.com/KishParikh13/clawk-ios/tree/main`
 - Current source of truth: `docs/ROADMAP.md`
+- Demo/release gates: `docs/DEMO_AND_RELEASE_CHECKLIST.md`
+- User-required tasks: `docs/USER_REQUIRED_TASKS.md`
+- Native agent API contract: `docs/specs/kish-agent-native-api.md`
 - Detailed specs: `docs/specs/glasses-voice-hands-free.md` and `docs/specs/memory-routines.md`
 - Code-backed feature list: `Clawk/KishOSCore/KishOSFeaturePlan.swift`
 - Ralph queue history: `.ralph/prd.json`
 
-The native KishOS app is live as the primary product path. It uses shared SwiftUI code across iOS and macOS and talks to the Mac mini `kish-agent` at `http://kishs-mac-mini-1:17891`.
+The native KishOS app is live as the primary product path. It uses shared SwiftUI code across iOS and macOS and talks to the Mac mini `kish-agent` at `http://kishs-mac-mini-1:17891`. The runtime endpoint is editable from Settings on both iOS and macOS.
 
 ## Recent Commits
 
@@ -22,8 +25,7 @@ The concurrency fix scopes send disablement to the active conversation, so a run
 ## Last Verified
 
 ```bash
-xcodebuild test -project Clawk/Clawk.xcodeproj -scheme KishOSMac -destination 'platform=macOS' -only-testing:KishOSMacTests/AgentClientTests
-xcodebuild build -project Clawk/Clawk.xcodeproj -scheme Clawk -destination 'generic/platform=iOS Simulator'
+scripts/verify-local.sh
 ```
 
 ## Planning Focus

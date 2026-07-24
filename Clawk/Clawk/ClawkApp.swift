@@ -18,7 +18,13 @@ struct ClawkApp: App {
     }
 }
 
-// MARK: - Main Tab View
+// MARK: - Legacy Dashboard Views
+//
+// The active iOS product path starts at KishOSIOSRootView. The views below are
+// from the older gateway/dashboard generation and still compile because the
+// iOS target includes this source directory wholesale. Do not extend this path
+// for new native KishOS work; move or delete it once native replacements are
+// verified.
 
 struct MainTabView: View {
     @EnvironmentObject var gateway: GatewayConnection

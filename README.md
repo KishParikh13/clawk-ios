@@ -2,7 +2,7 @@
 
 KishOS is the native iOS and macOS app for working with the `kish-agent` that runs on Kish's Mac mini. The current app is a shared SwiftUI shell with persistent conversations, project selection, attachments, voice/live-call controls, tool visibility, and status notifications.
 
-The canonical planning doc is [docs/ROADMAP.md](docs/ROADMAP.md). Detailed specs for the next worktrees live under [docs/specs](docs/specs).
+The canonical planning doc is [docs/ROADMAP.md](docs/ROADMAP.md). Detailed specs for the next worktrees live under [docs/specs](docs/specs). Demo and publishing gates live in [docs/DEMO_AND_RELEASE_CHECKLIST.md](docs/DEMO_AND_RELEASE_CHECKLIST.md).
 
 ## Current Architecture
 
@@ -12,7 +12,7 @@ The canonical planning doc is [docs/ROADMAP.md](docs/ROADMAP.md). Detailed specs
 - `Clawk/KishOSWidget`: widgets and Live Activity support.
 - `backend/`: legacy Node relay/dashboard backend. It remains in the repo for now, but the primary native chat path uses `KishAgentClient` against the Mac mini agent. Prefer deleting old relay/dashboard code once native replacements are confirmed.
 
-The default native agent endpoint is `http://kishs-mac-mini-1:17891`. Runtime conversations, projects, attachments, branch changes, and streaming tool events are served by the Mac mini agent.
+The default native agent endpoint is `http://kishs-mac-mini-1:17891`. Runtime conversations, projects, attachments, branch changes, and streaming tool events are served by the Mac mini agent. The endpoint can be changed at runtime from Settings on iOS and macOS.
 
 ## Live Capabilities
 
@@ -46,9 +46,15 @@ Run either:
 - `Clawk` for the iOS app.
 - `KishOSMac` for the macOS app.
 
-The Mac mini agent must be reachable from the device or simulator at `http://kishs-mac-mini-1:17891`, or the endpoint must be changed in `KishAgentClient`.
+The Mac mini agent must be reachable from the device or simulator at `http://kishs-mac-mini-1:17891`, or the endpoint must be changed in Settings. The expected native endpoint contract is documented in [docs/specs/kish-agent-native-api.md](docs/specs/kish-agent-native-api.md).
 
 ## Verification
+
+Full local verification:
+
+```bash
+scripts/verify-local.sh
+```
 
 Focused macOS agent-client tests:
 
@@ -70,8 +76,12 @@ Ralph verification queue:
 
 ## Docs
 
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): active native path, legacy paths, and cleanup plan.
 - [docs/ROADMAP.md](docs/ROADMAP.md): canonical live status and roadmap.
+- [docs/DEMO_AND_RELEASE_CHECKLIST.md](docs/DEMO_AND_RELEASE_CHECKLIST.md): demo path, publish blockers, and completion tracks.
+- [docs/USER_REQUIRED_TASKS.md](docs/USER_REQUIRED_TASKS.md): account, hardware, network, and product-decision tasks that need Kish.
 - [docs/specs](docs/specs): detailed specs for upcoming worktrees.
+- [docs/specs/kish-agent-native-api.md](docs/specs/kish-agent-native-api.md): native app to `kish-agent` API contract.
 - [HANDOFF.md](HANDOFF.md): current handoff for the next agent.
 - [SETUP.md](SETUP.md): detailed local setup.
 - [TESTFLIGHT.md](TESTFLIGHT.md): TestFlight build and upload notes.

@@ -6,7 +6,7 @@ This setup is for the current native KishOS app. Older Railway relay setup notes
 
 - macOS with Xcode installed.
 - XcodeGen. `./generate-project.sh` installs it with Homebrew if needed.
-- Network access to the Mac mini agent at `http://kishs-mac-mini-1:17891`.
+- Network access to a compatible `kish-agent`; the default development URL is `http://kishs-mac-mini-1:17891`.
 - Optional for TestFlight: Apple Developer account and App Store Connect access.
 
 ## Generate the Project
@@ -37,9 +37,15 @@ The native client default is `KishAgentClient.defaultBaseURL`, currently:
 http://kishs-mac-mini-1:17891
 ```
 
-The app expects the agent to provide conversation, streaming, project, attachment, file-reference, and branch-switch endpoints. If the Mac mini hostname is not resolvable from the current network, use a reachable hostname or IP in the client configuration.
+The app expects the agent to provide conversation, streaming, project, attachment, file-reference, branch-switch, approval, cancel, and tool-inventory endpoints. If the Mac mini hostname is not resolvable from the current network, use a reachable hostname or IP from Settings in the app. See [docs/specs/kish-agent-native-api.md](docs/specs/kish-agent-native-api.md) for the current native API contract.
 
 ## Verify
+
+Run the full local verifier:
+
+```bash
+scripts/verify-local.sh
+```
 
 Run focused client tests:
 
